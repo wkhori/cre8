@@ -24,6 +24,13 @@ import {
 import type { Shape } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   Square,
   Circle,
   Type,
@@ -39,8 +46,10 @@ import {
   Hand,
   Loader2,
   LogOut,
+  Moon,
+  Sun,
 } from "lucide-react";
-import { ThemeToggle } from "@/components/ThemeToggle";
+import { useTheme } from "next-themes";
 
 const CanvasStage = dynamic(
   () => import("@/components/canvas/CanvasStage"),
@@ -71,6 +80,7 @@ export default function BoardPage() {
   const boardId = params.id as string;
 
   const { user, profile, loading: authLoading, actionLoading, signOut } = useAuth();
+  const { theme, setTheme } = useTheme();
 
   const selectedIds = useCanvasStore((s) => s.selectedIds);
   const historyIndex = useCanvasStore((s) => s.historyIndex);
@@ -467,7 +477,7 @@ export default function BoardPage() {
         {/* Right: Presence + user */}
         <div className="ml-auto flex items-center gap-2">
           {hasSelection && (
-            <span className="text-[11px] tabular-nums text-zinc-500 dark:text-zinc-500">
+            <span className="text-[11px] tabular-nums text-zinc-500">
               {selectedIds.length} selected
             </span>
           )}
@@ -478,33 +488,46 @@ export default function BoardPage() {
 
           <ToolbarDivider />
 
-          {/* User avatar */}
-          <div className="hidden items-center gap-1.5 sm:inline-flex">
-            {profile?.photoURL ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={profile.photoURL}
-                alt={profile.name}
-                className="size-6 rounded-full object-cover ring-1 ring-zinc-200 dark:ring-zinc-700"
-                referrerPolicy="no-referrer"
-              />
-            ) : (
-              <div className="flex size-6 items-center justify-center rounded-full bg-zinc-200 text-[10px] font-semibold text-zinc-700 dark:bg-zinc-700 dark:text-zinc-200">
-                {(profile?.name ?? user.email ?? "U").slice(0, 1).toUpperCase()}
+          {/* Profile dropdown */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="flex items-center gap-1.5 rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                {profile?.photoURL ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={profile.photoURL}
+                    alt={profile.name}
+                    className="size-7 rounded-full object-cover ring-1 ring-zinc-200 dark:ring-zinc-700"
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  <div className="flex size-7 items-center justify-center rounded-full bg-zinc-200 text-[11px] font-semibold text-zinc-700 dark:bg-zinc-700 dark:text-zinc-200">
+                    {(profile?.name ?? user.email ?? "U").slice(0, 1).toUpperCase()}
+                  </div>
+                )}
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              <div className="px-2 py-1.5">
+                <p className="text-sm font-medium">{profile?.name ?? "User"}</p>
+                <p className="text-xs text-muted-foreground truncate">{user.email}</p>
               </div>
-            )}
-          </div>
-
-          <Button
-            size="icon-xs"
-            variant="ghost"
-            onClick={() => void signOut()}
-            disabled={actionLoading}
-            title="Sign out"
-          >
-            <LogOut className="size-3.5" />
-          </Button>
-          <ThemeToggle />
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>
+                {theme === "dark" ? <Sun className="size-4" /> : <Moon className="size-4" />}
+                {theme === "dark" ? "Light mode" : "Dark mode"}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                variant="destructive"
+                onClick={() => void signOut()}
+                disabled={actionLoading}
+              >
+                <LogOut className="size-4" />
+                Sign out
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </header>
 

@@ -7,6 +7,7 @@ import {
   subscribeCursors,
   type CursorPosition,
 } from "@/lib/presence";
+import { shortName } from "@/lib/utils";
 
 export interface CursorsLayerProps {
   boardId: string;
@@ -66,9 +67,7 @@ function RemoteCursor({
     9, 7.5,
   ];
 
-  const name = displayName.length > 12
-    ? displayName.slice(0, 11) + "\u2026"
-    : displayName;
+  const name = shortName(displayName);
   const labelWidth = name.length * 5.5 + 10;
 
   return (
