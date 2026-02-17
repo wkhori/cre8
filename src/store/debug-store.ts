@@ -1,7 +1,7 @@
 import { create } from "zustand";
 
 export type InteractionMode = "idle" | "dragging" | "panning" | "selecting";
-export type ActiveTool = "pointer" | "hand";
+export type ActiveTool = "pointer" | "hand" | "connector";
 
 interface DebugStore {
   fps: number;

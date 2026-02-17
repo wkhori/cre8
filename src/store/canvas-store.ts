@@ -6,6 +6,7 @@ import type {
   TextShape,
   StickyNoteShape,
   FrameShape,
+  ConnectorShape,
   BaseShape,
 } from "@/lib/types";
 import { generateId } from "@/lib/id";
@@ -50,6 +51,11 @@ interface CanvasStore {
   addText: (centerX: number, centerY: number, text?: string) => string;
   addStickyNote: (centerX: number, centerY: number, text?: string, color?: string) => string;
   addFrame: (centerX: number, centerY: number, title?: string) => string;
+  addConnector: (
+    from: { id: string } | { point: { x: number; y: number } },
+    to: { id: string } | { point: { x: number; y: number } },
+    style?: "line" | "arrow"
+  ) => string;
 
   // ── Mutations ──
   updateShape: (id: string, patch: Partial<Shape>) => void;
@@ -210,6 +216,25 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
     return shape.id;
   },
 
+  addConnector: (from, to, style = "arrow") => {
+    const state = get();
+    state.pushHistory();
+    const shape: ConnectorShape = {
+      id: generateId(),
+      type: "connector",
+      x: 0,
+      y: 0,
+      ...("id" in from ? { fromId: from.id } : { fromPoint: from.point }),
+      ...("id" in to ? { toId: to.id } : { toPoint: to.point }),
+      style,
+      stroke: "#6b7280",
+      strokeWidth: 2,
+      ...baseProps(state.shapes),
+    };
+    set({ shapes: [...state.shapes, shape], selectedIds: [shape.id] });
+    return shape.id;
+  },
+
   // ── Mutations ─────────────────────────────────────────────────────
 
   updateShape: (id, patch) => get().updateShapes([{ id, patch }]),
@@ -229,9 +254,18 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
     const state = get();
     if (ids.length === 0) return;
     state.pushHistory();
+    const idSet = new Set(ids);
+    // Also delete connectors that reference any deleted shape
+    const orphanedConnectors = state.shapes.filter(
+      (s) =>
+        s.type === "connector" &&
+        !idSet.has(s.id) &&
+        ((s.fromId && idSet.has(s.fromId)) || (s.toId && idSet.has(s.toId)))
+    );
+    for (const c of orphanedConnectors) idSet.add(c.id);
     set({
-      shapes: state.shapes.filter((s) => !ids.includes(s.id)),
-      selectedIds: state.selectedIds.filter((id) => !ids.includes(id)),
+      shapes: state.shapes.filter((s) => !idSet.has(s.id)),
+      selectedIds: state.selectedIds.filter((id) => !idSet.has(id)),
     });
   },
 

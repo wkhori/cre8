@@ -52,6 +52,12 @@ export function useCanvasKeyboard({
         return;
       }
 
+      // C key → connector tool
+      if (e.key === "c" && !e.metaKey && !e.ctrlKey) {
+        useDebugStore.getState().setActiveTool("connector");
+        return;
+      }
+
       const meta = e.metaKey || e.ctrlKey;
 
       if ((e.key === "Delete" || e.key === "Backspace") && !meta) {
@@ -133,6 +139,10 @@ export function useCanvasKeyboard({
       }
 
       if (e.key === "Escape") {
+        // If in connector mode, switch back to pointer
+        if (useDebugStore.getState().activeTool === "connector") {
+          useDebugStore.getState().setActiveTool("pointer");
+        }
         clearSelection();
         return;
       }

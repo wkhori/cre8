@@ -65,8 +65,10 @@ export interface FrameShape extends BaseShape {
 
 export interface ConnectorShape extends BaseShape {
   type: "connector";
-  fromId: string;
-  toId: string;
+  fromId?: string | null;
+  toId?: string | null;
+  fromPoint?: { x: number; y: number } | null;
+  toPoint?: { x: number; y: number } | null;
   style: "line" | "arrow";
   stroke: string;
   strokeWidth: number;

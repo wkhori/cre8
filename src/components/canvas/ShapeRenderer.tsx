@@ -2,29 +2,126 @@
 
 import { Rect, Ellipse, Text, Line, Group, Arrow } from "react-konva";
 import type Konva from "konva";
-import type { Shape } from "@/lib/types";
+import type { Shape, ConnectorShape } from "@/lib/types";
+import { getShapeBounds } from "@/lib/shape-geometry";
 
 interface ShapeRendererProps {
   shape: Shape;
   isSelected: boolean;
   isDark?: boolean;
+  allShapes?: Shape[];
+  isConnectorHover?: boolean;
   onSelect: (id: string, e: Konva.KonvaEventObject<MouseEvent | TouchEvent>) => void;
   onDragStart: (id: string) => void;
   onDragMove?: (id: string, e: Konva.KonvaEventObject<DragEvent>) => void;
   onDragEnd: (id: string, e: Konva.KonvaEventObject<DragEvent>) => void;
   onDblClick?: (id: string, e: Konva.KonvaEventObject<MouseEvent>) => void;
+  onMouseEnter?: (id: string) => void;
+  onMouseLeave?: (id: string) => void;
+}
+
+function computeConnectorPoints(connector: ConnectorShape, allShapes: Shape[]): number[] {
+  const fromShape = connector.fromId ? allShapes.find((s) => s.id === connector.fromId) : null;
+  const toShape = connector.toId ? allShapes.find((s) => s.id === connector.toId) : null;
+
+  // Resolve center points for each endpoint
+  let fromCx: number, fromCy: number, fromBounds: ReturnType<typeof getShapeBounds> | null;
+  if (fromShape) {
+    fromBounds = getShapeBounds(fromShape);
+    fromCx = fromBounds.x + fromBounds.width / 2;
+    fromCy = fromBounds.y + fromBounds.height / 2;
+  } else if (connector.fromPoint) {
+    fromBounds = null;
+    fromCx = connector.fromPoint.x;
+    fromCy = connector.fromPoint.y;
+  } else {
+    return [0, 0, 100, 0];
+  }
+
+  let toCx: number, toCy: number, toBounds: ReturnType<typeof getShapeBounds> | null;
+  if (toShape) {
+    toBounds = getShapeBounds(toShape);
+    toCx = toBounds.x + toBounds.width / 2;
+    toCy = toBounds.y + toBounds.height / 2;
+  } else if (connector.toPoint) {
+    toBounds = null;
+    toCx = connector.toPoint.x;
+    toCy = connector.toPoint.y;
+  } else {
+    return [0, 0, 100, 0];
+  }
+
+  // Compute edge intersection when connected to a shape, raw point otherwise
+  const startPt = fromBounds ? edgePoint(fromBounds, fromCx, fromCy, toCx, toCy) : { x: fromCx, y: fromCy };
+  const endPt = toBounds ? edgePoint(toBounds, toCx, toCy, fromCx, fromCy) : { x: toCx, y: toCy };
+
+  // Fan-out: offset connectors that share the same unordered {fromId, toId} pair
+  if (connector.fromId && connector.toId) {
+    const pairKey = [connector.fromId, connector.toId].sort().join("|");
+    const siblings = allShapes.filter(
+      (s) =>
+        s.type === "connector" &&
+        s.fromId &&
+        s.toId &&
+        [s.fromId, s.toId].sort().join("|") === pairKey
+    );
+    if (siblings.length > 1) {
+      const idx = siblings.findIndex((s) => s.id === connector.id);
+      const offset = (idx - (siblings.length - 1) / 2) * 20;
+      // Perpendicular direction
+      const dx = endPt.x - startPt.x;
+      const dy = endPt.y - startPt.y;
+      const len = Math.sqrt(dx * dx + dy * dy) || 1;
+      const px = -dy / len;
+      const py = dx / len;
+      startPt.x += px * offset;
+      startPt.y += py * offset;
+      endPt.x += px * offset;
+      endPt.y += py * offset;
+    }
+  }
+
+  return [startPt.x, startPt.y, endPt.x, endPt.y];
+}
+
+/** Find the point where a ray from center toward target intersects the bounding rect. */
+function edgePoint(
+  bounds: { x: number; y: number; width: number; height: number },
+  cx: number,
+  cy: number,
+  tx: number,
+  ty: number
+): { x: number; y: number } {
+  const dx = tx - cx;
+  const dy = ty - cy;
+  if (dx === 0 && dy === 0) return { x: cx, y: cy };
+
+  const hw = bounds.width / 2;
+  const hh = bounds.height / 2;
+
+  // Scale factor to hit the bounding rect edge
+  const sx = dx !== 0 ? hw / Math.abs(dx) : Infinity;
+  const sy = dy !== 0 ? hh / Math.abs(dy) : Infinity;
+  const s = Math.min(sx, sy);
+
+  return { x: cx + dx * s, y: cy + dy * s };
 }
 
 export default function ShapeRenderer({
   shape,
   isSelected,
   isDark,
+  allShapes,
+  isConnectorHover,
   onSelect,
   onDragStart,
   onDragMove,
   onDragEnd,
   onDblClick,
+  onMouseEnter,
+  onMouseLeave,
 }: ShapeRendererProps) {
+  const isConnector = shape.type === "connector";
   const commonProps = {
     id: shape.id,
     name: "canvas-shape",
@@ -32,7 +129,7 @@ export default function ShapeRenderer({
     y: shape.y,
     rotation: shape.rotation,
     opacity: shape.opacity,
-    draggable: true,
+    draggable: !isConnector,
     perfectDrawEnabled: false,
     onClick: (e: Konva.KonvaEventObject<MouseEvent>) => onSelect(shape.id, e),
     onTap: (e: Konva.KonvaEventObject<TouchEvent>) => onSelect(shape.id, e),
@@ -42,11 +139,37 @@ export default function ShapeRenderer({
     onDblClick: (e: Konva.KonvaEventObject<MouseEvent>) => onDblClick?.(shape.id, e),
     onDblTap: (e: Konva.KonvaEventObject<TouchEvent>) =>
       onDblClick?.(shape.id, e as unknown as Konva.KonvaEventObject<MouseEvent>),
+    onMouseEnter: () => onMouseEnter?.(shape.id),
+    onMouseLeave: () => onMouseLeave?.(shape.id),
+  };
+
+  // Connector hover ring helper — wraps a shape node in a Group with a blue highlight ring
+  const wrapWithHoverRing = (node: React.ReactElement) => {
+    if (!isConnectorHover || isConnector) return node;
+    const bounds = getShapeBounds(shape);
+    const pad = 4;
+    return (
+      <Group key={shape.id}>
+        <Rect
+          x={bounds.x - pad}
+          y={bounds.y - pad}
+          width={bounds.width + pad * 2}
+          height={bounds.height + pad * 2}
+          stroke="#3b82f6"
+          strokeWidth={2}
+          opacity={0.4}
+          cornerRadius={4}
+          listening={false}
+          perfectDrawEnabled={false}
+        />
+        {node}
+      </Group>
+    );
   };
 
   switch (shape.type) {
     case "rect":
-      return (
+      return wrapWithHoverRing(
         <Rect
           key={shape.id}
           {...commonProps}
@@ -60,7 +183,7 @@ export default function ShapeRenderer({
       );
 
     case "circle":
-      return (
+      return wrapWithHoverRing(
         <Ellipse
           key={shape.id}
           {...commonProps}
@@ -82,7 +205,7 @@ export default function ShapeRenderer({
           : shape.fill === "#fafafa" && !isDark
             ? "#18181b"
             : shape.fill;
-      return (
+      return wrapWithHoverRing(
         <Text
           key={shape.id}
           {...commonProps}
@@ -97,7 +220,7 @@ export default function ShapeRenderer({
     }
 
     case "line":
-      return (
+      return wrapWithHoverRing(
         <Line
           key={shape.id}
           {...commonProps}
@@ -111,7 +234,7 @@ export default function ShapeRenderer({
       );
 
     case "sticky":
-      return (
+      return wrapWithHoverRing(
         <Group key={shape.id} {...commonProps}>
           <Rect
             width={shape.w}
@@ -140,7 +263,7 @@ export default function ShapeRenderer({
       );
 
     case "frame":
-      return (
+      return wrapWithHoverRing(
         <Group key={shape.id} {...commonProps}>
           <Rect
             width={shape.w}
@@ -165,34 +288,32 @@ export default function ShapeRenderer({
       );
 
     case "connector": {
-      const pts = shape.points ?? [0, 0, 100, 0];
+      const pts = allShapes
+        ? computeConnectorPoints(shape, allShapes)
+        : (shape.points ?? [0, 0, 100, 0]);
+      const connectorProps = {
+        ...commonProps,
+        // Connectors use absolute world coords in points, not x/y offset
+        x: 0,
+        y: 0,
+        points: pts,
+        stroke: isSelected ? "#3b82f6" : shape.stroke,
+        strokeWidth: shape.strokeWidth,
+        hitStrokeWidth: Math.max(shape.strokeWidth, 12),
+        perfectDrawEnabled: false,
+      };
       if (shape.style === "arrow") {
         return (
           <Arrow
             key={shape.id}
-            {...commonProps}
-            points={pts}
-            stroke={shape.stroke}
-            strokeWidth={shape.strokeWidth}
-            fill={shape.stroke}
+            {...connectorProps}
+            fill={isSelected ? "#3b82f6" : shape.stroke}
             pointerLength={10}
             pointerWidth={8}
-            hitStrokeWidth={Math.max(shape.strokeWidth, 10)}
-            perfectDrawEnabled={false}
           />
         );
       }
-      return (
-        <Line
-          key={shape.id}
-          {...commonProps}
-          points={pts}
-          stroke={shape.stroke}
-          strokeWidth={shape.strokeWidth}
-          hitStrokeWidth={Math.max(shape.strokeWidth, 10)}
-          perfectDrawEnabled={false}
-        />
-      );
+      return <Line key={shape.id} {...connectorProps} />;
     }
 
     default:

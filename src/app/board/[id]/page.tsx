@@ -34,6 +34,9 @@ import {
   Type,
   StickyNote,
   Frame,
+  MoveRight,
+  ArrowRight,
+  Minus,
   Undo2,
   Redo2,
   Trash2,
@@ -74,6 +77,7 @@ export default function BoardPage() {
   const { theme, setTheme } = useTheme();
 
   const selectedIds = useCanvasStore((s) => s.selectedIds);
+  const shapes = useCanvasStore((s) => s.shapes);
   const historyIndex = useCanvasStore((s) => s.historyIndex);
   const historyLength = useCanvasStore((s) => s.history.length);
   const activeTool = useDebugStore((s) => s.activeTool);
@@ -347,6 +351,15 @@ export default function BoardPage() {
   const canUndo = historyIndex >= 0;
   const canRedo = historyIndex < historyLength - 2;
 
+  // Detect selected connectors for arrow/line toggle
+  const selectedConnectors = shapes.filter(
+    (s) => s.type === "connector" && selectedIds.includes(s.id)
+  );
+  const hasSelectedConnectors = selectedConnectors.length > 0;
+  const allSelectedAreArrows = hasSelectedConnectors && selectedConnectors.every(
+    (s) => s.type === "connector" && s.style === "arrow"
+  );
+
   // ── Auth guard ──────────────────────────────────────────────────────
   useEffect(() => {
     if (!authLoading && !user) {
@@ -448,11 +461,34 @@ export default function BoardPage() {
           <Button size="icon-xs" variant="ghost" onClick={handleAddFrame} title="Frame">
             <Frame className="size-3.5" />
           </Button>
+          <Button
+            size="icon-xs"
+            variant={activeTool === "connector" ? "default" : "ghost"}
+            onClick={() => setActiveTool(activeTool === "connector" ? "pointer" : "connector")}
+            title="Connector (C)"
+          >
+            <MoveRight className="size-3.5" />
+          </Button>
 
           {hasSelection && (
             <>
               <ToolbarDivider />
               <ColorPicker />
+              {hasSelectedConnectors && (
+                <Button
+                  size="icon-xs"
+                  variant="ghost"
+                  onClick={() => {
+                    const newStyle = allSelectedAreArrows ? "line" : "arrow";
+                    for (const c of selectedConnectors) {
+                      useCanvasStore.getState().updateShape(c.id, { style: newStyle });
+                    }
+                  }}
+                  title={allSelectedAreArrows ? "Switch to line" : "Switch to arrow"}
+                >
+                  {allSelectedAreArrows ? <Minus className="size-3.5" /> : <ArrowRight className="size-3.5" />}
+                </Button>
+              )}
               <Button
                 size="icon-xs"
                 variant="ghost"
