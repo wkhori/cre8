@@ -171,7 +171,7 @@ export default function BoardPage() {
       // Subscribe to live drag positions from remote users
       unsubLiveDrags = subscribeLiveDrags(boardId, user.uid, (drags) => {
         liveDragsRef.current = drags;
-        // Apply remote drag positions to local shapes as overlays
+        // Apply remote drag positions directly to local shapes
         isSyncingRef.current++;
         const store = useCanvasStore.getState();
         const updates: Array<{ id: string; patch: Partial<Shape> }> = [];
