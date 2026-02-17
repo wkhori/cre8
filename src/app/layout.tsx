@@ -15,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "cre8 — Collaborative Canvas",
-  description: "Real-time collaborative white board with AI agent",
+  title: "cre8 — Where teams think out loud",
+  description: "An infinite canvas for brainstorming, planning, and building together — with AI that moves as fast as you do.",
 };
 
 export default function RootLayout({
