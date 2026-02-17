@@ -79,9 +79,18 @@ export function joinBoard(
     lastSeen: serverTimestamp(),
   });
 
-  return () => {
-    // Clean up on unmount
-    set(presenceRef, { ...data, online: false, lastSeen: Date.now() });
+  // Heartbeat: update lastSeen every 30s so stale sessions get filtered out
+  let stopped = false;
+  const heartbeat = setInterval(() => {
+    if (stopped) return;
+    set(presenceRef, { ...data, lastSeen: Date.now() });
+  }, 30_000);
+
+  return async () => {
+    // Stop heartbeat FIRST to prevent race where heartbeat overwrites online:false
+    stopped = true;
+    clearInterval(heartbeat);
+    await set(presenceRef, { ...data, online: false, lastSeen: Date.now() }).catch(() => {}) // expected during sign-out;
   };
 }
 
@@ -93,15 +102,19 @@ export function subscribePresence(
 ): () => void {
   const presenceRef = ref(firebaseRtdb, `boards/${boardId}/presence`);
 
-  const unsubscribe = onValue(presenceRef, (snapshot) => {
-    const val = snapshot.val() as Record<string, PresenceUser> | null;
-    if (!val) {
-      callback([]);
-      return;
-    }
-    const users = Object.values(val);
-    callback(users);
-  });
+  const unsubscribe = onValue(
+    presenceRef,
+    (snapshot) => {
+      const val = snapshot.val() as Record<string, PresenceUser> | null;
+      if (!val) {
+        callback([]);
+        return;
+      }
+      const users = Object.values(val);
+      callback(users);
+    },
+    () => {} // expected during sign-out
+  );
 
   return unsubscribe;
 }
@@ -116,7 +129,10 @@ export function createCursorBroadcaster(
   const color = getCursorColor(uid);
   const cursorRef = ref(firebaseRtdb, `boards/${boardId}/cursors/${uid}`);
 
+  let stopped = false;
+
   const broadcast = throttle((x: number, y: number) => {
+    if (stopped) return;
     const data: CursorPosition = {
       uid,
       displayName,
@@ -128,8 +144,9 @@ export function createCursorBroadcaster(
     set(cursorRef, data);
   }, 33); // ~30fps
 
-  const cleanup = () => {
-    set(cursorRef, null);
+  const cleanup = async () => {
+    stopped = true;
+    await set(cursorRef, null).catch(() => {}) // expected during sign-out;
   };
 
   // Remove cursor data on disconnect
@@ -147,16 +164,20 @@ export function subscribeCursors(
 ): () => void {
   const cursorsRef = ref(firebaseRtdb, `boards/${boardId}/cursors`);
 
-  const unsubscribe = onValue(cursorsRef, (snapshot) => {
-    const val = snapshot.val() as Record<string, CursorPosition> | null;
-    if (!val) {
-      callback([]);
-      return;
-    }
-    // Filter out own cursor
-    const cursors = Object.values(val).filter((c) => c.uid !== myUid);
-    callback(cursors);
-  });
+  const unsubscribe = onValue(
+    cursorsRef,
+    (snapshot) => {
+      const val = snapshot.val() as Record<string, CursorPosition> | null;
+      if (!val) {
+        callback([]);
+        return;
+      }
+      // Filter out own cursor
+      const cursors = Object.values(val).filter((c) => c.uid !== myUid);
+      callback(cursors);
+    },
+    () => {} // expected during sign-out
+  );
 
   return unsubscribe;
 }

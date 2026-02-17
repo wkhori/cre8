@@ -161,6 +161,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setActionLoading(true);
     setError(null);
     try {
+      // Clean up presence/cursors BEFORE revoking auth,
+      // otherwise RTDB security rules reject the writes.
+      window.dispatchEvent(new CustomEvent("before-sign-out"));
+      // Give RTDB writes time to reach the server
+      await new Promise((r) => setTimeout(r, 150));
       await firebaseSignOut(firebaseAuth);
     } catch (err) {
       console.error("Sign out failed", err);

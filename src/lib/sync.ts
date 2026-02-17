@@ -175,7 +175,7 @@ export function createLiveDragBroadcaster(boardId: string, uid: string) {
   );
 
   const clear = () => {
-    rtdbSet(dragRef, null);
+    rtdbSet(dragRef, null).catch(() => {}); // expected during sign-out
   };
 
   return { broadcast, clear };
@@ -192,22 +192,26 @@ export function subscribeLiveDrags(
 ): () => void {
   const dragRef = ref(firebaseRtdb, `boards/${boardId}/liveDrags`);
 
-  const unsubscribe = onValue(dragRef, (snapshot) => {
-    const val = snapshot.val() as LiveDragData | null;
-    if (!val) {
-      onUpdate({});
-      return;
-    }
-    // Filter out our own drags and stale entries (>3s old)
-    const now = Date.now();
-    const filtered: LiveDragData = {};
-    for (const [id, data] of Object.entries(val)) {
-      if (data.uid !== myUid && now - data.ts < 3000) {
-        filtered[id] = data;
+  const unsubscribe = onValue(
+    dragRef,
+    (snapshot) => {
+      const val = snapshot.val() as LiveDragData | null;
+      if (!val) {
+        onUpdate({});
+        return;
       }
-    }
-    onUpdate(filtered);
-  });
+      // Filter out our own drags and stale entries (>3s old)
+      const now = Date.now();
+      const filtered: LiveDragData = {};
+      for (const [id, data] of Object.entries(val)) {
+        if (data.uid !== myUid && now - data.ts < 3000) {
+          filtered[id] = data;
+        }
+      }
+      onUpdate(filtered);
+    },
+    () => {} // expected during sign-out
+  );
 
   return unsubscribe;
 }

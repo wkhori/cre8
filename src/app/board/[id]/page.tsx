@@ -106,7 +106,7 @@ export default function BoardPage() {
 
     let unsubObjects: (() => void) | null = null;
     let unsubLiveDrags: (() => void) | null = null;
-    let leaveBoard: (() => void) | null = null;
+    let leaveBoard: (() => Promise<void>) | null = null;
 
     const init = async () => {
       // Ensure board document exists
@@ -211,14 +211,29 @@ export default function BoardPage() {
 
     init();
 
-    return () => {
+    const teardown = async () => {
       unsubObjects?.();
       unsubLiveDrags?.();
-      leaveBoard?.();
-      cursorBroadcasterRef.current?.cleanup();
+      // Await RTDB writes so they complete before auth is revoked
+      await Promise.all([
+        leaveBoard?.(),
+        cursorBroadcasterRef.current?.cleanup(),
+      ]);
       cursorBroadcasterRef.current = null;
       liveDragBroadcasterRef.current?.clear();
       liveDragBroadcasterRef.current = null;
+    };
+
+    // Clean up BEFORE sign-out so RTDB writes happen while still authenticated
+    const onBeforeSignOut = () => { teardown(); };
+    window.addEventListener("before-sign-out", onBeforeSignOut);
+    // Also clean up on tab close / navigation away
+    window.addEventListener("beforeunload", onBeforeSignOut);
+
+    return () => {
+      window.removeEventListener("before-sign-out", onBeforeSignOut);
+      window.removeEventListener("beforeunload", onBeforeSignOut);
+      teardown();
     };
   }, [user, profile, boardId]);
 
