@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <defs>
+    <radialGradient id="fg" cx="15%" cy="15%" r="100%">
+      <stop offset="0%" stop-color="#00FFB2"/>
+      <stop offset="45%" stop-color="#00C8FF"/>
+      <stop offset="100%" stop-color="#0055EE"/>
+    </radialGradient>
+  </defs>
+  <rect width="32" height="32" rx="7" fill="#0A0A12"/>
+  <rect x="4" y="4" width="7" height="7" rx="1.5" fill="url(#fg)" opacity="1"/>
+  <rect x="12.5" y="4" width="7" height="7" rx="1.5" fill="url(#fg)" opacity="0.70"/>
+  <rect x="21" y="4" width="7" height="7" rx="1.5" fill="url(#fg)" opacity="0.44"/>
+  <rect x="4" y="12.5" width="7" height="7" rx="1.5" fill="url(#fg)" opacity="0.62"/>
+  <rect x="12.5" y="12.5" width="7" height="7" rx="1.5" fill="url(#fg)" opacity="0.36"/>
+  <rect x="4" y="21" width="7" height="7" rx="1.5" fill="url(#fg)" opacity="0.30"/>
+  <rect x="12.5" y="21" width="7" height="7" rx="1.5" fill="url(#fg)" opacity="0.16"/>
+  <rect x="21" y="21" width="7" height="7" rx="1.5" fill="url(#fg)" opacity="0.08"/>
+</svg>

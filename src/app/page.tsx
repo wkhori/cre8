@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import { ArrowRight, Loader2, MousePointer2, Sparkles, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -240,14 +241,9 @@ export default function Home() {
       </div>
 
       {/* ── Bottom logo mark ── */}
-      <div className="absolute bottom-6 flex items-center gap-1.5 text-zinc-700">
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="text-zinc-600">
-          <rect width="7" height="7" rx="1.5" fill="currentColor" />
-          <rect x="9" width="7" height="7" rx="1.5" fill="currentColor" opacity="0.5" />
-          <rect y="9" width="7" height="7" rx="1.5" fill="currentColor" opacity="0.5" />
-          <rect x="9" y="9" width="7" height="7" rx="1.5" fill="currentColor" opacity="0.3" />
-        </svg>
-        <span className="text-xs font-medium tracking-tight">cre8</span>
+      <div className="absolute bottom-6 flex items-center gap-1.5">
+        <Image src="/logo-dark.svg" alt="cre8" width={18} height={18} className="opacity-70" />
+        <span className="text-xs font-medium tracking-tight text-zinc-500">cre8</span>
       </div>
     </div>
   );

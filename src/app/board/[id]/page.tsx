@@ -1,6 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import Image from "next/image";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { useCanvasStore } from "@/store/canvas-store";
@@ -370,9 +371,18 @@ export default function BoardPage() {
       <header className="sticky top-0 z-40 flex h-11 shrink-0 items-center border-b border-zinc-200/80 bg-white/90 px-3 backdrop-blur-lg dark:border-zinc-800/80 dark:bg-zinc-950/90">
         {/* Left: Logo + tool modes */}
         <div className="flex items-center gap-1">
-          <span className="mr-2 text-sm font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
-            cre8
-          </span>
+          <div className="mr-2 flex items-center gap-1.5">
+            <Image
+              src={theme === "dark" ? "/logo-dark.svg" : "/logo-light.svg"}
+              alt="cre8"
+              width={22}
+              height={22}
+              className="rounded-lg"
+            />
+            <span className="text-sm font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
+              cre8
+            </span>
+          </div>
 
           <ToolbarDivider />
 

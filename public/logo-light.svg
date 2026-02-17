@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" width="80" height="80">
+  <defs>
+    <radialGradient id="gl" cx="15%" cy="15%" r="100%">
+      <stop offset="0%" stop-color="#00D99A"/>
+      <stop offset="45%" stop-color="#00A8DD"/>
+      <stop offset="100%" stop-color="#0050DD"/>
+    </radialGradient>
+    <filter id="shadow" x="-8%" y="-8%" width="116%" height="124%">
+      <feDropShadow dx="0" dy="0.5" stdDeviation="2" flood-color="#000" flood-opacity="0.06"/>
+    </filter>
+  </defs>
+  <!-- Background -->
+  <rect width="80" height="80" rx="17" fill="#FFFFFF" filter="url(#shadow)"/>
+  <rect width="80" height="80" rx="17" fill="none" stroke="#E2E2EA" stroke-width="0.75"/>
+  <!-- Grid cells — 3×3 staircase cascade -->
+  <rect x="10" y="10" width="17" height="17" rx="3.5" fill="url(#gl)" opacity="1"/>
+  <rect x="31.5" y="10" width="17" height="17" rx="3.5" fill="url(#gl)" opacity="0.72"/>
+  <rect x="53" y="10" width="17" height="17" rx="3.5" fill="url(#gl)" opacity="0.46"/>
+  <rect x="10" y="31.5" width="17" height="17" rx="3.5" fill="url(#gl)" opacity="0.64"/>
+  <rect x="31.5" y="31.5" width="17" height="17" rx="3.5" fill="url(#gl)" opacity="0.38"/>
+  <rect x="10" y="53" width="17" height="17" rx="3.5" fill="url(#gl)" opacity="0.32"/>
+  <rect x="31.5" y="53" width="17" height="17" rx="3.5" fill="url(#gl)" opacity="0.18"/>
+  <rect x="53" y="53" width="17" height="17" rx="3.5" fill="url(#gl)" opacity="0.09"/>
+</svg>

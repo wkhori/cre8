@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" width="80" height="80">
+  <defs>
+    <radialGradient id="gd" cx="15%" cy="15%" r="100%">
+      <stop offset="0%" stop-color="#00FFB2"/>
+      <stop offset="45%" stop-color="#00C8FF"/>
+      <stop offset="100%" stop-color="#0055EE"/>
+    </radialGradient>
+    <filter id="glow">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="1.5" result="blur"/>
+      <feColorMatrix in="blur" type="matrix" values="0 0 0 0 0  0 0 0 0 0.8  0 0 0 0 1  0 0 0 0.25 0" result="glowColor"/>
+      <feMerge>
+        <feMergeNode in="glowColor"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <!-- Background -->
+  <rect width="80" height="80" rx="17" fill="#0A0A12"/>
+  <rect width="80" height="80" rx="17" fill="none" stroke="#1A1A2E" stroke-width="0.75"/>
+  <!-- Grid cells — 3×3 staircase cascade -->
+  <g filter="url(#glow)">
+    <rect x="10" y="10" width="17" height="17" rx="3.5" fill="url(#gd)" opacity="1"/>
+    <rect x="31.5" y="10" width="17" height="17" rx="3.5" fill="url(#gd)" opacity="0.70"/>
+    <rect x="53" y="10" width="17" height="17" rx="3.5" fill="url(#gd)" opacity="0.44"/>
+    <rect x="10" y="31.5" width="17" height="17" rx="3.5" fill="url(#gd)" opacity="0.62"/>
+    <rect x="31.5" y="31.5" width="17" height="17" rx="3.5" fill="url(#gd)" opacity="0.36"/>
+    <rect x="10" y="53" width="17" height="17" rx="3.5" fill="url(#gd)" opacity="0.30"/>
+    <rect x="31.5" y="53" width="17" height="17" rx="3.5" fill="url(#gd)" opacity="0.16"/>
+    <rect x="53" y="53" width="17" height="17" rx="3.5" fill="url(#gd)" opacity="0.08"/>
+  </g>
+</svg>
