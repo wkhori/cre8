@@ -37,6 +37,7 @@ interface AuthContextValue {
   signUpWithEmail: (name: string, email: string, password: string) => Promise<void>;
   signInWithEmail: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
+  clearActionLoading: () => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -144,8 +145,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       await signInWithPopup(firebaseAuth, googleAuthProvider);
     } catch (err) {
-      console.error("Google sign-in failed", err);
-      setError("Could not sign in with Google. Please try again.");
+      const code = (err as { code?: string })?.code;
+      if (code === "auth/popup-closed-by-user" || code === "auth/cancelled-popup-request") {
+        // User closed the popup — not an error, just reset
+      } else {
+        console.error("Google sign-in failed", err);
+        setError("Could not sign in with Google. Please try again.");
+      }
     } finally {
       setActionLoading(false);
     }
@@ -164,6 +170,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const clearActionLoading = useCallback(() => {
+    setActionLoading(false);
+    setError(null);
+  }, []);
+
   const value = useMemo<AuthContextValue>(
     () => ({
       user,
@@ -175,8 +186,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signUpWithEmail,
       signInWithEmail,
       signOut,
+      clearActionLoading,
     }),
-    [actionLoading, error, loading, profile, signInWithGoogle, signUpWithEmail, signInWithEmail, signOut, user]
+    [actionLoading, error, loading, profile, signInWithGoogle, signUpWithEmail, signInWithEmail, signOut, clearActionLoading, user]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

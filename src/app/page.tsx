@@ -11,7 +11,7 @@ import { useAuth } from "@/components/auth/AuthProvider";
 
 export default function Home() {
   const router = useRouter();
-  const { user, loading, actionLoading, error, signInWithGoogle, signUpWithEmail, signInWithEmail } = useAuth();
+  const { user, loading, actionLoading, error, signInWithGoogle, signUpWithEmail, signInWithEmail, clearActionLoading } = useAuth();
 
   const [showEmail, setShowEmail] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
@@ -107,7 +107,7 @@ export default function Home() {
 
                   <button
                     type="button"
-                    onClick={() => setShowEmail(true)}
+                    onClick={() => { setShowEmail(true); clearActionLoading(); }}
                     className="w-full py-1.5 text-center text-xs text-zinc-500 transition-colors hover:text-zinc-300"
                   >
                     or continue with email
