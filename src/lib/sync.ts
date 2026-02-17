@@ -115,27 +115,37 @@ export function subscribeBoardObjects(
   const objectsRef = collection(firebaseDb, "boards", boardId, "objects");
   let isFirst = true;
 
-  return onSnapshot(objectsRef, (snapshot) => {
-    if (isFirst) {
-      isFirst = false;
-      const shapes: Shape[] = [];
-      snapshot.forEach((docSnap) => {
-        shapes.push(firestoreToShape(docSnap.id, docSnap.data()));
-      });
-      callbacks.onInitial(shapes);
-      return;
-    }
+  return onSnapshot(
+    objectsRef,
+    (snapshot) => {
+      if (isFirst) {
+        isFirst = false;
+        const shapes: Shape[] = [];
+        snapshot.forEach((docSnap) => {
+          shapes.push(firestoreToShape(docSnap.id, docSnap.data()));
+        });
+        callbacks.onInitial(shapes);
+        return;
+      }
 
-    // Batch all changes from this snapshot
-    const changes: BoardObjectChange[] = [];
-    for (const change of snapshot.docChanges()) {
-      const shape = firestoreToShape(change.doc.id, change.doc.data());
-      changes.push({ type: change.type, shape });
+      // Batch all changes from this snapshot
+      const changes: BoardObjectChange[] = [];
+      for (const change of snapshot.docChanges()) {
+        const shape = firestoreToShape(change.doc.id, change.doc.data());
+        changes.push({ type: change.type, shape });
+      }
+      if (changes.length > 0) {
+        callbacks.onChanges(changes);
+      }
+    },
+    (error) => {
+      // Expected during sign-out: auth token is revoked before the
+      // listener cleanup runs, causing a permission-denied error.
+      if (error.code !== "permission-denied") {
+        console.error("Board objects snapshot error:", error);
+      }
     }
-    if (changes.length > 0) {
-      callbacks.onChanges(changes);
-    }
-  });
+  );
 }
 
 // ── Live drag sync via RTDB ──────────────────────────────────────────
