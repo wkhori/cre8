@@ -23,7 +23,6 @@ import {
 } from "@/lib/presence";
 import type { Shape } from "@/lib/types";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import {
   Square,
   Circle,
@@ -73,7 +72,6 @@ export default function BoardPage() {
 
   const { user, profile, loading: authLoading, actionLoading, signOut } = useAuth();
 
-  const shapes = useCanvasStore((s) => s.shapes);
   const selectedIds = useCanvasStore((s) => s.selectedIds);
   const historyIndex = useCanvasStore((s) => s.historyIndex);
   const historyLength = useCanvasStore((s) => s.history.length);
@@ -355,159 +353,148 @@ export default function BoardPage() {
   if (authLoading || !user) {
     return (
       <div className="flex h-screen items-center justify-center bg-zinc-50 dark:bg-zinc-950">
-        <div className="inline-flex items-center gap-2 rounded-md border border-zinc-200 bg-white px-4 py-2 text-sm text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200">
+        <div className="inline-flex items-center gap-2.5 rounded-lg border border-zinc-200 bg-white px-5 py-3 text-sm text-zinc-600 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400">
           <Loader2 className="size-4 animate-spin" />
-          Preparing your canvas...
+          Loading canvas...
         </div>
       </div>
     );
   }
 
   return (
-    <div className="flex h-screen flex-col bg-zinc-50 dark:bg-zinc-950">
-      {/* Top bar */}
-      <div className="sticky top-0 z-40 flex items-center gap-1.5 border-b border-zinc-200 bg-white/80 px-3 py-1.5 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/80">
-        <h1 className="mr-2 text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-          cre8
-        </h1>
+    <div className="flex h-screen flex-col bg-zinc-100 dark:bg-zinc-950">
+      {/* ── Top bar ── */}
+      <header className="sticky top-0 z-40 flex h-11 shrink-0 items-center border-b border-zinc-200/80 bg-white/90 px-3 backdrop-blur-lg dark:border-zinc-800/80 dark:bg-zinc-950/90">
+        {/* Left: Logo + tool modes */}
+        <div className="flex items-center gap-1">
+          <span className="mr-2 text-sm font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
+            cre8
+          </span>
 
-        <div className="mx-1 h-4 w-px bg-zinc-200 dark:bg-zinc-700" />
+          <ToolbarDivider />
 
-        {/* Tool modes */}
-        <Button
-          size="icon-xs"
-          variant={activeTool === "pointer" ? "default" : "ghost"}
-          onClick={() => setActiveTool("pointer")}
-          title="Pointer (V)"
-        >
-          <MousePointer2 className="size-3.5" />
-        </Button>
-        <Button
-          size="icon-xs"
-          variant={activeTool === "hand" ? "default" : "ghost"}
-          onClick={() => setActiveTool("hand")}
-          title="Hand (H)"
-        >
-          <Hand className="size-3.5" />
-        </Button>
+          <Button
+            size="icon-xs"
+            variant={activeTool === "pointer" ? "default" : "ghost"}
+            onClick={() => setActiveTool("pointer")}
+            title="Pointer (V)"
+          >
+            <MousePointer2 className="size-3.5" />
+          </Button>
+          <Button
+            size="icon-xs"
+            variant={activeTool === "hand" ? "default" : "ghost"}
+            onClick={() => setActiveTool("hand")}
+            title="Hand (H)"
+          >
+            <Hand className="size-3.5" />
+          </Button>
 
-        <div className="mx-1 h-4 w-px bg-zinc-200 dark:bg-zinc-700" />
+          <ToolbarDivider />
 
-        {/* Shape creators */}
-        <Button size="xs" variant="outline" onClick={handleAddStickyNote} title="Add Sticky Note">
-          <StickyNote className="size-3.5" />
-          <span className="hidden sm:inline">Sticky</span>
-        </Button>
-        <Button size="xs" variant="outline" onClick={handleAddRect} title="Add Rectangle">
-          <Square className="size-3.5" />
-          <span className="hidden sm:inline">Rect</span>
-        </Button>
-        <Button size="xs" variant="outline" onClick={handleAddCircle} title="Add Circle">
-          <Circle className="size-3.5" />
-          <span className="hidden sm:inline">Circle</span>
-        </Button>
-        <Button size="xs" variant="outline" onClick={handleAddText} title="Add Text">
-          <Type className="size-3.5" />
-          <span className="hidden sm:inline">Text</span>
-        </Button>
-        <Button size="xs" variant="outline" onClick={handleAddFrame} title="Add Frame">
-          <Frame className="size-3.5" />
-          <span className="hidden sm:inline">Frame</span>
-        </Button>
+          <Button size="icon-xs" variant="ghost" onClick={() => useCanvasStore.getState().undo()} disabled={!canUndo} title="Undo (Cmd+Z)">
+            <Undo2 className="size-3.5" />
+          </Button>
+          <Button size="icon-xs" variant="ghost" onClick={() => useCanvasStore.getState().redo()} disabled={!canRedo} title="Redo (Cmd+Shift+Z)">
+            <Redo2 className="size-3.5" />
+          </Button>
 
-        <div className="mx-1 h-4 w-px bg-zinc-200 dark:bg-zinc-700" />
+          <ToolbarDivider />
 
-        {/* Undo / Redo */}
-        <Button size="icon-xs" variant="ghost" onClick={() => useCanvasStore.getState().undo()} disabled={!canUndo} title="Undo (Ctrl+Z)">
-          <Undo2 className="size-3.5" />
-        </Button>
-        <Button size="icon-xs" variant="ghost" onClick={() => useCanvasStore.getState().redo()} disabled={!canRedo} title="Redo (Ctrl+Shift+Z)">
-          <Redo2 className="size-3.5" />
-        </Button>
+          <Button size="xs" variant="ghost" onClick={handleResetView} title="Reset view">
+            Reset
+          </Button>
+        </div>
 
-        <div className="mx-1 h-4 w-px bg-zinc-200 dark:bg-zinc-700" />
+        {/* Center: Shape creators */}
+        <div className="absolute left-1/2 flex -translate-x-1/2 items-center gap-0.5 rounded-lg border border-zinc-200/80 bg-zinc-50/80 p-0.5 dark:border-zinc-800/80 dark:bg-zinc-900/80">
+          <Button size="icon-xs" variant="ghost" onClick={handleAddStickyNote} title="Sticky Note">
+            <StickyNote className="size-3.5" />
+          </Button>
+          <Button size="icon-xs" variant="ghost" onClick={handleAddRect} title="Rectangle">
+            <Square className="size-3.5" />
+          </Button>
+          <Button size="icon-xs" variant="ghost" onClick={handleAddCircle} title="Circle">
+            <Circle className="size-3.5" />
+          </Button>
+          <Button size="icon-xs" variant="ghost" onClick={handleAddText} title="Text">
+            <Type className="size-3.5" />
+          </Button>
+          <Button size="icon-xs" variant="ghost" onClick={handleAddFrame} title="Frame">
+            <Frame className="size-3.5" />
+          </Button>
 
-        {/* Selection actions */}
-        <Button
-          size="icon-xs"
-          variant="ghost"
-          onClick={() => hasSelection && useCanvasStore.getState().duplicateShapes(selectedIds)}
-          disabled={!hasSelection}
-          title="Duplicate (Ctrl+D)"
-        >
-          <Copy className="size-3.5" />
-        </Button>
-        <Button
-          size="icon-xs"
-          variant="ghost"
-          onClick={() => hasSelection && useCanvasStore.getState().deleteShapes(selectedIds)}
-          disabled={!hasSelection}
-          title="Delete (Backspace)"
-        >
-          <Trash2 className="size-3.5" />
-        </Button>
-        <Button
-          size="icon-xs"
-          variant="ghost"
-          onClick={() => hasSelection && useCanvasStore.getState().bringToFront(selectedIds)}
-          disabled={!hasSelection}
-          title="Bring to Front (Ctrl+])"
-        >
-          <ArrowUpToLine className="size-3.5" />
-        </Button>
-        <Button
-          size="icon-xs"
-          variant="ghost"
-          onClick={() => hasSelection && useCanvasStore.getState().sendToBack(selectedIds)}
-          disabled={!hasSelection}
-          title="Send to Back (Ctrl+[)"
-        >
-          <ArrowDownToLine className="size-3.5" />
-        </Button>
+          {hasSelection && (
+            <>
+              <ToolbarDivider />
+              <Button
+                size="icon-xs"
+                variant="ghost"
+                onClick={() => useCanvasStore.getState().duplicateShapes(selectedIds)}
+                title="Duplicate (Cmd+D)"
+              >
+                <Copy className="size-3.5" />
+              </Button>
+              <Button
+                size="icon-xs"
+                variant="ghost"
+                onClick={() => useCanvasStore.getState().bringToFront(selectedIds)}
+                title="Bring to Front"
+              >
+                <ArrowUpToLine className="size-3.5" />
+              </Button>
+              <Button
+                size="icon-xs"
+                variant="ghost"
+                onClick={() => useCanvasStore.getState().sendToBack(selectedIds)}
+                title="Send to Back"
+              >
+                <ArrowDownToLine className="size-3.5" />
+              </Button>
+              <Button
+                size="icon-xs"
+                variant="ghost"
+                className="text-red-500 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/30"
+                onClick={() => useCanvasStore.getState().deleteShapes(selectedIds)}
+                title="Delete (Backspace)"
+              >
+                <Trash2 className="size-3.5" />
+              </Button>
+            </>
+          )}
+        </div>
 
-        <div className="mx-1 h-4 w-px bg-zinc-200 dark:bg-zinc-700" />
-
-        <Button size="xs" variant="ghost" onClick={handleResetView}>
-          Reset View
-        </Button>
-
-        {/* Right side */}
+        {/* Right: Presence + user */}
         <div className="ml-auto flex items-center gap-2">
-          {/* Presence bar */}
+          {hasSelection && (
+            <span className="text-[11px] tabular-nums text-zinc-500 dark:text-zinc-500">
+              {selectedIds.length} selected
+            </span>
+          )}
+
           {boardReady && (
             <PresenceBar boardId={boardId} myUid={user.uid} />
           )}
 
-          <div className="mx-1 h-4 w-px bg-zinc-200 dark:bg-zinc-700" />
+          <ToolbarDivider />
 
-          {/* User info */}
-          <div className="hidden items-center gap-2 rounded-md border border-zinc-200 bg-zinc-100 px-2 py-1 text-xs dark:border-zinc-700 dark:bg-zinc-900 sm:inline-flex">
+          {/* User avatar */}
+          <div className="hidden items-center gap-1.5 sm:inline-flex">
             {profile?.photoURL ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={profile.photoURL}
                 alt={profile.name}
-                className="size-5 rounded-full object-cover"
+                className="size-6 rounded-full object-cover ring-1 ring-zinc-200 dark:ring-zinc-700"
                 referrerPolicy="no-referrer"
               />
             ) : (
-              <div className="flex size-5 items-center justify-center rounded-full bg-zinc-300 text-[10px] font-semibold text-zinc-800 dark:bg-zinc-700 dark:text-zinc-100">
+              <div className="flex size-6 items-center justify-center rounded-full bg-zinc-200 text-[10px] font-semibold text-zinc-700 dark:bg-zinc-700 dark:text-zinc-200">
                 {(profile?.name ?? user.email ?? "U").slice(0, 1).toUpperCase()}
               </div>
             )}
-            <span className="max-w-32 truncate text-zinc-700 dark:text-zinc-200">
-              {profile?.name ?? user.displayName ?? "Creator"}
-            </span>
           </div>
 
-          {hasSelection && (
-            <Badge variant="outline" className="tabular-nums">
-              {selectedIds.length} selected
-            </Badge>
-          )}
-          <Badge variant="secondary" className="tabular-nums">
-            {shapes.length} object{shapes.length !== 1 ? "s" : ""}
-          </Badge>
           <Button
             size="icon-xs"
             variant="ghost"
@@ -519,9 +506,9 @@ export default function BoardPage() {
           </Button>
           <ThemeToggle />
         </div>
-      </div>
+      </header>
 
-      {/* Canvas area */}
+      {/* ── Canvas area ── */}
       <div className="relative flex-1">
         <CanvasStage
           boardId={boardId}
@@ -533,4 +520,8 @@ export default function BoardPage() {
       </div>
     </div>
   );
+}
+
+function ToolbarDivider() {
+  return <div className="mx-1 h-4 w-px bg-zinc-200 dark:bg-zinc-700" />;
 }
