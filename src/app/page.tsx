@@ -1,15 +1,23 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { ArrowRight, Loader2, MousePointer2, Sparkles, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { useAuth } from "@/components/auth/AuthProvider";
 
 export default function Home() {
   const router = useRouter();
-  const { user, profile, loading, actionLoading, error, signInWithGoogle } = useAuth();
+  const { user, loading, actionLoading, error, signInWithGoogle, signUpWithEmail, signInWithEmail } = useAuth();
+
+  const [showEmail, setShowEmail] = useState(false);
+  const [isSignUp, setIsSignUp] = useState(false);
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
 
   useEffect(() => {
     if (!loading && user) {
@@ -77,29 +85,119 @@ export default function Home() {
             </p>
 
             <div className="mt-5 space-y-3">
-              <Button
-                size="lg"
-                className="h-11 w-full justify-between rounded-xl bg-white text-zinc-950 hover:bg-zinc-100"
-                onClick={() => void signInWithGoogle()}
-                disabled={busy}
-              >
-                <span className="inline-flex items-center gap-2.5 text-[14px] font-medium">
-                  <GoogleMark />
-                  Continue with Google
-                </span>
-                {busy ? (
-                  <Loader2 className="size-4 animate-spin text-zinc-400" />
-                ) : (
-                  <ArrowRight className="size-4 text-zinc-400" />
-                )}
-              </Button>
+              {/* Google — hero CTA */}
+              {!showEmail && (
+                <>
+                  <Button
+                    size="lg"
+                    className="h-11 w-full justify-between rounded-xl bg-white text-zinc-950 hover:bg-zinc-100"
+                    onClick={() => void signInWithGoogle()}
+                    disabled={busy}
+                  >
+                    <span className="inline-flex items-center gap-2.5 text-[14px] font-medium">
+                      <GoogleMark />
+                      Continue with Google
+                    </span>
+                    {busy ? (
+                      <Loader2 className="size-4 animate-spin text-zinc-400" />
+                    ) : (
+                      <ArrowRight className="size-4 text-zinc-400" />
+                    )}
+                  </Button>
 
-              {profile && (
-                <div className="flex items-center justify-center gap-2 rounded-lg border border-zinc-800 bg-zinc-950/60 px-3 py-2.5 text-xs text-zinc-400">
-                  <span className="size-1.5 rounded-full bg-emerald-400" />
-                  Signed in as{" "}
-                  <span className="font-medium text-zinc-200">{profile.name}</span>
-                </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowEmail(true)}
+                    className="w-full py-1.5 text-center text-xs text-zinc-500 transition-colors hover:text-zinc-300"
+                  >
+                    or continue with email
+                  </button>
+                </>
+              )}
+
+              {/* Email form — revealed on demand */}
+              {showEmail && (
+                <form
+                  className="space-y-3"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (isSignUp) {
+                      void signUpWithEmail(name, email, password);
+                    } else {
+                      void signInWithEmail(email, password);
+                    }
+                  }}
+                >
+                  {isSignUp && (
+                    <div className="space-y-1.5">
+                      <Label htmlFor="auth-name" className="text-xs text-zinc-400">Name</Label>
+                      <Input
+                        id="auth-name"
+                        type="text"
+                        placeholder="Your name"
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        required
+                        autoFocus
+                        className="h-10 rounded-lg border-zinc-700 bg-zinc-950/60 text-sm text-zinc-100 placeholder:text-zinc-600"
+                      />
+                    </div>
+                  )}
+
+                  <div className="space-y-1.5">
+                    <Label htmlFor="auth-email" className="text-xs text-zinc-400">Email</Label>
+                    <Input
+                      id="auth-email"
+                      type="email"
+                      placeholder="you@example.com"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      required
+                      autoFocus={!isSignUp}
+                      className="h-10 rounded-lg border-zinc-700 bg-zinc-950/60 text-sm text-zinc-100 placeholder:text-zinc-600"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label htmlFor="auth-password" className="text-xs text-zinc-400">Password</Label>
+                    <Input
+                      id="auth-password"
+                      type="password"
+                      placeholder={isSignUp ? "At least 6 characters" : "••••••••"}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      required
+                      minLength={isSignUp ? 6 : undefined}
+                      className="h-10 rounded-lg border-zinc-700 bg-zinc-950/60 text-sm text-zinc-100 placeholder:text-zinc-600"
+                    />
+                  </div>
+
+                  <Button
+                    type="submit"
+                    size="lg"
+                    disabled={busy}
+                    className="h-10 w-full rounded-xl bg-zinc-100 text-sm font-medium text-zinc-900 hover:bg-white"
+                  >
+                    {busy ? <Loader2 className="size-4 animate-spin" /> : isSignUp ? "Create Account" : "Sign In"}
+                  </Button>
+
+                  <div className="flex items-center justify-between pt-1">
+                    <button
+                      type="button"
+                      onClick={() => { setShowEmail(false); setIsSignUp(false); }}
+                      className="text-xs text-zinc-600 transition-colors hover:text-zinc-400"
+                    >
+                      Back to Google
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsSignUp(!isSignUp)}
+                      className="text-xs text-zinc-400 transition-colors hover:text-zinc-200"
+                    >
+                      {isSignUp ? "Have an account? Sign in" : "Need an account? Sign up"}
+                    </button>
+                  </div>
+                </form>
               )}
 
               {error && (

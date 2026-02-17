@@ -1,9 +1,12 @@
 "use client";
 
 import {
+  createUserWithEmailAndPassword,
   onAuthStateChanged,
+  signInWithEmailAndPassword,
   signInWithPopup,
   signOut as firebaseSignOut,
+  updateProfile,
   type User,
 } from "firebase/auth";
 import {
@@ -31,10 +34,32 @@ interface AuthContextValue {
   actionLoading: boolean;
   error: string | null;
   signInWithGoogle: () => Promise<void>;
+  signUpWithEmail: (name: string, email: string, password: string) => Promise<void>;
+  signInWithEmail: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
+
+function friendlyAuthError(err: unknown): string {
+  const code = (err as { code?: string })?.code;
+  switch (code) {
+    case "auth/email-already-in-use":
+      return "An account with this email already exists.";
+    case "auth/weak-password":
+      return "Password must be at least 6 characters.";
+    case "auth/invalid-email":
+      return "Please enter a valid email address.";
+    case "auth/invalid-credential":
+    case "auth/wrong-password":
+    case "auth/user-not-found":
+      return "Invalid email or password.";
+    case "auth/too-many-requests":
+      return "Too many attempts. Please try again later.";
+    default:
+      return "Something went wrong. Please try again.";
+  }
+}
 
 function makeFallbackProfile(user: User): UserProfile {
   const defaultName =
@@ -84,6 +109,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return unsubscribe;
   }, []);
 
+  const signUpWithEmail = useCallback(async (name: string, email: string, password: string) => {
+    setActionLoading(true);
+    setError(null);
+    try {
+      const credential = await createUserWithEmailAndPassword(firebaseAuth, email, password);
+      await updateProfile(credential.user, { displayName: name });
+      // Force onAuthStateChanged to pick up the new displayName
+      await credential.user.reload();
+    } catch (err) {
+      console.error("Email sign-up failed", err);
+      setError(friendlyAuthError(err));
+    } finally {
+      setActionLoading(false);
+    }
+  }, []);
+
+  const signInWithEmail = useCallback(async (email: string, password: string) => {
+    setActionLoading(true);
+    setError(null);
+    try {
+      await signInWithEmailAndPassword(firebaseAuth, email, password);
+    } catch (err) {
+      console.error("Email sign-in failed", err);
+      setError(friendlyAuthError(err));
+    } finally {
+      setActionLoading(false);
+    }
+  }, []);
+
   const signInWithGoogle = useCallback(async () => {
     setActionLoading(true);
     setError(null);
@@ -118,9 +172,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       actionLoading,
       error,
       signInWithGoogle,
+      signUpWithEmail,
+      signInWithEmail,
       signOut,
     }),
-    [actionLoading, error, loading, profile, signInWithGoogle, signOut, user]
+    [actionLoading, error, loading, profile, signInWithGoogle, signUpWithEmail, signInWithEmail, signOut, user]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
