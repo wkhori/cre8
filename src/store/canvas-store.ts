@@ -9,20 +9,10 @@ import type {
   BaseShape,
 } from "@/lib/types";
 import { generateId } from "@/lib/id";
-
-const COLORS = [
-  "#3b82f6",
-  "#ef4444",
-  "#22c55e",
-  "#f59e0b",
-  "#8b5cf6",
-  "#ec4899",
-  "#06b6d4",
-  "#f97316",
-];
+import { VIVID_COLORS } from "@/lib/colors";
 
 function randomColor(): string {
-  return COLORS[Math.floor(Math.random() * COLORS.length)];
+  return VIVID_COLORS[Math.floor(Math.random() * VIVID_COLORS.length)];
 }
 
 const MAX_HISTORY = 50;

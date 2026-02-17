@@ -49,6 +49,7 @@ import {
   Moon,
   Sun,
 } from "lucide-react";
+import ColorPicker from "@/components/canvas/ColorPicker";
 import { useTheme } from "next-themes";
 
 const CanvasStage = dynamic(
@@ -437,6 +438,7 @@ export default function BoardPage() {
           {hasSelection && (
             <>
               <ToolbarDivider />
+              <ColorPicker />
               <Button
                 size="icon-xs"
                 variant="ghost"
