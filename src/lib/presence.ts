@@ -1,12 +1,6 @@
 "use client";
 
-import {
-  ref,
-  set,
-  onValue,
-  onDisconnect,
-  serverTimestamp,
-} from "firebase/database";
+import { ref, set, onValue, onDisconnect, serverTimestamp } from "firebase/database";
 import { firebaseRtdb } from "@/lib/firebase-client";
 import { throttle } from "@/lib/throttle";
 
@@ -90,7 +84,7 @@ export function joinBoard(
     // Stop heartbeat FIRST to prevent race where heartbeat overwrites online:false
     stopped = true;
     clearInterval(heartbeat);
-    await set(presenceRef, { ...data, online: false, lastSeen: Date.now() }).catch(() => {}) // expected during sign-out;
+    await set(presenceRef, { ...data, online: false, lastSeen: Date.now() }).catch(() => {}); // expected during sign-out;
   };
 }
 
@@ -121,11 +115,7 @@ export function subscribePresence(
 
 // ── Cursor broadcast (throttled to ~30Hz) ────────────────────────────
 
-export function createCursorBroadcaster(
-  boardId: string,
-  uid: string,
-  displayName: string
-) {
+export function createCursorBroadcaster(boardId: string, uid: string, displayName: string) {
   const color = getCursorColor(uid);
   const cursorRef = ref(firebaseRtdb, `boards/${boardId}/cursors/${uid}`);
 
@@ -146,7 +136,7 @@ export function createCursorBroadcaster(
 
   const cleanup = async () => {
     stopped = true;
-    await set(cursorRef, null).catch(() => {}) // expected during sign-out;
+    await set(cursorRef, null).catch(() => {}); // expected during sign-out;
   };
 
   // Remove cursor data on disconnect

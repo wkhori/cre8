@@ -29,9 +29,7 @@ export default function DebugDashboard() {
       const elapsed = now - lastTimeRef.current;
 
       if (elapsed >= 500) {
-        const currentFps = Math.round(
-          (frameCountRef.current / elapsed) * 1000
-        );
+        const currentFps = Math.round((frameCountRef.current / elapsed) * 1000);
         const avgFrameMs = Number((elapsed / frameCountRef.current).toFixed(1));
         setFps(currentFps, avgFrameMs);
         frameCountRef.current = 0;
@@ -69,30 +67,15 @@ export default function DebugDashboard() {
       <Row label="Tool" value={activeTool} />
       <Divider />
       <Row label="Zoom" value={`${(viewport.scale * 100).toFixed(0)}%`} />
-      <Row
-        label="Pan"
-        value={`${viewport.x.toFixed(0)}, ${viewport.y.toFixed(0)}`}
-      />
+      <Row label="Pan" value={`${viewport.x.toFixed(0)}, ${viewport.y.toFixed(0)}`} />
       <Divider />
-      <Row
-        label="Screen"
-        value={`${pointer.screenX.toFixed(0)}, ${pointer.screenY.toFixed(0)}`}
-      />
-      <Row
-        label="World"
-        value={`${pointer.worldX.toFixed(0)}, ${pointer.worldY.toFixed(0)}`}
-      />
+      <Row label="Screen" value={`${pointer.screenX.toFixed(0)}, ${pointer.screenY.toFixed(0)}`} />
+      <Row label="World" value={`${pointer.worldX.toFixed(0)}, ${pointer.worldY.toFixed(0)}`} />
     </div>
   );
 }
 
-function Row({
-  label,
-  value,
-}: {
-  label: string;
-  value: React.ReactNode;
-}) {
+function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex justify-between py-[1px]">
       <span className="text-zinc-500">{label}</span>

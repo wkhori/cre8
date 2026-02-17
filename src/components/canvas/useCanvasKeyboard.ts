@@ -30,11 +30,7 @@ export function useCanvasKeyboard({
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
-      if (
-        target.tagName === "INPUT" ||
-        target.tagName === "TEXTAREA" ||
-        target.isContentEditable
-      )
+      if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)
         return;
 
       // Space held → temporary hand mode
@@ -117,9 +113,7 @@ export function useCanvasKeyboard({
       }
 
       const NUDGE = e.shiftKey ? 10 : 1;
-      if (
-        ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)
-      ) {
+      if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) {
         e.preventDefault();
         const ids = useCanvasStore.getState().selectedIds;
         const store = useCanvasStore.getState();
@@ -130,10 +124,8 @@ export function useCanvasKeyboard({
         for (const id of ids) {
           const shape = shapeById.get(id);
           if (!shape) continue;
-          const dx =
-            e.key === "ArrowLeft" ? -NUDGE : e.key === "ArrowRight" ? NUDGE : 0;
-          const dy =
-            e.key === "ArrowUp" ? -NUDGE : e.key === "ArrowDown" ? NUDGE : 0;
+          const dx = e.key === "ArrowLeft" ? -NUDGE : e.key === "ArrowRight" ? NUDGE : 0;
+          const dy = e.key === "ArrowUp" ? -NUDGE : e.key === "ArrowDown" ? NUDGE : 0;
           updates.push({ id, patch: { x: shape.x + dx, y: shape.y + dy } });
         }
         updateShapes(updates);

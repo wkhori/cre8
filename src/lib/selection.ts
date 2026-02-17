@@ -21,4 +21,3 @@ export function intersectsSelectionBox(box: SelectionBox, shape: Shape): boolean
 export function getSelectionHitIds(shapes: Shape[], box: SelectionBox): string[] {
   return shapes.filter((shape) => intersectsSelectionBox(box, shape)).map((shape) => shape.id);
 }
-

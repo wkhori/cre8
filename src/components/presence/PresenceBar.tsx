@@ -2,17 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { subscribePresence, type PresenceUser } from "@/lib/presence";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { shortName, timeAgo } from "@/lib/utils";
 import { Users } from "lucide-react";
 
@@ -86,21 +77,14 @@ export default function PresenceBar({ boardId, myUid }: PresenceBarProps) {
           </button>
         </PopoverTrigger>
 
-        <PopoverContent
-          align="end"
-          side="bottom"
-          className="w-56 p-0"
-          sideOffset={8}
-        >
+        <PopoverContent align="end" side="bottom" className="w-56 p-0" sideOffset={8}>
           {activeUsers.length > 0 && (
             <div className="p-2">
               <div className="mb-1.5 flex items-center justify-between px-1">
                 <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
                   Active now
                 </p>
-                <span className="text-[10px] tabular-nums text-zinc-400">
-                  {activeUsers.length}
-                </span>
+                <span className="text-[10px] tabular-nums text-zinc-400">{activeUsers.length}</span>
               </div>
               <div className="space-y-0.5">
                 {activeUsers.map((user) => (
@@ -126,12 +110,7 @@ export default function PresenceBar({ boardId, myUid }: PresenceBarProps) {
               </div>
               <div className="space-y-0.5">
                 {offlineUsers.slice(0, 10).map((user) => (
-                  <UserRow
-                    key={user.uid}
-                    user={user}
-                    status="offline"
-                    lastSeen={user.lastSeen}
-                  />
+                  <UserRow key={user.uid} user={user} status="offline" lastSeen={user.lastSeen} />
                 ))}
               </div>
             </div>

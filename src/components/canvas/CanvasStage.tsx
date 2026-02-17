@@ -25,7 +25,12 @@ interface CanvasStageProps {
   onLiveDragEnd?: () => void;
 }
 
-export default function CanvasStage({ boardId, myUid, onLiveDrag, onLiveDragEnd }: CanvasStageProps) {
+export default function CanvasStage({
+  boardId,
+  myUid,
+  onLiveDrag,
+  onLiveDragEnd,
+}: CanvasStageProps) {
   const stageRef = useRef<Konva.Stage | null>(null);
   const layerRef = useRef<Konva.Layer | null>(null);
   const transformerRef = useRef<Konva.Transformer | null>(null);
@@ -82,10 +87,7 @@ export default function CanvasStage({ boardId, myUid, onLiveDrag, onLiveDragEnd 
   const effectiveTool = spaceHeld ? "hand" : activeTool;
 
   // Sort shapes by zIndex for rendering
-  const sortedShapes = useMemo(
-    () => [...shapes].sort((a, b) => a.zIndex - b.zIndex),
-    [shapes]
-  );
+  const sortedShapes = useMemo(() => [...shapes].sort((a, b) => a.zIndex - b.zIndex), [shapes]);
   const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds]);
 
   // Cursor style based on tool
@@ -110,10 +112,7 @@ export default function CanvasStage({ boardId, myUid, onLiveDrag, onLiveDragEnd 
   useCanvasKeyboard({ onSpaceDown: handleSpaceDown, onSpaceUp: handleSpaceUp });
 
   // ── Throttled debug updates ───────────────────────────────────────
-  const throttledSetPointer = useMemo(
-    () => throttle(useDebugStore.getState().setPointer, 33),
-    []
-  );
+  const throttledSetPointer = useMemo(() => throttle(useDebugStore.getState().setPointer, 33), []);
   const throttledSetViewport = useMemo(
     () => throttle(useDebugStore.getState().setViewport, 50),
     []
@@ -188,10 +187,10 @@ export default function CanvasStage({ boardId, myUid, onLiveDrag, onLiveDragEnd 
         editingTextId
           ? `${editingTextId} (editing)`
           : selectedIds.length === 1
-          ? selectedIds[0]
-          : selectedIds.length > 1
-            ? `${selectedIds.length} shapes`
-            : null
+            ? selectedIds[0]
+            : selectedIds.length > 1
+              ? `${selectedIds.length} shapes`
+              : null
       );
   }, [editingTextId, selectedIds]);
 
@@ -207,9 +206,7 @@ export default function CanvasStage({ boardId, myUid, onLiveDrag, onLiveDragEnd 
       return;
     }
 
-    const nodes = selectedIds
-      .map((id) => stage.findOne(`#${id}`))
-      .filter(Boolean) as Konva.Node[];
+    const nodes = selectedIds.map((id) => stage.findOne(`#${id}`)).filter(Boolean) as Konva.Node[];
 
     tr.nodes(nodes);
     tr.getLayer()?.batchDraw();
@@ -315,9 +312,7 @@ export default function CanvasStage({ boardId, myUid, onLiveDrag, onLiveDragEnd 
       const pos = stage.getPointerPosition();
       if (!pos) return;
 
-      const isHand =
-        spaceHeldRef.current ||
-        useDebugStore.getState().activeTool === "hand";
+      const isHand = spaceHeldRef.current || useDebugStore.getState().activeTool === "hand";
 
       if (isHand) {
         isPanningRef.current = true;
@@ -350,55 +345,52 @@ export default function CanvasStage({ boardId, myUid, onLiveDrag, onLiveDragEnd 
   );
 
   // ── Mouse move ────────────────────────────────────────────────────
-  const handleMouseMove = useCallback(
-    () => {
-      const stage = stageRef.current;
-      if (!stage) return;
-      const pos = stage.getPointerPosition();
-      if (!pos) return;
+  const handleMouseMove = useCallback(() => {
+    const stage = stageRef.current;
+    if (!stage) return;
+    const pos = stage.getPointerPosition();
+    if (!pos) return;
 
-      const vp = viewportRef.current;
-      throttledSetPointer({
-        screenX: pos.x,
-        screenY: pos.y,
-        worldX: (pos.x - vp.x) / vp.scale,
-        worldY: (pos.y - vp.y) / vp.scale,
+    const vp = viewportRef.current;
+    throttledSetPointer({
+      screenX: pos.x,
+      screenY: pos.y,
+      worldX: (pos.x - vp.x) / vp.scale,
+      worldY: (pos.y - vp.y) / vp.scale,
+    });
+
+    if (isSelectingRef.current) {
+      const worldX = (pos.x - vp.x) / vp.scale;
+      const worldY = (pos.y - vp.y) / vp.scale;
+      const start = selectionStartRef.current;
+      const selRect = selectionRectRef.current;
+      if (selRect) {
+        selRect.x(Math.min(start.x, worldX));
+        selRect.y(Math.min(start.y, worldY));
+        selRect.width(Math.abs(worldX - start.x));
+        selRect.height(Math.abs(worldY - start.y));
+        selRect.getLayer()?.batchDraw();
+      }
+      return;
+    }
+
+    if (isPanningRef.current) {
+      const dx = pos.x - lastPointerRef.current.x;
+      const dy = pos.y - lastPointerRef.current.y;
+      lastPointerRef.current = { x: pos.x, y: pos.y };
+      viewportRef.current = {
+        ...viewportRef.current,
+        x: viewportRef.current.x + dx,
+        y: viewportRef.current.y + dy,
+      };
+      stage.position({
+        x: viewportRef.current.x,
+        y: viewportRef.current.y,
       });
-
-      if (isSelectingRef.current) {
-        const worldX = (pos.x - vp.x) / vp.scale;
-        const worldY = (pos.y - vp.y) / vp.scale;
-        const start = selectionStartRef.current;
-        const selRect = selectionRectRef.current;
-        if (selRect) {
-          selRect.x(Math.min(start.x, worldX));
-          selRect.y(Math.min(start.y, worldY));
-          selRect.width(Math.abs(worldX - start.x));
-          selRect.height(Math.abs(worldY - start.y));
-          selRect.getLayer()?.batchDraw();
-        }
-        return;
-      }
-
-      if (isPanningRef.current) {
-        const dx = pos.x - lastPointerRef.current.x;
-        const dy = pos.y - lastPointerRef.current.y;
-        lastPointerRef.current = { x: pos.x, y: pos.y };
-        viewportRef.current = {
-          ...viewportRef.current,
-          x: viewportRef.current.x + dx,
-          y: viewportRef.current.y + dy,
-        };
-        stage.position({
-          x: viewportRef.current.x,
-          y: viewportRef.current.y,
-        });
-        stage.batchDraw();
-        syncViewport();
-      }
-    },
-    [syncViewport, throttledSetPointer]
-  );
+      stage.batchDraw();
+      syncViewport();
+    }
+  }, [syncViewport, throttledSetPointer]);
 
   // ── Mouse up ──────────────────────────────────────────────────────
   const handleMouseUp = useCallback(
@@ -448,11 +440,7 @@ export default function CanvasStage({ boardId, myUid, onLiveDrag, onLiveDragEnd 
     (id: string, e: Konva.KonvaEventObject<MouseEvent | TouchEvent>) => {
       e.cancelBubble = true;
 
-      if (
-        spaceHeldRef.current ||
-        useDebugStore.getState().activeTool === "hand"
-      )
-        return;
+      if (spaceHeldRef.current || useDebugStore.getState().activeTool === "hand") return;
 
       const evt = e.evt as MouseEvent;
       if (evt.shiftKey || evt.metaKey || evt.ctrlKey) {
@@ -552,37 +540,34 @@ export default function CanvasStage({ boardId, myUid, onLiveDrag, onLiveDragEnd 
     [updateShape, updateShapes, onLiveDragEnd]
   );
 
-  const beginTextEditing = useCallback(
-    (id: string) => {
-      const shape = useCanvasStore.getState().shapes.find((s) => s.id === id);
-      if (!shape) return;
-      // Support both "text" and "sticky" shape types for inline editing
-      if (shape.type !== "text" && shape.type !== "sticky") return;
+  const beginTextEditing = useCallback((id: string) => {
+    const shape = useCanvasStore.getState().shapes.find((s) => s.id === id);
+    if (!shape) return;
+    // Support both "text" and "sticky" shape types for inline editing
+    if (shape.type !== "text" && shape.type !== "sticky") return;
 
-      editingShapeTypeRef.current = shape.type;
-      setEditingTextId(id);
-      setEditingTextValue(shape.text);
+    editingShapeTypeRef.current = shape.type;
+    setEditingTextId(id);
+    setEditingTextValue(shape.text);
 
-      const stage = stageRef.current;
-      if (stage) {
-        const node = stage.findOne(`#${id}`);
-        if (node) {
-          if (shape.type === "sticky") {
-            // For sticky notes, only hide the Text child — keep the background Rect visible
-            const group = node as Konva.Group;
-            const textChild = group.findOne("Text");
-            if (textChild) textChild.visible(false);
-          } else {
-            node.visible(false);
-          }
-          stage.batchDraw();
+    const stage = stageRef.current;
+    if (stage) {
+      const node = stage.findOne(`#${id}`);
+      if (node) {
+        if (shape.type === "sticky") {
+          // For sticky notes, only hide the Text child — keep the background Rect visible
+          const group = node as Konva.Group;
+          const textChild = group.findOne("Text");
+          if (textChild) textChild.visible(false);
+        } else {
+          node.visible(false);
         }
+        stage.batchDraw();
       }
+    }
 
-      setTimeout(() => textareaRef.current?.focus(), 0);
-    },
-    []
-  );
+    setTimeout(() => textareaRef.current?.focus(), 0);
+  }, []);
 
   // ── Double-click to edit text ────────────────────────────────────
   const handleShapeDblClick = useCallback(
@@ -601,8 +586,7 @@ export default function CanvasStage({ boardId, myUid, onLiveDrag, onLiveDragEnd 
     };
 
     window.addEventListener("start-text-edit", onStartTextEdit as EventListener);
-    return () =>
-      window.removeEventListener("start-text-edit", onStartTextEdit as EventListener);
+    return () => window.removeEventListener("start-text-edit", onStartTextEdit as EventListener);
   }, [beginTextEditing]);
 
   const restoreEditingNode = useCallback(() => {
@@ -779,10 +763,7 @@ export default function CanvasStage({ boardId, myUid, onLiveDrag, onLiveDragEnd 
             keepRatio={false}
             rotateEnabled={false}
             boundBoxFunc={(oldBox, newBox) => {
-              if (
-                Math.abs(newBox.width) < 5 ||
-                Math.abs(newBox.height) < 5
-              ) {
+              if (Math.abs(newBox.width) < 5 || Math.abs(newBox.height) < 5) {
                 return oldBox;
               }
               return newBox;
@@ -809,15 +790,10 @@ export default function CanvasStage({ boardId, myUid, onLiveDrag, onLiveDragEnd 
           />
 
           {selectionBounds && !editingTextId && interaction !== "dragging" && !isTransforming && (
-            <DimensionLabel
-              bounds={selectionBounds}
-              viewportScale={viewportScale}
-            />
+            <DimensionLabel bounds={selectionBounds} viewportScale={viewportScale} />
           )}
         </Layer>
-        {boardId && myUid && (
-          <CursorsLayer boardId={boardId} myUid={myUid} />
-        )}
+        {boardId && myUid && <CursorsLayer boardId={boardId} myUid={myUid} />}
       </Stage>
 
       {/* Text/sticky editing overlay */}

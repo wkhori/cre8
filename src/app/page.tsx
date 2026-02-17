@@ -11,7 +11,16 @@ import { useAuth } from "@/components/auth/AuthProvider";
 
 export default function Home() {
   const router = useRouter();
-  const { user, loading, actionLoading, error, signInWithGoogle, signUpWithEmail, signInWithEmail, clearActionLoading } = useAuth();
+  const {
+    user,
+    loading,
+    actionLoading,
+    error,
+    signInWithGoogle,
+    signUpWithEmail,
+    signInWithEmail,
+    clearActionLoading,
+  } = useAuth();
 
   const [showEmail, setShowEmail] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
@@ -64,7 +73,8 @@ export default function Home() {
 
         {/* Subheadline */}
         <p className="mt-5 max-w-md text-center text-[17px] leading-relaxed text-zinc-400">
-          An infinite canvas for brainstorming, planning, and building together — with AI that moves as fast as you do.
+          An infinite canvas for brainstorming, planning, and building together — with AI that moves
+          as fast as you do.
         </p>
 
         {/* Feature pills */}
@@ -77,12 +87,8 @@ export default function Home() {
         {/* ── Sign-in card ── */}
         <div className="mt-12 w-full max-w-sm">
           <div className="rounded-2xl border border-zinc-800/80 bg-zinc-900/50 p-6 shadow-[0_8px_40px_rgba(0,0,0,0.4)] backdrop-blur-xl">
-            <h2 className="text-center text-lg font-medium text-zinc-100">
-              Get started
-            </h2>
-            <p className="mt-1.5 text-center text-sm text-zinc-500">
-              Sign in to open your canvas.
-            </p>
+            <h2 className="text-center text-lg font-medium text-zinc-100">Get started</h2>
+            <p className="mt-1.5 text-center text-sm text-zinc-500">Sign in to open your canvas.</p>
 
             <div className="mt-5 space-y-3">
               {/* Google — hero CTA */}
@@ -107,7 +113,10 @@ export default function Home() {
 
                   <button
                     type="button"
-                    onClick={() => { setShowEmail(true); clearActionLoading(); }}
+                    onClick={() => {
+                      setShowEmail(true);
+                      clearActionLoading();
+                    }}
                     className="w-full py-1.5 text-center text-xs text-zinc-500 transition-colors hover:text-zinc-300"
                   >
                     or continue with email
@@ -130,7 +139,9 @@ export default function Home() {
                 >
                   {isSignUp && (
                     <div className="space-y-1.5">
-                      <Label htmlFor="auth-name" className="text-xs text-zinc-400">Name</Label>
+                      <Label htmlFor="auth-name" className="text-xs text-zinc-400">
+                        Name
+                      </Label>
                       <Input
                         id="auth-name"
                         type="text"
@@ -145,7 +156,9 @@ export default function Home() {
                   )}
 
                   <div className="space-y-1.5">
-                    <Label htmlFor="auth-email" className="text-xs text-zinc-400">Email</Label>
+                    <Label htmlFor="auth-email" className="text-xs text-zinc-400">
+                      Email
+                    </Label>
                     <Input
                       id="auth-email"
                       type="email"
@@ -159,7 +172,9 @@ export default function Home() {
                   </div>
 
                   <div className="space-y-1.5">
-                    <Label htmlFor="auth-password" className="text-xs text-zinc-400">Password</Label>
+                    <Label htmlFor="auth-password" className="text-xs text-zinc-400">
+                      Password
+                    </Label>
                     <Input
                       id="auth-password"
                       type="password"
@@ -178,13 +193,22 @@ export default function Home() {
                     disabled={busy}
                     className="h-10 w-full rounded-xl bg-zinc-100 text-sm font-medium text-zinc-900 hover:bg-white"
                   >
-                    {busy ? <Loader2 className="size-4 animate-spin" /> : isSignUp ? "Create Account" : "Sign In"}
+                    {busy ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : isSignUp ? (
+                      "Create Account"
+                    ) : (
+                      "Sign In"
+                    )}
                   </Button>
 
                   <div className="flex items-center justify-between pt-1">
                     <button
                       type="button"
-                      onClick={() => { setShowEmail(false); setIsSignUp(false); }}
+                      onClick={() => {
+                        setShowEmail(false);
+                        setIsSignUp(false);
+                      }}
                       className="text-xs text-zinc-600 transition-colors hover:text-zinc-400"
                     >
                       Back to Google
@@ -217,13 +241,7 @@ export default function Home() {
 
       {/* ── Bottom logo mark ── */}
       <div className="absolute bottom-6 flex items-center gap-1.5 text-zinc-700">
-        <svg
-          width="16"
-          height="16"
-          viewBox="0 0 16 16"
-          fill="none"
-          className="text-zinc-600"
-        >
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="text-zinc-600">
           <rect width="7" height="7" rx="1.5" fill="currentColor" />
           <rect x="9" width="7" height="7" rx="1.5" fill="currentColor" opacity="0.5" />
           <rect y="9" width="7" height="7" rx="1.5" fill="currentColor" opacity="0.5" />
@@ -237,13 +255,7 @@ export default function Home() {
 
 /* ── Supporting components ── */
 
-function FeaturePill({
-  icon,
-  label,
-}: {
-  icon: React.ReactNode;
-  label: string;
-}) {
+function FeaturePill({ icon, label }: { icon: React.ReactNode; label: string }) {
   return (
     <span className="inline-flex items-center gap-1.5 rounded-full border border-zinc-800/80 bg-zinc-900/60 px-3 py-1.5 text-xs text-zinc-400 backdrop-blur-sm">
       {icon}

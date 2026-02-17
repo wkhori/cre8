@@ -18,14 +18,8 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import {
-  firebaseAuth,
-  googleAuthProvider,
-} from "@/lib/firebase-client";
-import {
-  loadOrCreateUserProfile,
-  type UserProfile,
-} from "@/lib/user-profile";
+import { firebaseAuth, googleAuthProvider } from "@/lib/firebase-client";
+import { loadOrCreateUserProfile, type UserProfile } from "@/lib/user-profile";
 
 interface AuthContextValue {
   user: User | null;
@@ -65,7 +59,10 @@ function friendlyAuthError(err: unknown): string {
 function makeFallbackProfile(user: User): UserProfile {
   const defaultName =
     user.displayName?.trim() ||
-    user.email?.split("@")[0]?.replace(/[._-]+/g, " ").trim() ||
+    user.email
+      ?.split("@")[0]
+      ?.replace(/[._-]+/g, " ")
+      .trim() ||
     "Creator";
 
   return {
@@ -193,7 +190,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signOut,
       clearActionLoading,
     }),
-    [actionLoading, error, loading, profile, signInWithGoogle, signUpWithEmail, signInWithEmail, signOut, clearActionLoading, user]
+    [
+      actionLoading,
+      error,
+      loading,
+      profile,
+      signInWithGoogle,
+      signUpWithEmail,
+      signInWithEmail,
+      signOut,
+      clearActionLoading,
+      user,
+    ]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
@@ -206,4 +214,3 @@ export function useAuth() {
   }
   return context;
 }
-

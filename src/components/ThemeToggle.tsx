@@ -12,7 +12,11 @@ export function ThemeToggle() {
   useEffect(() => setMounted(true), []);
 
   if (!mounted) {
-    return <Button size="icon-xs" variant="ghost" disabled><Sun className="size-3.5" /></Button>;
+    return (
+      <Button size="icon-xs" variant="ghost" disabled>
+        <Sun className="size-3.5" />
+      </Button>
+    );
   }
 
   return (

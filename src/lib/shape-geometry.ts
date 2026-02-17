@@ -8,9 +8,16 @@ export interface Bounds {
 }
 
 /** Compute min/max extents of a flat [x,y,x,y,...] points array. */
-function pointsBounds(points: number[]): { minX: number; minY: number; maxX: number; maxY: number } {
-  let minX = points[0], maxX = points[0];
-  let minY = points[1], maxY = points[1];
+function pointsBounds(points: number[]): {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+} {
+  let minX = points[0],
+    maxX = points[0];
+  let minY = points[1],
+    maxY = points[1];
   for (let i = 2; i < points.length; i += 2) {
     if (points[i] < minX) minX = points[i];
     if (points[i] > maxX) maxX = points[i];
@@ -48,9 +55,7 @@ export function getShapeBounds(shape: Shape): Bounds {
   }
 
   // Connector and Line both use points-based bounds
-  const pts = shape.type === "connector"
-    ? (shape.points ?? [0, 0, 100, 0])
-    : shape.points;
+  const pts = shape.type === "connector" ? (shape.points ?? [0, 0, 100, 0]) : shape.points;
 
   if (pts.length < 2) {
     return { x: shape.x, y: shape.y, width: 0, height: 0 };

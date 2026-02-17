@@ -10,8 +10,10 @@ interface DimensionLabelProps {
 }
 
 export default function DimensionLabel({ bounds, viewportScale }: DimensionLabelProps) {
-  const { labelX, labelY, fontSize, padX, padY, label, labelWidth } =
-    getDimensionLabelMetrics(bounds, viewportScale);
+  const { labelX, labelY, fontSize, padX, padY, label, labelWidth } = getDimensionLabelMetrics(
+    bounds,
+    viewportScale
+  );
 
   return (
     <Group listening={false}>

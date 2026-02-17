@@ -28,9 +28,7 @@ function fallbackName(email: string | null): string {
 export async function loadOrCreateUserProfile(user: User): Promise<UserProfile> {
   const profileRef = doc(firebaseDb, PROFILE_COLLECTION, user.uid);
   const snapshot = await getDoc(profileRef);
-  const data = snapshot.data() as
-    | { name?: string; email?: string; photoURL?: string }
-    | undefined;
+  const data = snapshot.data() as { name?: string; email?: string; photoURL?: string } | undefined;
 
   const name =
     user.displayName?.trim() ||

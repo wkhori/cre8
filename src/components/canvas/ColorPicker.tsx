@@ -10,11 +10,7 @@ import {
   getShapeColor,
   isLightColor,
 } from "@/lib/colors";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -29,9 +25,7 @@ export default function ColorPicker() {
   // Current color from first selected shape
   const currentColor = getShapeColor(selectedShapes[0]);
   // Check if all selected shapes share the same color
-  const allSameColor = selectedShapes.every(
-    (s) => getShapeColor(s) === currentColor
-  );
+  const allSameColor = selectedShapes.every((s) => getShapeColor(s) === currentColor);
 
   function applyColor(hex: string) {
     const store = useCanvasStore.getState();
@@ -62,12 +56,7 @@ export default function ColorPicker() {
           />
         </button>
       </PopoverTrigger>
-      <PopoverContent
-        side="bottom"
-        align="start"
-        sideOffset={8}
-        className="w-auto p-2"
-      >
+      <PopoverContent side="bottom" align="start" sideOffset={8} className="w-auto p-2">
         {/* Row 1: Bold / saturated (10) */}
         <div className="flex gap-1">
           {ROW_1_COLORS.map((hex) => (
@@ -118,12 +107,7 @@ function Swatch({
       title={hex}
     >
       {isActive && (
-        <Check
-          className={cn(
-            "size-3 stroke-3",
-            light ? "text-zinc-800" : "text-white"
-          )}
-        />
+        <Check className={cn("size-3 stroke-3", light ? "text-zinc-800" : "text-white")} />
       )}
     </button>
   );

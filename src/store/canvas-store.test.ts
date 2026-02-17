@@ -105,11 +105,7 @@ describe("canvas-store", () => {
 
     const state = useCanvasStore.getState();
     const pasted = state.shapes.find(
-      (s) =>
-        s.id !== rect.id &&
-        s.type === "rect" &&
-        s.x === rect.x + 10 &&
-        s.y === rect.y + 15
+      (s) => s.id !== rect.id && s.type === "rect" && s.x === rect.x + 10 && s.y === rect.y + 15
     );
 
     expect(pasted).toBeDefined();
@@ -206,4 +202,3 @@ describe("canvas-store", () => {
     expect(useCanvasStore.getState().historyIndex).toBe(-1);
   });
 });
-

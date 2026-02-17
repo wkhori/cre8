@@ -40,7 +40,8 @@ export default function ShapeRenderer({
     onDragMove: (e: Konva.KonvaEventObject<DragEvent>) => onDragMove?.(shape.id, e),
     onDragEnd: (e: Konva.KonvaEventObject<DragEvent>) => onDragEnd(shape.id, e),
     onDblClick: (e: Konva.KonvaEventObject<MouseEvent>) => onDblClick?.(shape.id, e),
-    onDblTap: (e: Konva.KonvaEventObject<TouchEvent>) => onDblClick?.(shape.id, e as unknown as Konva.KonvaEventObject<MouseEvent>),
+    onDblTap: (e: Konva.KonvaEventObject<TouchEvent>) =>
+      onDblClick?.(shape.id, e as unknown as Konva.KonvaEventObject<MouseEvent>),
   };
 
   switch (shape.type) {

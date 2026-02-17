@@ -9,11 +9,7 @@ import {
   serverTimestamp,
   getDoc,
 } from "firebase/firestore";
-import {
-  ref,
-  set as rtdbSet,
-  onValue,
-} from "firebase/database";
+import { ref, set as rtdbSet, onValue } from "firebase/database";
 import { firebaseDb, firebaseRtdb } from "@/lib/firebase-client";
 import type { Shape } from "@/lib/types";
 import { generateId } from "@/lib/id";
@@ -29,10 +25,7 @@ export interface BoardDoc {
   updatedAt: unknown;
 }
 
-export async function getOrCreateBoard(
-  boardId: string,
-  ownerId: string
-): Promise<BoardDoc> {
+export async function getOrCreateBoard(boardId: string, ownerId: string): Promise<BoardDoc> {
   const boardRef = doc(firebaseDb, "boards", boardId);
   const snapshot = await getDoc(boardRef);
 
@@ -67,10 +60,7 @@ function stripUndefined(obj: Record<string, unknown>): Record<string, unknown> {
  * Convert a local Shape to a Firestore-safe document.
  * Adds sync metadata (updatedAt, updatedBy).
  */
-function shapeToFirestore(
-  shape: Shape,
-  userId: string
-): Record<string, unknown> {
+function shapeToFirestore(shape: Shape, userId: string): Record<string, unknown> {
   return stripUndefined({
     ...shape,
     updatedAt: serverTimestamp(),
@@ -82,10 +72,7 @@ function shapeToFirestore(
  * Convert a Firestore document back to a local Shape.
  * Strips Firestore-specific fields.
  */
-function firestoreToShape(
-  docId: string,
-  data: Record<string, unknown>
-): Shape {
+function firestoreToShape(docId: string, data: Record<string, unknown>): Shape {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { updatedAt, updatedBy, createdAt, ...shapeData } = data;
   return { ...shapeData, id: docId } as Shape;
@@ -220,11 +207,7 @@ export function subscribeLiveDrags(
 // These are the shared operations that both the UI and AI agent call.
 // Each writes to Firestore; the onSnapshot listener syncs to all clients.
 
-export async function createObject(
-  boardId: string,
-  shape: Shape,
-  userId: string
-): Promise<string> {
+export async function createObject(boardId: string, shape: Shape, userId: string): Promise<string> {
   const id = shape.id || generateId();
   const shapeWithId = { ...shape, id };
   const objRef = doc(firebaseDb, "boards", boardId, "objects", id);
@@ -250,10 +233,7 @@ export async function updateObject(
   );
 }
 
-export async function deleteObjects(
-  boardId: string,
-  shapeIds: string[]
-): Promise<void> {
+export async function deleteObjects(boardId: string, shapeIds: string[]): Promise<void> {
   if (shapeIds.length === 0) return;
   const batch = writeBatch(firebaseDb);
   for (const id of shapeIds) {
@@ -271,11 +251,14 @@ export async function updateObjects(
   const batch = writeBatch(firebaseDb);
   for (const { id, patch } of updates) {
     const objRef = doc(firebaseDb, "boards", boardId, "objects", id);
-    batch.update(objRef, stripUndefined({
-      ...patch,
-      updatedAt: serverTimestamp(),
-      updatedBy: userId,
-    }));
+    batch.update(
+      objRef,
+      stripUndefined({
+        ...patch,
+        updatedAt: serverTimestamp(),
+        updatedBy: userId,
+      })
+    );
   }
   await batch.commit();
 }

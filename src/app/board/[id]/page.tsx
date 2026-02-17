@@ -17,10 +17,7 @@ import {
   type LiveDragData,
   type BoardObjectChange,
 } from "@/lib/sync";
-import {
-  joinBoard,
-  createCursorBroadcaster,
-} from "@/lib/presence";
+import { joinBoard, createCursorBroadcaster } from "@/lib/presence";
 import type { Shape } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import {
@@ -52,18 +49,9 @@ import {
 import ColorPicker from "@/components/canvas/ColorPicker";
 import { useTheme } from "next-themes";
 
-const CanvasStage = dynamic(
-  () => import("@/components/canvas/CanvasStage"),
-  { ssr: false }
-);
-const DebugDashboard = dynamic(
-  () => import("@/components/debug/DebugDashboard"),
-  { ssr: false }
-);
-const PresenceBar = dynamic(
-  () => import("@/components/presence/PresenceBar"),
-  { ssr: false }
-);
+const CanvasStage = dynamic(() => import("@/components/canvas/CanvasStage"), { ssr: false });
+const DebugDashboard = dynamic(() => import("@/components/debug/DebugDashboard"), { ssr: false });
+const PresenceBar = dynamic(() => import("@/components/presence/PresenceBar"), { ssr: false });
 
 function getViewportCenter() {
   const vp = useDebugStore.getState().viewport;
@@ -192,19 +180,10 @@ export default function BoardPage() {
       liveDragBroadcasterRef.current = createLiveDragBroadcaster(boardId, user.uid);
 
       // Join presence
-      leaveBoard = joinBoard(
-        boardId,
-        user.uid,
-        profile.name,
-        profile.photoURL
-      );
+      leaveBoard = joinBoard(boardId, user.uid, profile.name, profile.photoURL);
 
       // Create cursor broadcaster
-      cursorBroadcasterRef.current = createCursorBroadcaster(
-        boardId,
-        user.uid,
-        profile.name
-      );
+      cursorBroadcasterRef.current = createCursorBroadcaster(boardId, user.uid, profile.name);
 
       setBoardReady(true);
     };
@@ -215,17 +194,16 @@ export default function BoardPage() {
       unsubObjects?.();
       unsubLiveDrags?.();
       // Await RTDB writes so they complete before auth is revoked
-      await Promise.all([
-        leaveBoard?.(),
-        cursorBroadcasterRef.current?.cleanup(),
-      ]);
+      await Promise.all([leaveBoard?.(), cursorBroadcasterRef.current?.cleanup()]);
       cursorBroadcasterRef.current = null;
       liveDragBroadcasterRef.current?.clear();
       liveDragBroadcasterRef.current = null;
     };
 
     // Clean up BEFORE sign-out so RTDB writes happen while still authenticated
-    const onBeforeSignOut = () => { teardown(); };
+    const onBeforeSignOut = () => {
+      teardown();
+    };
     window.addEventListener("before-sign-out", onBeforeSignOut);
     // Also clean up on tab close / navigation away
     window.addEventListener("beforeunload", onBeforeSignOut);
@@ -318,12 +296,9 @@ export default function BoardPage() {
 
   // ── Expose live drag broadcaster to CanvasStage ─────────────────────
   // CanvasStage will call this during drag to broadcast positions via RTDB
-  const handleLiveDrag = useCallback(
-    (shapes: Array<{ id: string; x: number; y: number }>) => {
-      liveDragBroadcasterRef.current?.broadcast(shapes);
-    },
-    []
-  );
+  const handleLiveDrag = useCallback((shapes: Array<{ id: string; x: number; y: number }>) => {
+    liveDragBroadcasterRef.current?.broadcast(shapes);
+  }, []);
 
   const handleLiveDragEnd = useCallback(() => {
     liveDragBroadcasterRef.current?.clear();
@@ -418,10 +393,22 @@ export default function BoardPage() {
 
           <ToolbarDivider />
 
-          <Button size="icon-xs" variant="ghost" onClick={() => useCanvasStore.getState().undo()} disabled={!canUndo} title="Undo (Cmd+Z)">
+          <Button
+            size="icon-xs"
+            variant="ghost"
+            onClick={() => useCanvasStore.getState().undo()}
+            disabled={!canUndo}
+            title="Undo (Cmd+Z)"
+          >
             <Undo2 className="size-3.5" />
           </Button>
-          <Button size="icon-xs" variant="ghost" onClick={() => useCanvasStore.getState().redo()} disabled={!canRedo} title="Redo (Cmd+Shift+Z)">
+          <Button
+            size="icon-xs"
+            variant="ghost"
+            onClick={() => useCanvasStore.getState().redo()}
+            disabled={!canRedo}
+            title="Redo (Cmd+Shift+Z)"
+          >
             <Redo2 className="size-3.5" />
           </Button>
 
@@ -499,9 +486,7 @@ export default function BoardPage() {
             </span>
           )}
 
-          {boardReady && (
-            <PresenceBar boardId={boardId} myUid={user.uid} />
-          )}
+          {boardReady && <PresenceBar boardId={boardId} myUid={user.uid} />}
 
           <ToolbarDivider />
 

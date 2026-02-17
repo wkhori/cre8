@@ -3,10 +3,7 @@
 import { useEffect, useState, useRef } from "react";
 import { Layer, Group, Line, Text, Rect } from "react-konva";
 import { useDebugStore } from "@/store/debug-store";
-import {
-  subscribeCursors,
-  type CursorPosition,
-} from "@/lib/presence";
+import { subscribeCursors, type CursorPosition } from "@/lib/presence";
 import { shortName } from "@/lib/utils";
 
 export interface CursorsLayerProps {
@@ -34,11 +31,7 @@ export default function CursorsLayer({ boardId, myUid }: CursorsLayerProps) {
   return (
     <Layer listening={false}>
       {cursors.map((cursor) => (
-        <RemoteCursor
-          key={cursor.uid}
-          cursor={cursor}
-          viewportScale={viewportScale}
-        />
+        <RemoteCursor key={cursor.uid} cursor={cursor} viewportScale={viewportScale} />
       ))}
     </Layer>
   );
@@ -97,13 +90,20 @@ function RemoteCursor({
 
   // Compact Figma-style pointer — small, sharp, precise
   const pointerPoints = [
-    0, 0,       // tip
-    0, 11.5,    // left edge
-    3.2, 8.8,   // notch
-    5, 13,      // tail bottom
-    6.8, 12,    // tail top
-    5, 7.8,     // inner
-    8.5, 7.8,   // right wing
+    0,
+    0, // tip
+    0,
+    11.5, // left edge
+    3.2,
+    8.8, // notch
+    5,
+    13, // tail bottom
+    6.8,
+    12, // tail top
+    5,
+    7.8, // inner
+    8.5,
+    7.8, // right wing
   ];
 
   const name = shortName(displayName);

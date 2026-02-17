@@ -13,10 +13,7 @@ function requireEnv(name: string, value: string | undefined): string {
 }
 
 const firebaseConfig = {
-  apiKey: requireEnv(
-    "NEXT_PUBLIC_FIREBASE_API_KEY",
-    process.env.NEXT_PUBLIC_FIREBASE_API_KEY
-  ),
+  apiKey: requireEnv("NEXT_PUBLIC_FIREBASE_API_KEY", process.env.NEXT_PUBLIC_FIREBASE_API_KEY),
   authDomain: requireEnv(
     "NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN",
     process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
@@ -33,10 +30,7 @@ const firebaseConfig = {
     "NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID",
     process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
   ),
-  appId: requireEnv(
-    "NEXT_PUBLIC_FIREBASE_APP_ID",
-    process.env.NEXT_PUBLIC_FIREBASE_APP_ID
-  ),
+  appId: requireEnv("NEXT_PUBLIC_FIREBASE_APP_ID", process.env.NEXT_PUBLIC_FIREBASE_APP_ID),
   databaseURL: requireEnv(
     "NEXT_PUBLIC_FIREBASE_DATABASE_URL",
     process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL
@@ -44,8 +38,7 @@ const firebaseConfig = {
   measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
 };
 
-export const firebaseApp =
-  getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
+export const firebaseApp = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 
 export const firebaseAuth = getAuth(firebaseApp);
 export const firebaseDb = getFirestore(firebaseApp);

@@ -8,10 +8,7 @@ export interface ShapeTransformInput {
   scaleY: number;
 }
 
-export function buildTransformPatch(
-  shape: Shape,
-  input: ShapeTransformInput
-): Partial<Shape> {
+export function buildTransformPatch(shape: Shape, input: ShapeTransformInput): Partial<Shape> {
   const patch: Record<string, unknown> = {
     x: input.x,
     y: input.y,
@@ -44,4 +41,3 @@ export function buildTransformPatch(
 
   return patch as Partial<Shape>;
 }
-

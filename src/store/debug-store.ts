@@ -15,12 +15,7 @@ interface DebugStore {
   activeTool: ActiveTool;
   setFps: (fps: number, frameMs: number) => void;
   setViewport: (v: { scale: number; x: number; y: number }) => void;
-  setPointer: (p: {
-    screenX: number;
-    screenY: number;
-    worldX: number;
-    worldY: number;
-  }) => void;
+  setPointer: (p: { screenX: number; screenY: number; worldX: number; worldY: number }) => void;
   setObjectCount: (n: number) => void;
   setSelectedId: (id: string | null) => void;
   setInteraction: (mode: InteractionMode) => void;

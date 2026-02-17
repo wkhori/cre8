@@ -63,4 +63,3 @@ describe("selection helpers", () => {
     expect(ids).toEqual(["rect-1", "ellipse-1"]);
   });
 });
-

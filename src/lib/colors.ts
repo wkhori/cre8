@@ -32,17 +32,12 @@ export const ROW_2_COLORS = [
 export const VIVID_COLORS = ROW_1_COLORS.slice(2) as unknown as readonly string[];
 
 /** Full palette: all 20 colors */
-export const COLOR_PALETTE = [
-  ...ROW_1_COLORS,
-  ...ROW_2_COLORS,
-] as const;
+export const COLOR_PALETTE = [...ROW_1_COLORS, ...ROW_2_COLORS] as const;
 
 /**
  * Map a shape type to its primary color property key.
  */
-export function getColorField(
-  shapeType: string
-): "fill" | "stroke" | "color" {
+export function getColorField(shapeType: string): "fill" | "stroke" | "color" {
   switch (shapeType) {
     case "sticky":
       return "color";

@@ -99,8 +99,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
 
   setShapes: (shapes) => set({ shapes }),
 
-  addShape: (shape) =>
-    set((s) => ({ shapes: [...s.shapes, shape] })),
+  addShape: (shape) => set((s) => ({ shapes: [...s.shapes, shape] })),
 
   removeShapeSync: (id) =>
     set((s) => ({
@@ -192,8 +191,8 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
   addText: (centerX, centerY, text = "Text") => {
     const state = get();
     state.pushHistory();
-    const isDark = typeof document !== "undefined" &&
-      document.documentElement.classList.contains("dark");
+    const isDark =
+      typeof document !== "undefined" && document.documentElement.classList.contains("dark");
     const shape: TextShape = {
       id: generateId(),
       type: "text",
@@ -213,8 +212,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
 
   // ── Mutations ─────────────────────────────────────────────────────
 
-  updateShape: (id, patch) =>
-    get().updateShapes([{ id, patch }]),
+  updateShape: (id, patch) => get().updateShapes([{ id, patch }]),
 
   updateShapes: (updates) => {
     if (updates.length === 0) return;
@@ -278,9 +276,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
     state.pushHistory();
     let maxZ = nextZIndex(state.shapes);
     set({
-      shapes: state.shapes.map((s) =>
-        ids.includes(s.id) ? { ...s, zIndex: maxZ++ } : s
-      ),
+      shapes: state.shapes.map((s) => (ids.includes(s.id) ? { ...s, zIndex: maxZ++ } : s)),
     });
   },
 
@@ -291,9 +287,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
     const minZ = Math.min(...state.shapes.map((s) => s.zIndex));
     let z = minZ - ids.length;
     set({
-      shapes: state.shapes.map((s) =>
-        ids.includes(s.id) ? { ...s, zIndex: z++ } : s
-      ),
+      shapes: state.shapes.map((s) => (ids.includes(s.id) ? { ...s, zIndex: z++ } : s)),
     });
   },
 
@@ -301,9 +295,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
 
   copySelected: () => {
     const state = get();
-    const copied = state.shapes.filter((s) =>
-      state.selectedIds.includes(s.id)
-    );
+    const copied = state.shapes.filter((s) => state.selectedIds.includes(s.id));
     set({ clipboard: copied });
   },
 
