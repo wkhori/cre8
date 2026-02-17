@@ -44,8 +44,9 @@ import {
   Loader2,
   LogOut,
   Moon,
-  Sun,
+  Bug,
 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import ColorPicker from "@/components/canvas/ColorPicker";
 import { useTheme } from "next-themes";
 
@@ -78,6 +79,7 @@ export default function BoardPage() {
   const setActiveTool = useDebugStore((s) => s.setActiveTool);
 
   const [boardReady, setBoardReady] = useState(false);
+  const [showDebug, setShowDebug] = useState(false);
   const cursorBroadcasterRef = useRef<ReturnType<typeof createCursorBroadcaster> | null>(null);
   const liveDragBroadcasterRef = useRef<ReturnType<typeof createLiveDragBroadcaster> | null>(null);
   const isSyncingRef = useRef(0); // counter: >0 means we're applying remote changes
@@ -515,10 +517,29 @@ export default function BoardPage() {
                 <p className="text-xs text-muted-foreground truncate">{user.email}</p>
               </div>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>
-                {theme === "dark" ? <Sun className="size-4" /> : <Moon className="size-4" />}
-                {theme === "dark" ? "Light mode" : "Dark mode"}
-              </DropdownMenuItem>
+              <div
+                className="flex items-center justify-between px-2 py-1.5"
+                onClick={(e) => e.preventDefault()}
+              >
+                <div className="flex items-center gap-2 text-sm">
+                  <Moon className="size-4" />
+                  Dark mode
+                </div>
+                <Switch
+                  checked={theme === "dark"}
+                  onCheckedChange={(checked) => setTheme(checked ? "dark" : "light")}
+                />
+              </div>
+              <div
+                className="flex items-center justify-between px-2 py-1.5"
+                onClick={(e) => e.preventDefault()}
+              >
+                <div className="flex items-center gap-2 text-sm">
+                  <Bug className="size-4" />
+                  Dev mode
+                </div>
+                <Switch checked={showDebug} onCheckedChange={setShowDebug} />
+              </div>
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 variant="destructive"
@@ -541,7 +562,7 @@ export default function BoardPage() {
           onLiveDrag={handleLiveDrag}
           onLiveDragEnd={handleLiveDragEnd}
         />
-        <DebugDashboard />
+        {showDebug && <DebugDashboard />}
       </div>
     </div>
   );
