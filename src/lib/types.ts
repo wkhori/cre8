@@ -1,0 +1,93 @@
+// ── Base shape with shared fields ──────────────────────────────────
+export interface BaseShape {
+  id: string;
+  x: number;
+  y: number;
+  rotation: number;
+  opacity: number;
+  zIndex: number;
+}
+
+// ── Concrete shape types ───────────────────────────────────────────
+export interface RectShape extends BaseShape {
+  type: "rect";
+  w: number;
+  h: number;
+  fill: string;
+  stroke?: string;
+  strokeWidth?: number;
+  cornerRadius?: number;
+}
+
+export interface CircleShape extends BaseShape {
+  type: "circle";
+  radiusX: number;
+  radiusY: number;
+  fill: string;
+  stroke?: string;
+  strokeWidth?: number;
+}
+
+export interface TextShape extends BaseShape {
+  type: "text";
+  text: string;
+  fontSize: number;
+  fontFamily: string;
+  fill: string;
+  width?: number;
+  align?: "left" | "center" | "right";
+}
+
+export interface LineShape extends BaseShape {
+  type: "line";
+  points: number[]; // [x1,y1, x2,y2, ...]
+  stroke: string;
+  strokeWidth: number;
+}
+
+export interface StickyNoteShape extends BaseShape {
+  type: "sticky";
+  w: number;
+  h: number;
+  text: string;
+  color: string; // background hex color
+  fontSize?: number;
+}
+
+export interface FrameShape extends BaseShape {
+  type: "frame";
+  w: number;
+  h: number;
+  title: string;
+  fill: string; // background (semi-transparent)
+  stroke: string;
+}
+
+export interface ConnectorShape extends BaseShape {
+  type: "connector";
+  fromId: string;
+  toId: string;
+  style: "line" | "arrow";
+  stroke: string;
+  strokeWidth: number;
+  points?: number[]; // computed from connected objects
+}
+
+// ── Discriminated union ────────────────────────────────────────────
+export type Shape =
+  | RectShape
+  | CircleShape
+  | TextShape
+  | LineShape
+  | StickyNoteShape
+  | FrameShape
+  | ConnectorShape;
+
+export type ShapeType = Shape["type"];
+
+// ── Viewport ───────────────────────────────────────────────────────
+export interface Viewport {
+  scale: number;
+  x: number;
+  y: number;
+}
