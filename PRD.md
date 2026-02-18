@@ -1069,7 +1069,7 @@ Share on X or LinkedIn:
 
 # Submission Checklist
 
-**Deadline: Sunday 10:59 PM CT**
+**Deadline: Sunday 11:59 PM CT**
 
 - [ ] GitHub Repository with setup guide, architecture overview, deployed link
 - [ ] Demo Video (3-5 min) covering real-time collab, AI commands, architecture
