@@ -104,6 +104,7 @@ function simulateToolCall(
         type: "createShape",
         tempId,
         shapeType: toolInput.shapeType as "rectangle" | "circle",
+        x: toolInput.x as number,
         y: toolInput.y as number,
         w: toolInput.width as number,
         h: toolInput.height as number,
