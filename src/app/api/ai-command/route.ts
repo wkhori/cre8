@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { AI_TOOLS, type AIOperation } from "@/lib/ai-tools";
 import { AI_SYSTEM_PROMPT } from "@/lib/ai-system-prompt";
+import { getLangfuse } from "@/lib/langfuse";
 import { z } from "zod";
 
 // ── Request validation ─────────────────────────────────────────────
@@ -329,6 +330,14 @@ export async function POST(request: NextRequest) {
       apiKey: process.env.ANTHROPIC_API_KEY,
     });
 
+    // ── LangFuse tracing (no-op if env vars missing) ──
+    const langfuse = getLangfuse();
+    const trace = langfuse?.trace({
+      name: "ai-command",
+      input: { command, boardObjectCount: boardState.length, viewportCenter },
+      metadata: { model: "claude-sonnet-4-5-20250929" },
+    });
+
     // Format board state for Claude context (includes occupied region + open space hints)
     const boardSummary = formatBoardState(boardState, viewportCenter ?? undefined);
     const viewportHint = viewportCenter
@@ -344,9 +353,17 @@ export async function POST(request: NextRequest) {
     const operations: AIOperation[] = [];
     const tempIdMap = new Map<string, string>();
     let finalText = "";
+    let totalInputTokens = 0;
+    let totalOutputTokens = 0;
 
     // Tool-use loop
     for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+      const generation = trace?.generation({
+        name: `tool-round-${round}`,
+        model: "claude-sonnet-4-5-20250929",
+        input: messages,
+      });
+
       const response = await anthropic.messages.create({
         model: "claude-sonnet-4-5-20250929",
         max_tokens: 4096,
@@ -354,6 +371,10 @@ export async function POST(request: NextRequest) {
         tools: AI_TOOLS,
         messages,
       });
+
+      // Track token usage
+      totalInputTokens += response.usage.input_tokens;
+      totalOutputTokens += response.usage.output_tokens;
 
       // Collect text from this response
       for (const block of response.content) {
@@ -367,6 +388,18 @@ export async function POST(request: NextRequest) {
         (block): block is Anthropic.Messages.ToolUseBlock =>
           block.type === "tool_use",
       );
+
+      generation?.end({
+        output: response.content,
+        usage: {
+          input: response.usage.input_tokens,
+          output: response.usage.output_tokens,
+        },
+        metadata: {
+          stopReason: response.stop_reason,
+          toolCalls: toolUseBlocks.map((t) => t.name),
+        },
+      });
 
       // If no tool calls or end_turn, we're done
       if (toolUseBlocks.length === 0 || response.stop_reason === "end_turn") {
@@ -401,6 +434,22 @@ export async function POST(request: NextRequest) {
       messages = [...messages, { role: "user", content: toolResults }];
     }
 
+    // Finalize trace
+    trace?.update({
+      output: {
+        operationCount: operations.length,
+        message: finalText || "Command executed successfully.",
+      },
+      metadata: {
+        totalInputTokens,
+        totalOutputTokens,
+        operationTypes: operations.map((o) => o.type),
+      },
+    });
+
+    // Flush traces (non-blocking)
+    langfuse?.flushAsync().catch(() => {});
+
     return NextResponse.json({
       success: true,
       operations,
@@ -409,6 +458,11 @@ export async function POST(request: NextRequest) {
   } catch (err) {
     console.error("AI command error:", err);
     const message = err instanceof Error ? err.message : "Unknown error";
+
+    // Log error to LangFuse if available
+    const langfuse = getLangfuse();
+    langfuse?.flushAsync().catch(() => {});
+
     return NextResponse.json(
       { success: false, error: message },
       { status: 500 },
