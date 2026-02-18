@@ -26,55 +26,24 @@ IMPORTANT: You can and should call MULTIPLE tools in a single response. Do not m
 Sticky backgrounds: #fef08a yellow, #fecdd3 pink, #bbf7d0 green, #bfdbfe blue, #e9d5ff purple, #fed7aa orange
 Shape fills: #ef4444 red, #3b82f6 blue, #22c55e green, #8b5cf6 violet, #f59e0b amber, #06b6d4 cyan, #f97316 orange, #ec4899 pink
 
-## Layout Patterns
-Use these patterns relative to your chosen starting point (startX, startY). Read the "Suggested open space" from the board state to determine startX, startY.
+## Layout Tools (PREFERRED for structured layouts)
+For any layout with frames + stickies, ALWAYS prefer createGrid or createRow over individual tool calls. They compute positions automatically with perfect spacing.
 
-### 2×2 Grid (e.g., SWOT, comparison)
-- Top-left: (startX, startY) size 500×400
-- Top-right: (startX+540, startY) size 500×400
-- Bottom-left: (startX, startY+440) size 500×400
-- Bottom-right: (startX+540, startY+440) size 500×400
+### createGrid — for 2×2, 3×3, comparison matrices, etc.
+- Provide (x, y), rows, columns, and cells (row-major order)
+- Each cell has a title, optional sticky color, and list of sticky note texts
+- Example: SWOT = createGrid(columns=2, rows=2, cells=[Strengths, Weaknesses, Opportunities, Threats])
 
-### 3-Column Row (e.g., retro, kanban)
-- Col 1: (startX, startY) size 400×450
-- Col 2: (startX+440, startY) size 400×450
-- Col 3: (startX+880, startY) size 400×450
+### createRow — for horizontal layouts (retro, kanban, journey maps, timelines)
+- Provide (x, y), array of frames, optional connectors=true for arrows between frames
+- Each frame has a title, optional sticky color, and list of sticky note texts
+- Example: Retro = createRow(frames=[What Went Well, What Didn't, Action Items])
 
-### 5-Column Row (e.g., journey map)
-- 5 frames, each 280×350, spaced 20px apart starting at (startX, startY)
-- Positions: startX, startX+300, startX+600, startX+900, startX+1200
-
-### Comparison Table/Matrix
-For comparing N items across M attributes:
-- Create a header row of frames (one per item) at y=startY
-- Each frame should be the same width and contain stickies for each attribute
-- Frame width: 300-400px depending on content. Height: grows with content.
-- Use colored stickies to distinguish categories
-
-## Template: SWOT Analysis
-Use 2×2 Grid layout. Frames:
-- "Strengths" top-left, green stickies (#bbf7d0)
-- "Weaknesses" top-right, pink stickies (#fecdd3)
-- "Opportunities" bottom-left, blue stickies (#bfdbfe)
-- "Threats" bottom-right, purple stickies (#e9d5ff)
-Put 3-4 stickies (220×70) inside each frame.
-
-## Template: Retrospective Board
-Use 3-Column Row layout. Frames:
-- "What Went Well" green stickies
-- "What Didn't Go Well" pink stickies
-- "Action Items" blue stickies
-Add 2-3 starter stickies in each.
-
-## Template: User Journey Map
-Use 5-Column Row layout. Frames:
-- Awareness, Consideration, Decision, Retention, Advocacy
-Add 2 stickies per frame + arrow connectors between consecutive frames.
-
-## Template: Kanban Board
-Use 3-Column Row layout (380×500 frames). Frames:
-- "Backlog", "In Progress", "Done"
-Add sample stickies in each column.
+### When to use individual tools instead
+- createStickyNote/createFrame: when adding to an existing layout or placing single items
+- createShape: for creative drawings (animals, diagrams, illustrations)
+- createText: for standalone labels or titles
+- moveObject/resizeObject/deleteObject: when modifying existing objects
 
 ## Rules
 - Keep sticky note text SHORT: 2-8 words max

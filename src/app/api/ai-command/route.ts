@@ -123,13 +123,13 @@ function formatBoardState(
 }
 
 // ── Tool call simulation ───────────────────────────────────────────
-// Returns an AIOperation + a simulated tool result string for Claude
+// Returns AIOperation(s) + a simulated tool result string for Claude
 function simulateToolCall(
   toolName: string,
   toolInput: Record<string, unknown>,
   boardState: Record<string, unknown>[],
   tempIdMap: Map<string, string>,
-): { operation: AIOperation | null; result: string } {
+): { operation: AIOperation | null; result: string; extraOps?: AIOperation[] } {
   switch (toolName) {
     case "createStickyNote": {
       const tempId = generateTempId();
@@ -292,6 +292,153 @@ function simulateToolCall(
       };
     }
 
+    case "createGrid": {
+      const gridId = generateTempId();
+      const cols = toolInput.columns as number;
+      const rows = toolInput.rows as number;
+      const cells = toolInput.cells as { title: string; color?: string; items: string[] }[];
+      const cellW = (toolInput.cellWidth as number) || 450;
+      const cellH = (toolInput.cellHeight as number) || 380;
+      const gap = 40;
+      const baseX = toolInput.x as number;
+      const baseY = toolInput.y as number;
+      const stickyW = 220;
+      const stickyH = 70;
+      const stickyPadLeft = 20;
+      const stickyPadTop = 50;
+      const stickyGap = 10;
+      const createdIds: string[] = [];
+
+      const ops: AIOperation[] = [];
+
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const idx = r * cols + c;
+          const cell = cells[idx];
+          if (!cell) continue;
+
+          const fx = baseX + c * (cellW + gap);
+          const fy = baseY + r * (cellH + gap);
+
+          const frameId = generateTempId();
+          createdIds.push(frameId);
+          tempIdMap.set(frameId, frameId);
+
+          ops.push({
+            type: "createFrame",
+            tempId: frameId,
+            x: fx,
+            y: fy,
+            title: cell.title,
+            w: cellW,
+            h: cellH,
+          });
+
+          cell.items.forEach((text, i) => {
+            const sId = generateTempId();
+            createdIds.push(sId);
+            tempIdMap.set(sId, sId);
+            ops.push({
+              type: "createStickyNote",
+              tempId: sId,
+              x: fx + stickyPadLeft,
+              y: fy + stickyPadTop + i * (stickyH + stickyGap),
+              text,
+              color: cell.color,
+              w: stickyW,
+              h: stickyH,
+            });
+          });
+        }
+      }
+
+      tempIdMap.set(gridId, gridId);
+      return {
+        operation: null,
+        result: JSON.stringify({ success: true, gridId, createdIds, operationCount: ops.length }),
+        extraOps: ops,
+      };
+    }
+
+    case "createRow": {
+      const rowId = generateTempId();
+      const frames = toolInput.frames as { title: string; color?: string; items: string[] }[];
+      const frameW = (toolInput.frameWidth as number) || 380;
+      const frameH = (toolInput.frameHeight as number) || 420;
+      const gap = 40;
+      const baseX = toolInput.x as number;
+      const baseY = toolInput.y as number;
+      const stickyW = Math.min(frameW - 40, 260);
+      const stickyH = 70;
+      const stickyPadLeft = 20;
+      const stickyPadTop = 50;
+      const stickyGap = 10;
+      const addConnectors = (toolInput.connectors as boolean) || false;
+      const createdIds: string[] = [];
+      const frameIds: string[] = [];
+
+      const ops: AIOperation[] = [];
+
+      frames.forEach((frame, i) => {
+        const fx = baseX + i * (frameW + gap);
+        const fy = baseY;
+
+        const frameId = generateTempId();
+        frameIds.push(frameId);
+        createdIds.push(frameId);
+        tempIdMap.set(frameId, frameId);
+
+        ops.push({
+          type: "createFrame",
+          tempId: frameId,
+          x: fx,
+          y: fy,
+          title: frame.title,
+          w: frameW,
+          h: frameH,
+        });
+
+        frame.items.forEach((text, j) => {
+          const sId = generateTempId();
+          createdIds.push(sId);
+          tempIdMap.set(sId, sId);
+          ops.push({
+            type: "createStickyNote",
+            tempId: sId,
+            x: fx + stickyPadLeft,
+            y: fy + stickyPadTop + j * (stickyH + stickyGap),
+            text,
+            color: frame.color,
+            w: stickyW,
+            h: stickyH,
+          });
+        });
+      });
+
+      // Add connectors between consecutive frames
+      if (addConnectors) {
+        for (let i = 0; i < frameIds.length - 1; i++) {
+          const cId = generateTempId();
+          createdIds.push(cId);
+          tempIdMap.set(cId, cId);
+          ops.push({
+            type: "createConnector",
+            tempId: cId,
+            fromId: frameIds[i],
+            toId: frameIds[i + 1],
+            style: "arrow",
+          });
+        }
+      }
+
+      tempIdMap.set(rowId, rowId);
+      return {
+        operation: null,
+        result: JSON.stringify({ success: true, rowId, createdIds, operationCount: ops.length }),
+        extraOps: ops,
+      };
+    }
+
     default:
       return {
         operation: null,
@@ -413,7 +560,7 @@ export async function POST(request: NextRequest) {
       const toolResults: Anthropic.Messages.ToolResultBlockParam[] = [];
 
       for (const toolBlock of toolUseBlocks) {
-        const { operation, result } = simulateToolCall(
+        const { operation, result, extraOps } = simulateToolCall(
           toolBlock.name,
           toolBlock.input as Record<string, unknown>,
           boardState,
@@ -422,6 +569,9 @@ export async function POST(request: NextRequest) {
 
         if (operation) {
           operations.push(operation);
+        }
+        if (extraOps) {
+          operations.push(...extraOps);
         }
 
         toolResults.push({

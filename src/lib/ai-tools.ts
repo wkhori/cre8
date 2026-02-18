@@ -51,7 +51,36 @@ export type AIOperation =
   | { type: "updateText"; objectId: string; newText: string }
   | { type: "changeColor"; objectId: string; color: string }
   | { type: "deleteObject"; objectId: string }
-  | { type: "resizeObject"; objectId: string; w: number; h: number };
+  | { type: "resizeObject"; objectId: string; w: number; h: number }
+  | {
+      type: "createGrid";
+      tempId: string;
+      x: number;
+      y: number;
+      columns: number;
+      rows: number;
+      cells: {
+        title: string;
+        color?: string;
+        items: string[];
+      }[];
+      cellWidth?: number;
+      cellHeight?: number;
+    }
+  | {
+      type: "createRow";
+      tempId: string;
+      x: number;
+      y: number;
+      frames: {
+        title: string;
+        color?: string;
+        items: string[];
+      }[];
+      frameWidth?: number;
+      frameHeight?: number;
+      connectors?: boolean;
+    };
 
 // ── Tool definitions for Claude ────────────────────────────────────
 // All x/y coordinates are TOP-LEFT corner of the bounding box.
@@ -211,6 +240,82 @@ export const AI_TOOLS: Anthropic.Messages.Tool[] = [
       type: "object",
       properties: {},
       required: [],
+    },
+  },
+  {
+    name: "createGrid",
+    description:
+      "Create a grid layout of frames with sticky notes inside. Use for SWOT, 2×2 matrices, comparison tables, etc. Positions are computed automatically — no manual coordinate math needed. Provide cells in row-major order (left to right, top to bottom).",
+    input_schema: {
+      type: "object",
+      properties: {
+        x: { type: "number", description: "X of top-left corner of the entire grid" },
+        y: { type: "number", description: "Y of top-left corner of the entire grid" },
+        columns: { type: "number", description: "Number of columns (e.g. 2 for a 2×2)" },
+        rows: { type: "number", description: "Number of rows (e.g. 2 for a 2×2)" },
+        cells: {
+          type: "array",
+          description: "Array of cells in row-major order. Length must equal rows × columns.",
+          items: {
+            type: "object",
+            properties: {
+              title: { type: "string", description: "Frame title" },
+              color: {
+                type: "string",
+                description: "Sticky note color for this cell (hex). Default: #fef08a",
+              },
+              items: {
+                type: "array",
+                items: { type: "string" },
+                description: "Sticky note texts (2-8 words each)",
+              },
+            },
+            required: ["title", "items"],
+          },
+        },
+        cellWidth: { type: "number", description: "Width per cell frame (default 450)" },
+        cellHeight: { type: "number", description: "Height per cell frame (default 380)" },
+      },
+      required: ["x", "y", "columns", "rows", "cells"],
+    },
+  },
+  {
+    name: "createRow",
+    description:
+      "Create a horizontal row of frames with sticky notes inside. Use for retro boards, kanban, journey maps, timelines, or any horizontal layout. Positions are computed automatically. Optionally add arrow connectors between consecutive frames.",
+    input_schema: {
+      type: "object",
+      properties: {
+        x: { type: "number", description: "X of top-left corner of the first frame" },
+        y: { type: "number", description: "Y of top-left corner of the row" },
+        frames: {
+          type: "array",
+          description: "Array of frames from left to right.",
+          items: {
+            type: "object",
+            properties: {
+              title: { type: "string", description: "Frame title" },
+              color: {
+                type: "string",
+                description: "Sticky note color for this frame (hex). Default: #fef08a",
+              },
+              items: {
+                type: "array",
+                items: { type: "string" },
+                description: "Sticky note texts (2-8 words each)",
+              },
+            },
+            required: ["title", "items"],
+          },
+        },
+        frameWidth: { type: "number", description: "Width per frame (default 380)" },
+        frameHeight: { type: "number", description: "Height per frame (default 420)" },
+        connectors: {
+          type: "boolean",
+          description: "Add arrow connectors between consecutive frames (default false)",
+        },
+      },
+      required: ["x", "y", "frames"],
     },
   },
 ];
