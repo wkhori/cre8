@@ -20,8 +20,72 @@ function generateTempId(): string {
 }
 
 // ── Board state formatter ──────────────────────────────────────────
+function getShapeBounds(s: Record<string, unknown>): { x: number; y: number; w: number; h: number } | null {
+  const type = s.type as string;
+  const x = s.x as number;
+  const y = s.y as number;
+
+  switch (type) {
+    case "sticky":
+    case "rect":
+    case "frame":
+      return { x, y, w: (s.w as number) || 260, h: (s.h as number) || 120 };
+    case "text":
+      return { x, y, w: (s.width as number) || 200, h: (s.fontSize as number) || 24 };
+    case "circle": {
+      const rx = (s.radiusX as number) || 50;
+      const ry = (s.radiusY as number) || 50;
+      return { x: x - rx, y: y - ry, w: rx * 2, h: ry * 2 };
+    }
+    case "connector":
+    case "line":
+      return null; // connectors/lines don't occupy meaningful space
+    default:
+      return { x, y, w: 100, h: 100 };
+  }
+}
+
+function computeOccupiedRegion(
+  shapes: Record<string, unknown>[],
+  viewportCenter?: { x: number; y: number },
+): string {
+  if (shapes.length === 0) return "";
+
+  const bounds = shapes.map(getShapeBounds).filter((b): b is NonNullable<typeof b> => b !== null);
+  if (bounds.length === 0) return "";
+
+  const minX = Math.min(...bounds.map((b) => b.x));
+  const minY = Math.min(...bounds.map((b) => b.y));
+  const maxX = Math.max(...bounds.map((b) => b.x + b.w));
+  const maxY = Math.max(...bounds.map((b) => b.y + b.h));
+
+  let hint = `\nOccupied region: top-left=(${Math.round(minX)}, ${Math.round(minY)}) to bottom-right=(${Math.round(maxX)}, ${Math.round(maxY)}).`;
+
+  // Suggest open placement area — to the right or below existing content
+  const rightOfExisting = Math.round(maxX) + 80;
+  const belowExisting = Math.round(maxY) + 80;
+
+  if (viewportCenter) {
+    // If viewport center is far from existing content, suggest near viewport
+    const vcx = viewportCenter.x;
+    const vcy = viewportCenter.y;
+    const isFarFromContent = vcx > maxX + 200 || vcy > maxY + 200 || vcx < minX - 200 || vcy < minY - 200;
+
+    if (isFarFromContent) {
+      hint += ` The user's viewport is far from existing content — place new objects near viewport center (${vcx}, ${vcy}).`;
+    } else {
+      hint += ` Suggested open space: start at x=${rightOfExisting} (right of existing) or y=${belowExisting} (below existing). Do NOT overlap the occupied region.`;
+    }
+  } else {
+    hint += ` Suggested open space: start at x=${rightOfExisting} (right of existing) or y=${belowExisting} (below existing).`;
+  }
+
+  return hint;
+}
+
 function formatBoardState(
   shapes: Record<string, unknown>[],
+  viewportCenter?: { x: number; y: number },
 ): string {
   if (shapes.length === 0) return "The board is currently empty.";
 
@@ -52,7 +116,9 @@ function formatBoardState(
     }
   });
 
-  return `The board has ${shapes.length} objects:\n${lines.join("\n")}`;
+  const occupiedHint = computeOccupiedRegion(shapes, viewportCenter);
+
+  return `The board has ${shapes.length} objects:\n${lines.join("\n")}${occupiedHint}`;
 }
 
 // ── Tool call simulation ───────────────────────────────────────────
@@ -263,10 +329,10 @@ export async function POST(request: NextRequest) {
       apiKey: process.env.ANTHROPIC_API_KEY,
     });
 
-    // Format board state for Claude context
-    const boardSummary = formatBoardState(boardState);
+    // Format board state for Claude context (includes occupied region + open space hints)
+    const boardSummary = formatBoardState(boardState, viewportCenter ?? undefined);
     const viewportHint = viewportCenter
-      ? `\nThe user is currently viewing the area around (${viewportCenter.x}, ${viewportCenter.y}). Place new objects near this position so they are visible.`
+      ? `\nThe user is currently viewing the area around (${viewportCenter.x}, ${viewportCenter.y}).`
       : "";
     const userMessage = `Current board state:\n${boardSummary}${viewportHint}\n\nUser command: ${command}`;
 
