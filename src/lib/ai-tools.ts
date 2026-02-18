@@ -247,7 +247,7 @@ export const AI_TOOLS: Anthropic.Messages.Tool[] = [
   {
     name: "createGrid",
     description:
-      "Create a grid layout of frames with sticky notes inside. Use for SWOT, 2×2 matrices, comparison tables, etc. Positions are computed automatically — no manual coordinate math needed. Provide cells in row-major order (left to right, top to bottom).",
+      "Create a grid layout of frames with sticky notes inside. MANDATORY for any structured layout with frames + stickies. Frame heights auto-size to fit all items. Provide cells in row-major order (left to right, top to bottom).",
     input_schema: {
       type: "object",
       properties: {
@@ -284,7 +284,7 @@ export const AI_TOOLS: Anthropic.Messages.Tool[] = [
   {
     name: "createRow",
     description:
-      "Create a horizontal row of frames with sticky notes inside. Use for retro boards, kanban, journey maps, timelines, or any horizontal layout. Positions are computed automatically. Optionally add arrow connectors between consecutive frames.",
+      "Create a horizontal row of frames with sticky notes inside. MANDATORY for any horizontal layout with frames + stickies. Frame heights auto-size to fit all items. Optionally add arrow connectors between consecutive frames.",
     input_schema: {
       type: "object",
       properties: {

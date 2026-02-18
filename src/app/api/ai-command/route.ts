@@ -299,19 +299,41 @@ function simulateToolCall(
       const rows = toolInput.rows as number;
       const cells = toolInput.cells as { title: string; color?: string; items: string[] }[];
       const cellW = (toolInput.cellWidth as number) || 450;
-      const cellH = (toolInput.cellHeight as number) || 380;
       const gap = 40;
       const baseX = toolInput.x as number;
       const baseY = toolInput.y as number;
-      const stickyW = 220;
-      const stickyH = 70;
+      const stickyW = cellW - 40; // 20px padding on each side
+      const stickyH = 80;
       const stickyPadLeft = 20;
-      const stickyPadTop = 50;
-      const stickyGap = 10;
+      const stickyPadTop = 60; // room for frame title
+      const stickyGap = 15;
+      const framePadBottom = 25;
       const createdIds: string[] = [];
+
+      // Auto-compute frame height per row (tallest cell in that row wins)
+      const rowHeights: number[] = [];
+      for (let r = 0; r < rows; r++) {
+        let maxItems = 0;
+        for (let c = 0; c < cols; c++) {
+          const cell = cells[r * cols + c];
+          if (cell) maxItems = Math.max(maxItems, cell.items.length);
+        }
+        const itemsH = maxItems * stickyH + Math.max(0, maxItems - 1) * stickyGap;
+        rowHeights.push(Math.max(stickyPadTop + itemsH + framePadBottom, 200));
+      }
+
+      // If explicit cellHeight provided, use that as minimum
+      const explicitH = toolInput.cellHeight as number | undefined;
+      if (explicitH) {
+        for (let r = 0; r < rows; r++) {
+          rowHeights[r] = Math.max(rowHeights[r], explicitH);
+        }
+      }
 
       const ops: AIOperation[] = [];
 
+      // Compute cumulative Y offsets per row
+      let cumulativeY = baseY;
       for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
           const idx = r * cols + c;
@@ -319,7 +341,7 @@ function simulateToolCall(
           if (!cell) continue;
 
           const fx = baseX + c * (cellW + gap);
-          const fy = baseY + r * (cellH + gap);
+          const fy = cumulativeY;
 
           const frameId = generateTempId();
           createdIds.push(frameId);
@@ -332,7 +354,7 @@ function simulateToolCall(
             y: fy,
             title: cell.title,
             w: cellW,
-            h: cellH,
+            h: rowHeights[r],
           });
 
           cell.items.forEach((text, i) => {
@@ -351,6 +373,7 @@ function simulateToolCall(
             });
           });
         }
+        cumulativeY += rowHeights[r] + gap;
       }
 
       tempIdMap.set(gridId, gridId);
@@ -365,18 +388,29 @@ function simulateToolCall(
       const rowId = generateTempId();
       const frames = toolInput.frames as { title: string; color?: string; items: string[] }[];
       const frameW = (toolInput.frameWidth as number) || 380;
-      const frameH = (toolInput.frameHeight as number) || 420;
       const gap = 40;
       const baseX = toolInput.x as number;
       const baseY = toolInput.y as number;
-      const stickyW = Math.min(frameW - 40, 260);
-      const stickyH = 70;
+      const stickyW = frameW - 40; // 20px padding on each side
+      const stickyH = 80;
       const stickyPadLeft = 20;
-      const stickyPadTop = 50;
-      const stickyGap = 10;
+      const stickyPadTop = 60;
+      const stickyGap = 15;
+      const framePadBottom = 25;
       const addConnectors = (toolInput.connectors as boolean) || false;
       const createdIds: string[] = [];
       const frameIds: string[] = [];
+
+      // Auto-compute uniform frame height (tallest frame wins so row is aligned)
+      const maxItems = Math.max(...frames.map((f) => f.items.length), 0);
+      const itemsH = maxItems * stickyH + Math.max(0, maxItems - 1) * stickyGap;
+      let frameH = Math.max(stickyPadTop + itemsH + framePadBottom, 200);
+
+      // If explicit frameHeight provided, use that as minimum
+      const explicitH = toolInput.frameHeight as number | undefined;
+      if (explicitH) {
+        frameH = Math.max(frameH, explicitH);
+      }
 
       const ops: AIOperation[] = [];
 
