@@ -16,7 +16,7 @@ export default function DebugDashboard() {
 
   // FPS counter using rAF
   const frameCountRef = useRef(0);
-  const lastTimeRef = useRef(performance.now());
+  const lastTimeRef = useRef(0);
   const rafRef = useRef<number>(0);
 
   useEffect(() => {
@@ -77,7 +77,7 @@ export default function DebugDashboard() {
 
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div className="flex justify-between py-[1px]">
+    <div className="flex justify-between py-px">
       <span className="text-zinc-500">{label}</span>
       <span className="text-zinc-200">{value}</span>
     </div>
