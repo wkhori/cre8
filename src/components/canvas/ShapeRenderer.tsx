@@ -2,8 +2,8 @@
 
 import { Rect, Ellipse, Text, Line, Group, Arrow } from "react-konva";
 import type Konva from "konva";
-import type { Shape, ConnectorShape } from "@/lib/types";
-import { getShapeBounds } from "@/lib/shape-geometry";
+import type { Shape } from "@/lib/types";
+import { getShapeBounds, computeConnectorPoints } from "@/lib/shape-geometry";
 
 interface ShapeRendererProps {
   shape: Shape;
@@ -18,95 +18,6 @@ interface ShapeRendererProps {
   onDblClick?: (id: string, e: Konva.KonvaEventObject<MouseEvent>) => void;
   onMouseEnter?: (id: string) => void;
   onMouseLeave?: (id: string) => void;
-}
-
-function computeConnectorPoints(connector: ConnectorShape, allShapes: Shape[]): number[] {
-  const fromShape = connector.fromId ? allShapes.find((s) => s.id === connector.fromId) : null;
-  const toShape = connector.toId ? allShapes.find((s) => s.id === connector.toId) : null;
-
-  // Resolve center points for each endpoint
-  let fromCx: number, fromCy: number, fromBounds: ReturnType<typeof getShapeBounds> | null;
-  if (fromShape) {
-    fromBounds = getShapeBounds(fromShape);
-    fromCx = fromBounds.x + fromBounds.width / 2;
-    fromCy = fromBounds.y + fromBounds.height / 2;
-  } else if (connector.fromPoint) {
-    fromBounds = null;
-    fromCx = connector.fromPoint.x;
-    fromCy = connector.fromPoint.y;
-  } else {
-    return [0, 0, 100, 0];
-  }
-
-  let toCx: number, toCy: number, toBounds: ReturnType<typeof getShapeBounds> | null;
-  if (toShape) {
-    toBounds = getShapeBounds(toShape);
-    toCx = toBounds.x + toBounds.width / 2;
-    toCy = toBounds.y + toBounds.height / 2;
-  } else if (connector.toPoint) {
-    toBounds = null;
-    toCx = connector.toPoint.x;
-    toCy = connector.toPoint.y;
-  } else {
-    return [0, 0, 100, 0];
-  }
-
-  // Compute edge intersection when connected to a shape, raw point otherwise
-  const startPt = fromBounds
-    ? edgePoint(fromBounds, fromCx, fromCy, toCx, toCy)
-    : { x: fromCx, y: fromCy };
-  const endPt = toBounds ? edgePoint(toBounds, toCx, toCy, fromCx, fromCy) : { x: toCx, y: toCy };
-
-  // Fan-out: offset connectors that share the same unordered {fromId, toId} pair
-  if (connector.fromId && connector.toId) {
-    const pairKey = [connector.fromId, connector.toId].sort().join("|");
-    const siblings = allShapes.filter(
-      (s) =>
-        s.type === "connector" &&
-        s.fromId &&
-        s.toId &&
-        [s.fromId, s.toId].sort().join("|") === pairKey
-    );
-    if (siblings.length > 1) {
-      const idx = siblings.findIndex((s) => s.id === connector.id);
-      const offset = (idx - (siblings.length - 1) / 2) * 20;
-      // Perpendicular direction
-      const dx = endPt.x - startPt.x;
-      const dy = endPt.y - startPt.y;
-      const len = Math.sqrt(dx * dx + dy * dy) || 1;
-      const px = -dy / len;
-      const py = dx / len;
-      startPt.x += px * offset;
-      startPt.y += py * offset;
-      endPt.x += px * offset;
-      endPt.y += py * offset;
-    }
-  }
-
-  return [startPt.x, startPt.y, endPt.x, endPt.y];
-}
-
-/** Find the point where a ray from center toward target intersects the bounding rect. */
-function edgePoint(
-  bounds: { x: number; y: number; width: number; height: number },
-  cx: number,
-  cy: number,
-  tx: number,
-  ty: number
-): { x: number; y: number } {
-  const dx = tx - cx;
-  const dy = ty - cy;
-  if (dx === 0 && dy === 0) return { x: cx, y: cy };
-
-  const hw = bounds.width / 2;
-  const hh = bounds.height / 2;
-
-  // Scale factor to hit the bounding rect edge
-  const sx = dx !== 0 ? hw / Math.abs(dx) : Infinity;
-  const sy = dy !== 0 ? hh / Math.abs(dy) : Infinity;
-  const s = Math.min(sx, sy);
-
-  return { x: cx + dx * s, y: cy + dy * s };
 }
 
 export default function ShapeRenderer({
