@@ -46,48 +46,42 @@ function getShapeBounds(s: Record<string, unknown>): { x: number; y: number; w: 
   }
 }
 
-function computeOccupiedRegion(
+// Compact summary: just count + bounds (used in initial user message)
+function formatBoardSummary(
   shapes: Record<string, unknown>[],
   viewportCenter?: { x: number; y: number },
 ): string {
-  if (shapes.length === 0) return "";
+  if (shapes.length === 0) return "The board is currently empty.";
 
   const bounds = shapes.map(getShapeBounds).filter((b): b is NonNullable<typeof b> => b !== null);
-  if (bounds.length === 0) return "";
+  if (bounds.length === 0) return `The board has ${shapes.length} objects (no spatial data).`;
 
-  const minX = Math.min(...bounds.map((b) => b.x));
-  const minY = Math.min(...bounds.map((b) => b.y));
-  const maxX = Math.max(...bounds.map((b) => b.x + b.w));
-  const maxY = Math.max(...bounds.map((b) => b.y + b.h));
+  const minX = Math.round(Math.min(...bounds.map((b) => b.x)));
+  const minY = Math.round(Math.min(...bounds.map((b) => b.y)));
+  const maxX = Math.round(Math.max(...bounds.map((b) => b.x + b.w)));
+  const maxY = Math.round(Math.max(...bounds.map((b) => b.y + b.h)));
 
-  let hint = `\nOccupied region: top-left=(${Math.round(minX)}, ${Math.round(minY)}) to bottom-right=(${Math.round(maxX)}, ${Math.round(maxY)}).`;
-
-  // Suggest open placement area — to the right or below existing content
-  const rightOfExisting = Math.round(maxX) + 80;
-  const belowExisting = Math.round(maxY) + 80;
+  let summary = `The board has ${shapes.length} objects occupying the region (${minX}, ${minY}) to (${maxX}, ${maxY}).`;
 
   if (viewportCenter) {
-    // If viewport center is far from existing content, suggest near viewport
     const vcx = viewportCenter.x;
     const vcy = viewportCenter.y;
     const isFarFromContent = vcx > maxX + 200 || vcy > maxY + 200 || vcx < minX - 200 || vcy < minY - 200;
 
     if (isFarFromContent) {
-      hint += ` The user's viewport is far from existing content — place new objects near viewport center (${vcx}, ${vcy}).`;
+      summary += ` The user's viewport is far from existing content — place new objects near viewport center (${vcx}, ${vcy}).`;
     } else {
-      hint += ` Suggested open space: start at x=${rightOfExisting} (right of existing) or y=${belowExisting} (below existing). Do NOT overlap the occupied region.`;
+      const rightOf = maxX + 80;
+      const below = maxY + 80;
+      summary += ` Suggested open space: x=${rightOf} (right) or y=${below} (below). Do NOT overlap the occupied region.`;
     }
-  } else {
-    hint += ` Suggested open space: start at x=${rightOfExisting} (right of existing) or y=${belowExisting} (below existing).`;
   }
 
-  return hint;
+  return summary;
 }
 
-function formatBoardState(
-  shapes: Record<string, unknown>[],
-  viewportCenter?: { x: number; y: number },
-): string {
+// Full details: every object listed (used for getBoardState tool response)
+function formatBoardStateFull(shapes: Record<string, unknown>[]): string {
   if (shapes.length === 0) return "The board is currently empty.";
 
   const lines = shapes.map((s) => {
@@ -117,9 +111,7 @@ function formatBoardState(
     }
   });
 
-  const occupiedHint = computeOccupiedRegion(shapes, viewportCenter);
-
-  return `The board has ${shapes.length} objects:\n${lines.join("\n")}${occupiedHint}`;
+  return `The board has ${shapes.length} objects:\n${lines.join("\n")}`;
 }
 
 // ── Tool call simulation ───────────────────────────────────────────
@@ -286,10 +278,7 @@ function simulateToolCall(
     case "getBoardState": {
       return {
         operation: null,
-        result: JSON.stringify({
-          success: true,
-          objects: boardState,
-        }),
+        result: formatBoardStateFull(boardState),
       };
     }
 
@@ -474,6 +463,262 @@ function simulateToolCall(
       };
     }
 
+    case "createFlowchart": {
+      const flowId = generateTempId();
+      const steps = toolInput.steps as { label: string; description?: string; color?: string }[];
+      const direction = (toolInput.direction as string) || "horizontal";
+      const nodeW = (toolInput.nodeWidth as number) || 200;
+      const nodeH = (toolInput.nodeHeight as number) || 80;
+      const gap = 100; // space between nodes (includes connector arrow)
+      const baseX = toolInput.x as number;
+      const baseY = toolInput.y as number;
+      const createdIds: string[] = [];
+      const stepIds: string[] = [];
+
+      const ops: AIOperation[] = [];
+
+      steps.forEach((step, i) => {
+        // Position each step node
+        const sx = direction === "horizontal" ? baseX + i * (nodeW + gap) : baseX;
+        const sy = direction === "horizontal" ? baseY : baseY + i * (nodeH + gap);
+
+        // Create the step box (rectangle)
+        const shapeId = generateTempId();
+        stepIds.push(shapeId);
+        createdIds.push(shapeId);
+        tempIdMap.set(shapeId, shapeId);
+
+        ops.push({
+          type: "createShape",
+          tempId: shapeId,
+          shapeType: "rectangle",
+          x: sx,
+          y: sy,
+          w: nodeW,
+          h: nodeH,
+          fill: step.color ?? "#3b82f6",
+        });
+
+        // Create label text centered inside the box
+        const labelId = generateTempId();
+        createdIds.push(labelId);
+        tempIdMap.set(labelId, labelId);
+        ops.push({
+          type: "createText",
+          tempId: labelId,
+          x: sx + 10,
+          y: sy + (step.description ? 12 : nodeH / 2 - 12),
+          text: step.label,
+          fontSize: 16,
+          fill: "#ffffff",
+          width: nodeW - 20,
+        });
+
+        // Optional description text
+        if (step.description) {
+          const descId = generateTempId();
+          createdIds.push(descId);
+          tempIdMap.set(descId, descId);
+          ops.push({
+            type: "createText",
+            tempId: descId,
+            x: sx + 10,
+            y: sy + 38,
+            text: step.description,
+            fontSize: 12,
+            fill: "#dbeafe",
+            width: nodeW - 20,
+          });
+        }
+      });
+
+      // Add arrow connectors between consecutive steps
+      for (let i = 0; i < stepIds.length - 1; i++) {
+        const cId = generateTempId();
+        createdIds.push(cId);
+        tempIdMap.set(cId, cId);
+        ops.push({
+          type: "createConnector",
+          tempId: cId,
+          fromId: stepIds[i],
+          toId: stepIds[i + 1],
+          style: "arrow",
+        });
+      }
+
+      tempIdMap.set(flowId, flowId);
+      return {
+        operation: null,
+        result: JSON.stringify({ success: true, flowchartId: flowId, createdIds, operationCount: ops.length }),
+        extraOps: ops,
+      };
+    }
+
+    case "createMindMap": {
+      const mapId = generateTempId();
+      const centerLabel = toolInput.centerLabel as string;
+      const branches = toolInput.branches as { label: string; color?: string; children?: string[] }[];
+      const cx = toolInput.x as number;
+      const cy = toolInput.y as number;
+      const createdIds: string[] = [];
+
+      const ops: AIOperation[] = [];
+
+      // Center node (large circle)
+      const centerSize = 160;
+      const centerId = generateTempId();
+      createdIds.push(centerId);
+      tempIdMap.set(centerId, centerId);
+
+      ops.push({
+        type: "createShape",
+        tempId: centerId,
+        shapeType: "circle",
+        x: cx - centerSize / 2,
+        y: cy - centerSize / 2,
+        w: centerSize,
+        h: centerSize,
+        fill: "#8b5cf6",
+      });
+
+      // Center label
+      const centerTextId = generateTempId();
+      createdIds.push(centerTextId);
+      tempIdMap.set(centerTextId, centerTextId);
+      ops.push({
+        type: "createText",
+        tempId: centerTextId,
+        x: cx - 60,
+        y: cy - 12,
+        text: centerLabel,
+        fontSize: 20,
+        fill: "#ffffff",
+        width: 120,
+      });
+
+      // Distribute branches evenly around the center
+      // Scale radius based on branch count so more branches = more room
+      const n = branches.length;
+      const branchRadius = Math.max(300, 180 + n * 30);
+      const branchW = 180;
+      const branchH = 60;
+
+      branches.forEach((branch, i) => {
+        // Evenly space angles, starting from top (-90deg)
+        const angle = (2 * Math.PI * i) / n - Math.PI / 2;
+        const bx = cx + branchRadius * Math.cos(angle) - branchW / 2;
+        const by = cy + branchRadius * Math.sin(angle) - branchH / 2;
+
+        const branchId = generateTempId();
+        createdIds.push(branchId);
+        tempIdMap.set(branchId, branchId);
+
+        const defaultColors = ["#3b82f6", "#22c55e", "#f59e0b", "#ef4444", "#ec4899", "#06b6d4", "#f97316", "#8b5cf6"];
+        const fillColor = branch.color ?? defaultColors[i % defaultColors.length];
+
+        ops.push({
+          type: "createShape",
+          tempId: branchId,
+          shapeType: "rectangle",
+          x: bx,
+          y: by,
+          w: branchW,
+          h: branchH,
+          fill: fillColor,
+        });
+
+        // Branch label
+        const branchTextId = generateTempId();
+        createdIds.push(branchTextId);
+        tempIdMap.set(branchTextId, branchTextId);
+        ops.push({
+          type: "createText",
+          tempId: branchTextId,
+          x: bx + 10,
+          y: by + branchH / 2 - 10,
+          text: branch.label,
+          fontSize: 16,
+          fill: "#ffffff",
+          width: branchW - 20,
+        });
+
+        // Connector from center to branch
+        const connId = generateTempId();
+        createdIds.push(connId);
+        tempIdMap.set(connId, connId);
+        ops.push({
+          type: "createConnector",
+          tempId: connId,
+          fromId: centerId,
+          toId: branchId,
+          style: "line",
+        });
+
+        // Children (sticky notes stacked outward from branch)
+        if (branch.children && branch.children.length > 0) {
+          const childOffset = 150; // distance from branch center to first child center
+          const stickyW = 150;
+          const stickyH = 65;
+          const stickyGap = 15;
+
+          // Direction unit vector from center to this branch
+          const cos = Math.cos(angle);
+          const sin = Math.sin(angle);
+
+          // Anchor: first child center, offset from branch center in the branch direction
+          const anchorX = bx + branchW / 2 + childOffset * cos;
+          const anchorY = by + branchH / 2 + childOffset * sin;
+
+          // Stack children perpendicular to the branch direction
+          // Perpendicular vector: rotate 90 degrees
+          const perpX = -sin;
+          const perpY = cos;
+
+          const totalH = branch.children.length * stickyH + (branch.children.length - 1) * stickyGap;
+
+          branch.children.forEach((childText, j) => {
+            // Offset along perpendicular to spread children out
+            const perpOffset = -totalH / 2 + j * (stickyH + stickyGap) + stickyH / 2;
+            const childCx = anchorX + perpX * perpOffset;
+            const childCy = anchorY + perpY * perpOffset;
+
+            const childId = generateTempId();
+            createdIds.push(childId);
+            tempIdMap.set(childId, childId);
+            ops.push({
+              type: "createStickyNote",
+              tempId: childId,
+              x: childCx - stickyW / 2,
+              y: childCy - stickyH / 2,
+              text: childText,
+              color: branch.color ?? "#fef08a",
+              w: stickyW,
+              h: stickyH,
+            });
+
+            // Connector from branch to child
+            const childConnId = generateTempId();
+            createdIds.push(childConnId);
+            tempIdMap.set(childConnId, childConnId);
+            ops.push({
+              type: "createConnector",
+              tempId: childConnId,
+              fromId: branchId,
+              toId: childId,
+              style: "line",
+            });
+          });
+        }
+      });
+
+      tempIdMap.set(mapId, mapId);
+      return {
+        operation: null,
+        result: JSON.stringify({ success: true, mindMapId: mapId, createdIds, operationCount: ops.length }),
+        extraOps: ops,
+      };
+    }
+
     default:
       return {
         operation: null,
@@ -521,11 +766,17 @@ export async function POST(request: NextRequest) {
     });
 
     // Format board state for Claude context (includes occupied region + open space hints)
-    const boardSummary = formatBoardState(boardState, viewportCenter ?? undefined);
+    const boardSummary = formatBoardSummary(boardState, viewportCenter ?? undefined);
     const viewportHint = viewportCenter
       ? `\nThe user is currently viewing the area around (${viewportCenter.x}, ${viewportCenter.y}).`
       : "";
-    const userMessage = `Current board state:\n${boardSummary}${viewportHint}\n\nUser command: ${command}`;
+    const today = new Date().toLocaleDateString("en-US", {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
+    const userMessage = `Today is ${today}.\n\nCurrent board state:\n${boardSummary}${viewportHint}\n\nUser command: ${command}`;
 
     // Build initial messages
     let messages: Anthropic.Messages.MessageParam[] = [
@@ -548,7 +799,7 @@ export async function POST(request: NextRequest) {
 
       const response = await anthropic.messages.create({
         model: "claude-sonnet-4-5-20250929",
-        max_tokens: 4096,
+        max_tokens: 8192,
         system: AI_SYSTEM_PROMPT,
         tools: AI_TOOLS,
         messages,

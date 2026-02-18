@@ -81,6 +81,32 @@ export type AIOperation =
       frameWidth?: number;
       frameHeight?: number;
       connectors?: boolean;
+    }
+  | {
+      type: "createFlowchart";
+      tempId: string;
+      x: number;
+      y: number;
+      steps: {
+        label: string;
+        description?: string;
+        color?: string;
+      }[];
+      direction?: "horizontal" | "vertical";
+      nodeWidth?: number;
+      nodeHeight?: number;
+    }
+  | {
+      type: "createMindMap";
+      tempId: string;
+      x: number;
+      y: number;
+      centerLabel: string;
+      branches: {
+        label: string;
+        color?: string;
+        children?: string[];
+      }[];
     };
 
 // ── Tool definitions for Claude ────────────────────────────────────
@@ -247,7 +273,7 @@ export const AI_TOOLS: Anthropic.Messages.Tool[] = [
   {
     name: "createGrid",
     description:
-      "Create a grid layout of frames with sticky notes inside. MANDATORY for any structured layout with frames + stickies. Frame heights auto-size to fit all items. Provide cells in row-major order (left to right, top to bottom).",
+      "Create a grid of titled frames with sticky notes inside. Best for categorized lists (SWOT, pros/cons, comparisons). Frame heights auto-size to fit all items. Provide cells in row-major order (left to right, top to bottom).",
     input_schema: {
       type: "object",
       properties: {
@@ -284,7 +310,7 @@ export const AI_TOOLS: Anthropic.Messages.Tool[] = [
   {
     name: "createRow",
     description:
-      "Create a horizontal row of frames with sticky notes inside. MANDATORY for any horizontal layout with frames + stickies. Frame heights auto-size to fit all items. Optionally add arrow connectors between consecutive frames.",
+      "Create a horizontal row of titled frames with sticky notes inside. Best for kanban, retro boards, timelines. Frame heights auto-size to fit all items. Optionally add arrow connectors between consecutive frames.",
     input_schema: {
       type: "object",
       properties: {
@@ -318,6 +344,70 @@ export const AI_TOOLS: Anthropic.Messages.Tool[] = [
         },
       },
       required: ["x", "y", "frames"],
+    },
+  },
+  {
+    name: "createFlowchart",
+    description:
+      "Create a flowchart with connected steps. Best for processes, workflows, user flows, decision trees. Steps are laid out as rounded rectangles with arrow connectors.",
+    input_schema: {
+      type: "object",
+      properties: {
+        x: { type: "number", description: "X of top-left corner of the flowchart" },
+        y: { type: "number", description: "Y of top-left corner of the flowchart" },
+        steps: {
+          type: "array",
+          description: "Ordered array of process steps.",
+          items: {
+            type: "object",
+            properties: {
+              label: { type: "string", description: "Step title (2-6 words)" },
+              description: { type: "string", description: "Optional detail text below the step" },
+              color: { type: "string", description: "Fill color as hex (default: #3b82f6)" },
+            },
+            required: ["label"],
+          },
+        },
+        direction: {
+          type: "string",
+          enum: ["horizontal", "vertical"],
+          description: "Layout direction (default: horizontal)",
+        },
+        nodeWidth: { type: "number", description: "Width of each step box (default 200)" },
+        nodeHeight: { type: "number", description: "Height of each step box (default 80)" },
+      },
+      required: ["x", "y", "steps"],
+    },
+  },
+  {
+    name: "createMindMap",
+    description:
+      "Create a mind map with a central topic and radiating branches. Best for brainstorming, topic exploration, idea organization. Branches spread evenly around the center node.",
+    input_schema: {
+      type: "object",
+      properties: {
+        x: { type: "number", description: "X center of the mind map" },
+        y: { type: "number", description: "Y center of the mind map" },
+        centerLabel: { type: "string", description: "Central topic text" },
+        branches: {
+          type: "array",
+          description: "Array of branches radiating from center.",
+          items: {
+            type: "object",
+            properties: {
+              label: { type: "string", description: "Branch label (2-5 words)" },
+              color: { type: "string", description: "Branch node fill color (hex)" },
+              children: {
+                type: "array",
+                items: { type: "string" },
+                description: "Sub-items as sticky notes (2-6 words each)",
+              },
+            },
+            required: ["label"],
+          },
+        },
+      },
+      required: ["x", "y", "centerLabel", "branches"],
     },
   },
 ];

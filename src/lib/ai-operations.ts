@@ -13,15 +13,11 @@ import type {
 } from "@/lib/types";
 import type { AIOperation } from "@/lib/ai-tools";
 
-function nextZIndex(shapes: Shape[]): number {
-  if (shapes.length === 0) return 0;
-  return Math.max(...shapes.map((s) => s.zIndex)) + 1;
-}
-
 /**
  * Execute a batch of AI operations against the canvas store.
  * Pushes history once so the entire batch is a single undo step.
- * Returns a map of temp IDs → real IDs for reference.
+ * All shapes are collected and applied in ONE setShapes call to avoid
+ * triggering N subscription firings → N Firestore writes → sync loop.
  *
  * All coordinates are TOP-LEFT — no center conversion needed.
  */
@@ -34,15 +30,24 @@ export function executeAIOperations(
   // Snapshot current state for undo (one undo step for the whole batch)
   store.pushHistory();
 
-  for (const op of operations) {
-    // Re-read state each iteration since shapes array grows
-    const currentShapes = useCanvasStore.getState().shapes;
+  // Collect all new shapes and mutations, then apply once
+  const newShapes: Shape[] = [];
+  const updates: Array<{ id: string; patch: Partial<Shape> }> = [];
+  const deletions: string[] = [];
+  let baseZIndex = store.shapes.length === 0
+    ? 0
+    : Math.max(...store.shapes.map((s) => s.zIndex)) + 1;
 
+  const isDark =
+    typeof document !== "undefined" &&
+    document.documentElement.classList.contains("dark");
+
+  for (const op of operations) {
     switch (op.type) {
       case "createStickyNote": {
         const id = generateId();
         tempIdMap.set(op.tempId, id);
-        const shape: StickyNoteShape = {
+        newShapes.push({
           id,
           type: "sticky",
           x: op.x,
@@ -54,16 +59,15 @@ export function executeAIOperations(
           fontSize: 16,
           rotation: 0,
           opacity: 1,
-          zIndex: nextZIndex(currentShapes),
-        };
-        store.addShape(shape);
+          zIndex: baseZIndex++,
+        } as StickyNoteShape);
         break;
       }
 
       case "createFrame": {
         const id = generateId();
         tempIdMap.set(op.tempId, id);
-        const shape: FrameShape = {
+        newShapes.push({
           id,
           type: "frame",
           x: op.x,
@@ -76,8 +80,7 @@ export function executeAIOperations(
           rotation: 0,
           opacity: 1,
           zIndex: 0, // frames behind everything
-        };
-        store.addShape(shape);
+        } as FrameShape);
         break;
       }
 
@@ -86,8 +89,7 @@ export function executeAIOperations(
         tempIdMap.set(op.tempId, id);
 
         if (op.shapeType === "circle") {
-          // For circles, x/y is center position (Konva convention)
-          const shape: CircleShape = {
+          newShapes.push({
             id,
             type: "circle",
             x: op.x + op.w / 2,
@@ -97,11 +99,10 @@ export function executeAIOperations(
             fill: op.fill ?? "#3b82f6",
             rotation: 0,
             opacity: 1,
-            zIndex: nextZIndex(currentShapes),
-          };
-          store.addShape(shape);
+            zIndex: baseZIndex++,
+          } as CircleShape);
         } else {
-          const shape: RectShape = {
+          newShapes.push({
             id,
             type: "rect",
             x: op.x,
@@ -112,9 +113,8 @@ export function executeAIOperations(
             cornerRadius: 4,
             rotation: 0,
             opacity: 1,
-            zIndex: nextZIndex(currentShapes),
-          };
-          store.addShape(shape);
+            zIndex: baseZIndex++,
+          } as RectShape);
         }
         break;
       }
@@ -122,16 +122,12 @@ export function executeAIOperations(
       case "createText": {
         const id = generateId();
         tempIdMap.set(op.tempId, id);
-        const isDark =
-          typeof document !== "undefined" &&
-          document.documentElement.classList.contains("dark");
         const fontSize = op.fontSize ?? 24;
-        // Use explicit width if provided, otherwise estimate from text length
         const estimatedWidth = op.width ?? Math.min(
           800,
           Math.max(100, Math.ceil(op.text.length * fontSize * 0.6) + 20),
         );
-        const shape: TextShape = {
+        newShapes.push({
           id,
           type: "text",
           x: op.x,
@@ -144,19 +140,17 @@ export function executeAIOperations(
           align: "left",
           rotation: 0,
           opacity: 1,
-          zIndex: nextZIndex(currentShapes),
-        };
-        store.addShape(shape);
+          zIndex: baseZIndex++,
+        } as TextShape);
         break;
       }
 
       case "createConnector": {
         const id = generateId();
         tempIdMap.set(op.tempId, id);
-        // Resolve temp IDs to real IDs
         const fromId = tempIdMap.get(op.fromId) ?? op.fromId;
         const toId = tempIdMap.get(op.toId) ?? op.toId;
-        const shape: ConnectorShape = {
+        newShapes.push({
           id,
           type: "connector",
           x: 0,
@@ -168,47 +162,44 @@ export function executeAIOperations(
           strokeWidth: 2,
           rotation: 0,
           opacity: 1,
-          zIndex: nextZIndex(currentShapes),
-        };
-        store.addShape(shape);
+          zIndex: baseZIndex++,
+        } as ConnectorShape);
         break;
       }
 
       case "moveObject": {
         const realId = tempIdMap.get(op.objectId) ?? op.objectId;
-        store.updateShapes([{ id: realId, patch: { x: op.x, y: op.y } }]);
+        updates.push({ id: realId, patch: { x: op.x, y: op.y } });
         break;
       }
 
       case "resizeObject": {
         const realId = tempIdMap.get(op.objectId) ?? op.objectId;
-        const shape = currentShapes.find((s) => s.id === realId);
+        const shape = store.shapes.find((s) => s.id === realId);
         if (!shape) break;
         if (shape.type === "circle") {
-          store.updateShapes([
-            { id: realId, patch: { radiusX: op.w / 2, radiusY: op.h / 2 } },
-          ]);
+          updates.push({ id: realId, patch: { radiusX: op.w / 2, radiusY: op.h / 2 } });
         } else {
-          store.updateShapes([{ id: realId, patch: { w: op.w, h: op.h } }]);
+          updates.push({ id: realId, patch: { w: op.w, h: op.h } });
         }
         break;
       }
 
       case "updateText": {
         const realId = tempIdMap.get(op.objectId) ?? op.objectId;
-        const shape = currentShapes.find((s) => s.id === realId);
+        const shape = store.shapes.find((s) => s.id === realId);
         if (!shape) break;
         if (shape.type === "frame") {
-          store.updateShapes([{ id: realId, patch: { title: op.newText } }]);
+          updates.push({ id: realId, patch: { title: op.newText } });
         } else {
-          store.updateShapes([{ id: realId, patch: { text: op.newText } }]);
+          updates.push({ id: realId, patch: { text: op.newText } });
         }
         break;
       }
 
       case "changeColor": {
         const realId = tempIdMap.get(op.objectId) ?? op.objectId;
-        const shape = currentShapes.find((s) => s.id === realId);
+        const shape = store.shapes.find((s) => s.id === realId);
         if (!shape) break;
         let patch: Partial<Shape>;
         switch (shape.type) {
@@ -223,17 +214,43 @@ export function executeAIOperations(
             patch = { fill: op.color } as Partial<Shape>;
             break;
         }
-        store.updateShapes([{ id: realId, patch }]);
+        updates.push({ id: realId, patch });
         break;
       }
 
       case "deleteObject": {
         const realId = tempIdMap.get(op.objectId) ?? op.objectId;
-        store.removeShapeSync(realId);
+        deletions.push(realId);
         break;
       }
     }
   }
+
+  // Apply everything in a SINGLE store update
+  let finalShapes = [...store.shapes];
+
+  // Add new shapes
+  if (newShapes.length > 0) {
+    finalShapes = [...finalShapes, ...newShapes];
+  }
+
+  // Apply updates
+  if (updates.length > 0) {
+    const updateMap = new Map(updates.map((u) => [u.id, u.patch]));
+    finalShapes = finalShapes.map((s) => {
+      const patch = updateMap.get(s.id);
+      return patch ? ({ ...s, ...patch } as Shape) : s;
+    });
+  }
+
+  // Apply deletions
+  if (deletions.length > 0) {
+    const deleteSet = new Set(deletions);
+    finalShapes = finalShapes.filter((s) => !deleteSet.has(s.id));
+  }
+
+  // One store update → one subscription fire → one Firestore sync
+  store.setShapes(finalShapes);
 
   return tempIdMap;
 }
