@@ -280,7 +280,7 @@ export default function BoardPage() {
   }
 
   return (
-    <div className="flex h-screen flex-col bg-zinc-100 dark:bg-zinc-950">
+    <div className="flex h-screen flex-col bg-[#ededed] dark:bg-[#1a1a1e]">
       <BoardToolbar
         boardId={boardId}
         user={user}
