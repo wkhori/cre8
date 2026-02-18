@@ -136,7 +136,11 @@ export default function CanvasStage({
       result = result.map((s) => {
         if (s.id !== endpointDrag.connectorId || s.type !== "connector") return s;
         if (endpointDrag.end === "from") {
-          return { ...s, fromId: null, fromPoint: { x: endpointDrag.x, y: endpointDrag.y } } as Shape;
+          return {
+            ...s,
+            fromId: null,
+            fromPoint: { x: endpointDrag.x, y: endpointDrag.y },
+          } as Shape;
         } else {
           return { ...s, toId: null, toPoint: { x: endpointDrag.x, y: endpointDrag.y } } as Shape;
         }
@@ -270,9 +274,7 @@ export default function CanvasStage({
     }
 
     // Don't attach transformer to connector shapes or the connector source shape
-    const excludeIds = new Set(
-      shapes.filter((s) => s.type === "connector").map((s) => s.id)
-    );
+    const excludeIds = new Set(shapes.filter((s) => s.type === "connector").map((s) => s.id));
     if (connectorFromId) excludeIds.add(connectorFromId);
     const nodes = selectedIds
       .filter((id) => !excludeIds.has(id))
@@ -418,7 +420,9 @@ export default function CanvasStage({
           // Second click on empty canvas — create freestanding connector
           const from = buildConnectorFrom();
           if (from) {
-            useCanvasStore.getState().addConnector(from, { point: { x: worldX, y: worldY } }, "arrow");
+            useCanvasStore
+              .getState()
+              .addConnector(from, { point: { x: worldX, y: worldY } }, "arrow");
             useDebugStore.getState().setActiveTool("pointer");
           }
           clearConnectorFrom();
@@ -479,9 +483,9 @@ export default function CanvasStage({
     if (connectorFromIdRef.current || connectorFromPointRef.current) {
       let fromCx: number, fromCy: number;
       if (connectorFromIdRef.current) {
-        const fromShape = useCanvasStore.getState().shapes.find(
-          (s) => s.id === connectorFromIdRef.current
-        );
+        const fromShape = useCanvasStore
+          .getState()
+          .shapes.find((s) => s.id === connectorFromIdRef.current);
         if (fromShape) {
           const fb = getShapeBounds(fromShape);
           fromCx = fb.x + fb.width / 2;
@@ -592,7 +596,7 @@ export default function CanvasStage({
         } else {
           // Second click on a shape — create connector (from shape or point → to shape)
           const from = buildConnectorFrom();
-          if (from && !(("id" in from) && from.id === id)) {
+          if (from && !("id" in from && from.id === id)) {
             useCanvasStore.getState().addConnector(from, { id }, "arrow");
             useDebugStore.getState().setActiveTool("pointer");
           }
@@ -731,7 +735,8 @@ export default function CanvasStage({
     }
 
     // Focus and set cursor position: select all for default text, else cursor at end
-    const isDefault = (shape.type === "text" && currentText === "Text") ||
+    const isDefault =
+      (shape.type === "text" && currentText === "Text") ||
       (shape.type === "frame" && currentText === "Frame");
     setTimeout(() => {
       const ta = textareaRef.current;
@@ -1032,16 +1037,25 @@ export default function CanvasStage({
       if (hitShape) {
         // Re-attach to shape — null out the freestanding point
         if (end === "from") {
-          store.updateShape(connectorId, { fromId: hitShape.id, fromPoint: null } as Partial<Shape>);
+          store.updateShape(connectorId, {
+            fromId: hitShape.id,
+            fromPoint: null,
+          } as Partial<Shape>);
         } else {
           store.updateShape(connectorId, { toId: hitShape.id, toPoint: null } as Partial<Shape>);
         }
       } else {
         // Set as freestanding point — null out the shape reference
         if (end === "from") {
-          store.updateShape(connectorId, { fromId: null, fromPoint: { x: dropX, y: dropY } } as Partial<Shape>);
+          store.updateShape(connectorId, {
+            fromId: null,
+            fromPoint: { x: dropX, y: dropY },
+          } as Partial<Shape>);
         } else {
-          store.updateShape(connectorId, { toId: null, toPoint: { x: dropX, y: dropY } } as Partial<Shape>);
+          store.updateShape(connectorId, {
+            toId: null,
+            toPoint: { x: dropX, y: dropY },
+          } as Partial<Shape>);
         }
       }
     },

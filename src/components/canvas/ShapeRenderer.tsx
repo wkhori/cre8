@@ -52,7 +52,9 @@ function computeConnectorPoints(connector: ConnectorShape, allShapes: Shape[]): 
   }
 
   // Compute edge intersection when connected to a shape, raw point otherwise
-  const startPt = fromBounds ? edgePoint(fromBounds, fromCx, fromCy, toCx, toCy) : { x: fromCx, y: fromCy };
+  const startPt = fromBounds
+    ? edgePoint(fromBounds, fromCx, fromCy, toCx, toCy)
+    : { x: fromCx, y: fromCy };
   const endPt = toBounds ? edgePoint(toBounds, toCx, toCy, fromCx, fromCy) : { x: toCx, y: toCy };
 
   // Fan-out: offset connectors that share the same unordered {fromId, toId} pair

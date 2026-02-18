@@ -356,9 +356,9 @@ export default function BoardPage() {
     (s) => s.type === "connector" && selectedIds.includes(s.id)
   );
   const hasSelectedConnectors = selectedConnectors.length > 0;
-  const allSelectedAreArrows = hasSelectedConnectors && selectedConnectors.every(
-    (s) => s.type === "connector" && s.style === "arrow"
-  );
+  const allSelectedAreArrows =
+    hasSelectedConnectors &&
+    selectedConnectors.every((s) => s.type === "connector" && s.style === "arrow");
 
   // ── Auth guard ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -486,7 +486,11 @@ export default function BoardPage() {
                   }}
                   title={allSelectedAreArrows ? "Switch to line" : "Switch to arrow"}
                 >
-                  {allSelectedAreArrows ? <Minus className="size-3.5" /> : <ArrowRight className="size-3.5" />}
+                  {allSelectedAreArrows ? (
+                    <Minus className="size-3.5" />
+                  ) : (
+                    <ArrowRight className="size-3.5" />
+                  )}
                 </Button>
               )}
               <Button
