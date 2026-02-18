@@ -197,6 +197,7 @@ function simulateToolCall(
         text: toolInput.text as string,
         fontSize: toolInput.fontSize as number | undefined,
         fill: toolInput.fill as string | undefined,
+        width: toolInput.width as number | undefined,
       };
       tempIdMap.set(tempId, tempId);
       return {

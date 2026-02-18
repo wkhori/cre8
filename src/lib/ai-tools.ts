@@ -30,6 +30,7 @@ export type AIOperation =
       text: string;
       fontSize?: number;
       fill?: string;
+      width?: number;
     }
   | {
       type: "createFrame";
@@ -151,6 +152,7 @@ export const AI_TOOLS: Anthropic.Messages.Tool[] = [
         y: { type: "number", description: "Y of top-left corner" },
         fontSize: { type: "number", description: "Font size in px (default 24)" },
         fill: { type: "string", description: "Text color as hex" },
+        width: { type: "number", description: "Max text width in px. Auto-calculated from text length if omitted." },
       },
       required: ["text", "x", "y"],
     },

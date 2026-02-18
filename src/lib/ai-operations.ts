@@ -125,16 +125,22 @@ export function executeAIOperations(
         const isDark =
           typeof document !== "undefined" &&
           document.documentElement.classList.contains("dark");
+        const fontSize = op.fontSize ?? 24;
+        // Use explicit width if provided, otherwise estimate from text length
+        const estimatedWidth = op.width ?? Math.min(
+          800,
+          Math.max(100, Math.ceil(op.text.length * fontSize * 0.6) + 20),
+        );
         const shape: TextShape = {
           id,
           type: "text",
           x: op.x,
           y: op.y,
           text: op.text,
-          fontSize: op.fontSize ?? 24,
+          fontSize,
           fontFamily: "sans-serif",
           fill: op.fill ?? (isDark ? "#fafafa" : "#18181b"),
-          width: 200,
+          width: estimatedWidth,
           align: "left",
           rotation: 0,
           opacity: 1,
