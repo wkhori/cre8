@@ -706,19 +706,20 @@ export default function CanvasStage({
   const beginTextEditing = useCallback((id: string) => {
     const shape = useCanvasStore.getState().shapes.find((s) => s.id === id);
     if (!shape) return;
-    // Support both "text" and "sticky" shape types for inline editing
-    if (shape.type !== "text" && shape.type !== "sticky") return;
+    // Support text, sticky, and frame shape types for inline editing
+    if (shape.type !== "text" && shape.type !== "sticky" && shape.type !== "frame") return;
 
     editingShapeTypeRef.current = shape.type;
     setEditingTextId(id);
-    setEditingTextValue(shape.text);
+    const currentText = shape.type === "frame" ? shape.title : shape.text;
+    setEditingTextValue(currentText);
 
     const stage = stageRef.current;
     if (stage) {
       const node = stage.findOne(`#${id}`);
       if (node) {
-        if (shape.type === "sticky") {
-          // For sticky notes, only hide the Text child — keep the background Rect visible
+        if (shape.type === "sticky" || shape.type === "frame") {
+          // For sticky/frame, only hide the Text child — keep the background visible
           const group = node as Konva.Group;
           const textChild = group.findOne("Text");
           if (textChild) textChild.visible(false);
@@ -729,7 +730,19 @@ export default function CanvasStage({
       }
     }
 
-    setTimeout(() => textareaRef.current?.focus(), 0);
+    // Focus and set cursor position: select all for default text, else cursor at end
+    const isDefault = (shape.type === "text" && currentText === "Text") ||
+      (shape.type === "frame" && currentText === "Frame");
+    setTimeout(() => {
+      const ta = textareaRef.current;
+      if (!ta) return;
+      ta.focus();
+      if (isDefault) {
+        ta.select();
+      } else {
+        ta.selectionStart = ta.selectionEnd = currentText.length;
+      }
+    }, 0);
   }, []);
 
   // ── Double-click to edit text ────────────────────────────────────
@@ -757,7 +770,7 @@ export default function CanvasStage({
     if (!stage || !editingTextId) return;
     const node = stage.findOne(`#${editingTextId}`);
     if (node) {
-      if (editingShapeTypeRef.current === "sticky") {
+      if (editingShapeTypeRef.current === "sticky" || editingShapeTypeRef.current === "frame") {
         const group = node as Konva.Group;
         const textChild = group.findOne("Text");
         if (textChild) textChild.visible(true);
@@ -773,9 +786,13 @@ export default function CanvasStage({
     const store = useCanvasStore.getState();
     const shapeType = editingShapeTypeRef.current;
     store.pushHistory();
-    store.updateShape(editingTextId, {
-      text: editingTextValue || (shapeType === "sticky" ? "" : "Text"),
-    });
+    if (shapeType === "frame") {
+      store.updateShape(editingTextId, { title: editingTextValue || "Frame" });
+    } else {
+      store.updateShape(editingTextId, {
+        text: editingTextValue || (shapeType === "sticky" ? "" : "Text"),
+      });
+    }
 
     restoreEditingNode();
 
@@ -839,7 +856,8 @@ export default function CanvasStage({
         border: "none",
         borderRadius: 0,
         background: "transparent",
-        outline: "2px solid #3b82f6",
+        outline: "none",
+        boxShadow: "inset 0 0 0 2px #3b82f6",
         resize: "none" as const,
         padding: 0,
         margin: 0,
@@ -847,6 +865,34 @@ export default function CanvasStage({
         overflow: "hidden" as const,
         zIndex: 100,
         wordBreak: "break-word" as const,
+      };
+    }
+
+    if (shape.type === "frame") {
+      const x = (shape.x + 8) * vp.scale + vp.x;
+      const y = (shape.y - 20) * vp.scale + vp.y;
+      const fontSize = 13 * vp.scale;
+      const width = Math.max((shape.w - 16) * vp.scale, 60);
+      return {
+        position: "absolute" as const,
+        left: x,
+        top: y,
+        width,
+        height: fontSize + 6,
+        fontSize,
+        fontFamily: "system-ui, sans-serif",
+        color: "#71717a",
+        border: "none",
+        borderRadius: 2,
+        background: "transparent",
+        outline: "none",
+        boxShadow: "0 0 0 1px #3b82f6",
+        resize: "none" as const,
+        padding: 0,
+        margin: 0,
+        lineHeight: 1.2,
+        overflow: "hidden" as const,
+        zIndex: 100,
       };
     }
 
@@ -1137,7 +1183,8 @@ export default function CanvasStage({
             setEditingTextValue(val);
             // Stream text changes live to the store (and thus to Firestore)
             if (editingTextId) {
-              useCanvasStore.getState().updateShape(editingTextId, { text: val });
+              const field = editingShapeTypeRef.current === "frame" ? "title" : "text";
+              useCanvasStore.getState().updateShape(editingTextId, { [field]: val });
             }
           }}
           onBlur={commitTextEdit}
