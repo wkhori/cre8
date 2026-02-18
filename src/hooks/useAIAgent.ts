@@ -2,6 +2,7 @@
 
 import { useCallback, useRef, useState } from "react";
 import { useCanvasStore } from "@/store/canvas-store";
+import { useDebugStore } from "@/store/debug-store";
 import { executeAIOperations } from "@/lib/ai-operations";
 import type { AIOperation } from "@/lib/ai-tools";
 
@@ -50,13 +51,21 @@ export function useAIAgent(boardId: string) {
       }, COOLDOWN_MS);
 
       try {
-        // Read current board state from the store
+        // Read current board state + viewport position
         const boardState = useCanvasStore.getState().shapes;
+        const { viewport } = useDebugStore.getState();
+
+        // Compute viewport center in world coordinates
+        // screen-to-world: worldX = (screenX - panX) / scale
+        const viewportCenter = {
+          x: Math.round((window.innerWidth / 2 - viewport.x) / viewport.scale),
+          y: Math.round((window.innerHeight / 2 - viewport.y) / viewport.scale),
+        };
 
         const res = await fetch("/api/ai-command", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ command, boardState }),
+          body: JSON.stringify({ command, boardState, viewportCenter }),
         });
 
         const data: AICommandResult = await res.json();

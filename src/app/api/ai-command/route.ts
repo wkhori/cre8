@@ -8,6 +8,9 @@ import { z } from "zod";
 const RequestSchema = z.object({
   command: z.string().min(1).max(2000),
   boardState: z.array(z.record(z.string(), z.unknown())),
+  viewportCenter: z
+    .object({ x: z.number(), y: z.number() })
+    .optional(),
 });
 
 // ── Temp ID generation (server-side, for tracking across tool rounds) ──
@@ -27,7 +30,7 @@ function formatBoardState(
     const type = s.type as string;
     const x = Math.round(s.x as number);
     const y = Math.round(s.y as number);
-    const base = `- [${id}] ${type} at (${x}, ${y})`;
+    const base = `- [${id}] ${type} top-left=(${x}, ${y})`;
 
     switch (type) {
       case "sticky":
@@ -247,7 +250,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { command, boardState } = parsed.data;
+    const { command, boardState, viewportCenter } = parsed.data;
 
     if (!process.env.ANTHROPIC_API_KEY) {
       return NextResponse.json(
@@ -262,7 +265,10 @@ export async function POST(request: NextRequest) {
 
     // Format board state for Claude context
     const boardSummary = formatBoardState(boardState);
-    const userMessage = `Current board state:\n${boardSummary}\n\nUser command: ${command}`;
+    const viewportHint = viewportCenter
+      ? `\nThe user is currently viewing the area around (${viewportCenter.x}, ${viewportCenter.y}). Place new objects near this position so they are visible.`
+      : "";
+    const userMessage = `Current board state:\n${boardSummary}${viewportHint}\n\nUser command: ${command}`;
 
     // Build initial messages
     let messages: Anthropic.Messages.MessageParam[] = [

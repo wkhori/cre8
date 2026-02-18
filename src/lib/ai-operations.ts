@@ -22,6 +22,8 @@ function nextZIndex(shapes: Shape[]): number {
  * Execute a batch of AI operations against the canvas store.
  * Pushes history once so the entire batch is a single undo step.
  * Returns a map of temp IDs → real IDs for reference.
+ *
+ * All coordinates are TOP-LEFT — no center conversion needed.
  */
 export function executeAIOperations(
   operations: AIOperation[],
@@ -40,15 +42,13 @@ export function executeAIOperations(
       case "createStickyNote": {
         const id = generateId();
         tempIdMap.set(op.tempId, id);
-        const w = op.w ?? 260;
-        const h = op.h ?? 120;
         const shape: StickyNoteShape = {
           id,
           type: "sticky",
-          x: op.x - w / 2,
-          y: op.y - h / 2,
-          w,
-          h,
+          x: op.x,
+          y: op.y,
+          w: op.w ?? 260,
+          h: op.h ?? 120,
           text: op.text,
           color: op.color ?? "#fef08a",
           fontSize: 16,
@@ -63,15 +63,13 @@ export function executeAIOperations(
       case "createFrame": {
         const id = generateId();
         tempIdMap.set(op.tempId, id);
-        const w = op.w ?? 400;
-        const h = op.h ?? 300;
         const shape: FrameShape = {
           id,
           type: "frame",
-          x: op.x - w / 2,
-          y: op.y - h / 2,
-          w,
-          h,
+          x: op.x,
+          y: op.y,
+          w: op.w ?? 400,
+          h: op.h ?? 300,
           title: op.title,
           fill: "rgba(0,0,0,0.03)",
           stroke: "#a1a1aa",
@@ -88,11 +86,12 @@ export function executeAIOperations(
         tempIdMap.set(op.tempId, id);
 
         if (op.shapeType === "circle") {
+          // For circles, x/y is center position (Konva convention)
           const shape: CircleShape = {
             id,
             type: "circle",
-            x: op.x,
-            y: op.y,
+            x: op.x + op.w / 2,
+            y: op.y + op.h / 2,
             radiusX: op.w / 2,
             radiusY: op.h / 2,
             fill: op.fill ?? "#3b82f6",
@@ -105,8 +104,8 @@ export function executeAIOperations(
           const shape: RectShape = {
             id,
             type: "rect",
-            x: op.x - op.w / 2,
-            y: op.y - op.h / 2,
+            x: op.x,
+            y: op.y,
             w: op.w,
             h: op.h,
             fill: op.fill ?? "#3b82f6",
@@ -129,8 +128,8 @@ export function executeAIOperations(
         const shape: TextShape = {
           id,
           type: "text",
-          x: op.x - 40,
-          y: op.y - 12,
+          x: op.x,
+          y: op.y,
           text: op.text,
           fontSize: op.fontSize ?? 24,
           fontFamily: "sans-serif",
@@ -179,7 +178,6 @@ export function executeAIOperations(
         const realId = tempIdMap.get(op.objectId) ?? op.objectId;
         const shape = currentShapes.find((s) => s.id === realId);
         if (!shape) break;
-        // Different shapes store size differently
         if (shape.type === "circle") {
           store.updateShapes([
             { id: realId, patch: { radiusX: op.w / 2, radiusY: op.h / 2 } },
