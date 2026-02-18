@@ -554,11 +554,9 @@ export async function POST(request: NextRequest) {
         break;
       }
 
-      // Add assistant response to conversation
-      messages = [...messages, { role: "assistant", content: response.content }];
-
-      // Execute each tool call and build tool_result messages
+      // Execute each tool call and collect operations
       const toolResults: Anthropic.Messages.ToolResultBlockParam[] = [];
+      let calledGetBoardState = false;
 
       for (const toolBlock of toolUseBlocks) {
         const { operation, result, extraOps } = simulateToolCall(
@@ -574,6 +572,9 @@ export async function POST(request: NextRequest) {
         if (extraOps) {
           operations.push(...extraOps);
         }
+        if (toolBlock.name === "getBoardState") {
+          calledGetBoardState = true;
+        }
 
         toolResults.push({
           type: "tool_result",
@@ -582,7 +583,20 @@ export async function POST(request: NextRequest) {
         });
       }
 
-      messages = [...messages, { role: "user", content: toolResults }];
+      // Only continue the loop if Claude called getBoardState (needs data to decide next action).
+      // Otherwise, all create/move/delete ops are done — no need for a summary round.
+      if (!calledGetBoardState) {
+        if (!finalText) {
+          finalText = `Created ${operations.length} objects on the board.`;
+        }
+        break;
+      }
+
+      messages = [
+        ...messages,
+        { role: "assistant", content: response.content },
+        { role: "user", content: toolResults },
+      ];
     }
 
     // Finalize trace
