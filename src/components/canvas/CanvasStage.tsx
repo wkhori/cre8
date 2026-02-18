@@ -12,6 +12,7 @@ import { buildTransformPatch } from "@/lib/shape-transform";
 import { getSelectionHitIds } from "@/lib/selection";
 import ShapeRenderer from "./ShapeRenderer";
 import DimensionLabel from "./DimensionLabel";
+import DotGrid from "./DotGrid";
 import CursorsLayer from "./CursorsLayer";
 import { useCanvasKeyboard } from "./useCanvasKeyboard";
 import { useTextEditing } from "./useTextEditing";
@@ -55,6 +56,10 @@ export default function CanvasStage({
   const isPanningRef = useRef(false);
   const lastPointerRef = useRef({ x: 0, y: 0 });
   const viewportRef = useRef({ scale: 1, x: 0, y: 0 });
+
+  // Reactive viewport + size for DotGrid (updated on same throttle as debug store)
+  const [gridViewport, setGridViewport] = useState({ x: 0, y: 0, scale: 1 });
+  const [stageSize, setStageSize] = useState({ width: 800, height: 600 });
 
   // Text/sticky editing (extracted hook)
   const textEditing = useTextEditing(stageRef, viewportRef, shapes);
@@ -277,6 +282,7 @@ export default function CanvasStage({
       if (!entry) return;
       const { width, height } = entry.contentRect;
       sizeRef.current = { width, height };
+      setStageSize({ width, height });
       const stage = stageRef.current;
       if (stage) {
         stage.width(width);
@@ -286,6 +292,7 @@ export default function CanvasStage({
     ro.observe(container);
     const rect = container.getBoundingClientRect();
     sizeRef.current = { width: rect.width, height: rect.height };
+    setStageSize({ width: rect.width, height: rect.height });
     return () => ro.disconnect();
   }, []);
 
@@ -299,6 +306,7 @@ export default function CanvasStage({
       stage.position({ x: 0, y: 0 });
       stage.batchDraw();
       useDebugStore.getState().setViewport({ scale: 1, x: 0, y: 0 });
+      setGridViewport({ scale: 1, x: 0, y: 0 });
     };
     window.addEventListener("reset-canvas-view", handleReset);
     return () => window.removeEventListener("reset-canvas-view", handleReset);
@@ -320,9 +328,14 @@ export default function CanvasStage({
     setSelectionBounds(computeSelectionBounds());
   }, [computeSelectionBounds]);
 
+  // Throttle grid redraws separately — debug store already has its own throttle
+  const throttledSetGrid = useMemo(() => throttle(setGridViewport, 50), []);
+
   const syncViewport = useCallback(() => {
-    throttledSetViewport({ ...viewportRef.current });
-  }, [throttledSetViewport]);
+    const vp = { ...viewportRef.current };
+    throttledSetViewport(vp);
+    throttledSetGrid(vp);
+  }, [throttledSetViewport, throttledSetGrid]);
 
   // ── Wheel zoom at cursor ──────────────────────────────────────────
   const handleWheel = useCallback(
@@ -759,7 +772,7 @@ export default function CanvasStage({
   return (
     <div
       ref={containerRef}
-      className="h-full w-full overflow-hidden bg-zinc-100 dark:bg-zinc-900"
+      className="h-full w-full overflow-hidden bg-[#ededed] dark:bg-[#1a1a1e]"
       style={{ cursor: cursorStyle }}
     >
       <Stage
@@ -772,6 +785,15 @@ export default function CanvasStage({
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
       >
+        {/* Dot grid layer — behind everything, not interactive */}
+        <Layer listening={false}>
+          <DotGrid
+            viewport={gridViewport}
+            stageWidth={stageSize.width}
+            stageHeight={stageSize.height}
+            isDark={isDark}
+          />
+        </Layer>
         <Layer ref={layerRef}>
           {sortedShapes.map((shape) => (
             <ShapeRenderer
