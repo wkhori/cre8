@@ -24,6 +24,7 @@ import BoardToolbar from "@/components/board/BoardToolbar";
 
 const CanvasStage = dynamic(() => import("@/components/canvas/CanvasStage"), { ssr: false });
 const DebugDashboard = dynamic(() => import("@/components/debug/DebugDashboard"), { ssr: false });
+const AICommandInput = dynamic(() => import("@/components/ai/AICommandInput"), { ssr: false });
 
 export default function BoardPage() {
   const router = useRouter();
@@ -300,6 +301,7 @@ export default function BoardPage() {
           onLiveDragEnd={handleLiveDragEnd}
         />
         {showDebug && <DebugDashboard />}
+        {user && <AICommandInput boardId={boardId} userId={user.uid} />}
       </div>
     </div>
   );
