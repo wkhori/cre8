@@ -19,7 +19,7 @@ export function getLangfuse(): Langfuse | null {
   langfuseInstance = new Langfuse({
     publicKey,
     secretKey,
-    baseUrl: process.env.LANGFUSE_BASEURL || "https://cloud.langfuse.com",
+    baseUrl: process.env.LANGFUSE_BASE_URL || "https://cloud.langfuse.com",
   });
 
   return langfuseInstance;
