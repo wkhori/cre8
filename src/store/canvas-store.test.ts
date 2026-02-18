@@ -183,6 +183,147 @@ describe("canvas-store", () => {
     expect(canvasSnapshot()).toEqual(afterNewBranch);
   });
 
+  // ── Sticky note creation ──────────────────────────────────────────
+  it("addStickyNote creates with correct defaults", () => {
+    const store = useCanvasStore.getState();
+    const id = store.addStickyNote(300, 200);
+
+    const state = useCanvasStore.getState();
+    const sticky = state.shapes.find((s) => s.id === id);
+    expect(sticky).toBeDefined();
+    expect(sticky!.type).toBe("sticky");
+    if (sticky!.type !== "sticky") throw new Error("unreachable");
+
+    // Centered at (300, 200) with 200x200 default size
+    expect(sticky!.w).toBe(200);
+    expect(sticky!.h).toBe(200);
+    expect(sticky!.x).toBe(200); // 300 - 100
+    expect(sticky!.y).toBe(100); // 200 - 100
+    expect(sticky!.text).toBe("");
+    expect(sticky!.color).toBe("#fef08a");
+    expect(sticky!.fontSize).toBe(16);
+    // Auto-selected
+    expect(state.selectedIds).toEqual([id]);
+  });
+
+  it("addStickyNote accepts custom text and color", () => {
+    const store = useCanvasStore.getState();
+    const id = store.addStickyNote(0, 0, "Hello", "#a7f3d0");
+
+    const sticky = useCanvasStore.getState().shapes.find((s) => s.id === id);
+    expect(sticky).toBeDefined();
+    if (sticky!.type !== "sticky") throw new Error("unreachable");
+    expect(sticky!.text).toBe("Hello");
+    expect(sticky!.color).toBe("#a7f3d0");
+  });
+
+  // ── Frame creation ──────────────────────────────────────────────
+  it("addFrame creates with correct defaults", () => {
+    const store = useCanvasStore.getState();
+    const id = store.addFrame(400, 300);
+
+    const state = useCanvasStore.getState();
+    const frame = state.shapes.find((s) => s.id === id);
+    expect(frame).toBeDefined();
+    expect(frame!.type).toBe("frame");
+    if (frame!.type !== "frame") throw new Error("unreachable");
+
+    // Centered at (400, 300) with 400x300 default size
+    expect(frame!.w).toBe(400);
+    expect(frame!.h).toBe(300);
+    expect(frame!.x).toBe(200); // 400 - 200
+    expect(frame!.y).toBe(150); // 300 - 150
+    expect(frame!.title).toBe("Frame");
+    expect(frame!.zIndex).toBe(0); // frames go behind everything
+    expect(state.selectedIds).toEqual([id]);
+  });
+
+  // ── Connector creation ──────────────────────────────────────────
+  it("addConnector creates shape-to-shape connector", () => {
+    const store = useCanvasStore.getState();
+    store.addRect(100, 100);
+    store.addCircle(300, 300);
+    const [rect, circle] = useCanvasStore.getState().shapes;
+
+    const connId = store.addConnector({ id: rect.id }, { id: circle.id }, "arrow");
+    const conn = useCanvasStore.getState().shapes.find((s) => s.id === connId);
+    expect(conn).toBeDefined();
+    expect(conn!.type).toBe("connector");
+    if (conn!.type !== "connector") throw new Error("unreachable");
+    expect(conn!.fromId).toBe(rect.id);
+    expect(conn!.toId).toBe(circle.id);
+    expect(conn!.style).toBe("arrow");
+  });
+
+  it("addConnector creates point-to-point connector", () => {
+    const store = useCanvasStore.getState();
+    const connId = store.addConnector(
+      { point: { x: 10, y: 20 } },
+      { point: { x: 200, y: 300 } },
+      "line"
+    );
+    const conn = useCanvasStore.getState().shapes.find((s) => s.id === connId);
+    expect(conn).toBeDefined();
+    if (conn!.type !== "connector") throw new Error("unreachable");
+    expect(conn!.fromPoint).toEqual({ x: 10, y: 20 });
+    expect(conn!.toPoint).toEqual({ x: 200, y: 300 });
+    expect(conn!.style).toBe("line");
+  });
+
+  it("addConnector creates shape-to-point connector", () => {
+    const store = useCanvasStore.getState();
+    store.addRect(100, 100);
+    const [rect] = useCanvasStore.getState().shapes;
+
+    const connId = store.addConnector({ id: rect.id }, { point: { x: 500, y: 500 } }, "arrow");
+    const conn = useCanvasStore.getState().shapes.find((s) => s.id === connId);
+    expect(conn).toBeDefined();
+    if (conn!.type !== "connector") throw new Error("unreachable");
+    expect(conn!.fromId).toBe(rect.id);
+    expect(conn!.toPoint).toEqual({ x: 500, y: 500 });
+  });
+
+  // ── Connector cascade delete ─────────────────────────────────────
+  it("deleteShapes cascades to orphaned connectors", () => {
+    const store = useCanvasStore.getState();
+    store.addRect(100, 100);
+    store.addCircle(300, 300);
+    const [rect, circle] = useCanvasStore.getState().shapes;
+
+    store.addConnector({ id: rect.id }, { id: circle.id }, "arrow");
+    expect(useCanvasStore.getState().shapes).toHaveLength(3);
+
+    // Delete the rect — connector should be cascade-deleted too
+    store.deleteShapes([rect.id]);
+    const remaining = useCanvasStore.getState().shapes;
+    expect(remaining).toHaveLength(1);
+    expect(remaining[0].id).toBe(circle.id);
+  });
+
+  // ── Update sticky/frame fields ──────────────────────────────────
+  it("updateShape modifies sticky text", () => {
+    const store = useCanvasStore.getState();
+    const id = store.addStickyNote(100, 100, "original");
+    store.pushHistory();
+    store.updateShape(id, { text: "updated" });
+
+    const sticky = useCanvasStore.getState().shapes.find((s) => s.id === id);
+    if (sticky!.type !== "sticky") throw new Error("unreachable");
+    expect(sticky!.text).toBe("updated");
+  });
+
+  it("updateShape modifies frame title", () => {
+    const store = useCanvasStore.getState();
+    const id = store.addFrame(100, 100, "Original");
+    store.pushHistory();
+    store.updateShape(id, { title: "Renamed" });
+
+    const frame = useCanvasStore.getState().shapes.find((s) => s.id === id);
+    if (frame!.type !== "frame") throw new Error("unreachable");
+    expect(frame!.title).toBe("Renamed");
+  });
+
+  // ── Existing tests ──────────────────────────────────────────────
   it("caps history at 50 entries", () => {
     const store = useCanvasStore.getState();
     for (let i = 0; i < 60; i++) {

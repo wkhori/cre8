@@ -7,13 +7,15 @@ import type { Shape, ConnectorShape } from "@/lib/types";
 import { useCanvasStore } from "@/store/canvas-store";
 import { useDebugStore } from "@/store/debug-store";
 import { throttle } from "@/lib/throttle";
-import { getShapeBounds, type Bounds } from "@/lib/shape-geometry";
+import { getShapeBounds, edgeIntersection, type Bounds } from "@/lib/shape-geometry";
 import { buildTransformPatch } from "@/lib/shape-transform";
 import { getSelectionHitIds } from "@/lib/selection";
 import ShapeRenderer from "./ShapeRenderer";
 import DimensionLabel from "./DimensionLabel";
 import CursorsLayer from "./CursorsLayer";
 import { useCanvasKeyboard } from "./useCanvasKeyboard";
+import { useTextEditing } from "./useTextEditing";
+import { useConnectorCreation } from "./useConnectorCreation";
 
 const MIN_SCALE = 0.25;
 const MAX_SCALE = 4;
@@ -54,11 +56,8 @@ export default function CanvasStage({
   const lastPointerRef = useRef({ x: 0, y: 0 });
   const viewportRef = useRef({ scale: 1, x: 0, y: 0 });
 
-  // Text/sticky editing state
-  const [editingTextId, setEditingTextId] = useState<string | null>(null);
-  const [editingTextValue, setEditingTextValue] = useState("");
-  const editingShapeTypeRef = useRef<string | null>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  // Text/sticky editing (extracted hook)
+  const textEditing = useTextEditing(stageRef, viewportRef, shapes);
 
   // Space-held state for temporary hand mode
   const [spaceHeld, setSpaceHeld] = useState(false);
@@ -73,14 +72,8 @@ export default function CanvasStage({
   // Track dragging shape IDs for live drag broadcast
   const draggingIdsRef = useRef<string[]>([]);
 
-  // Connector creation state
-  const connectorFromIdRef = useRef<string | null>(null);
-  const connectorFromPointRef = useRef<{ x: number; y: number } | null>(null);
-  const [connectorFromId, setConnectorFromId] = useState<string | null>(null);
-  const [connectorPreview, setConnectorPreview] = useState<number[] | null>(null);
-
-  // Connector hover feedback
-  const [hoveredShapeId, setHoveredShapeId] = useState<string | null>(null);
+  // Connector creation (extracted hook)
+  const connector = useConnectorCreation();
 
   // Live drag positions for connector tracking (avoids store/Firestore writes during drag)
   const [dragPositions, setDragPositions] = useState<Map<string, { x: number; y: number }>>(
@@ -107,16 +100,6 @@ export default function CanvasStage({
 
   // Determine effective tool: space overrides to hand temporarily
   const effectiveTool = spaceHeld ? "hand" : activeTool;
-
-  // Clear connector creation state when switching away from connector tool
-  useEffect(() => {
-    if (activeTool !== "connector") {
-      connectorFromIdRef.current = null;
-      connectorFromPointRef.current = null;
-      setConnectorFromId(null);
-      setConnectorPreview(null);
-    }
-  }, [activeTool]);
 
   const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds]);
 
@@ -251,15 +234,15 @@ export default function CanvasStage({
     useDebugStore
       .getState()
       .setSelectedId(
-        editingTextId
-          ? `${editingTextId} (editing)`
+        textEditing.editingTextId
+          ? `${textEditing.editingTextId} (editing)`
           : selectedIds.length === 1
             ? selectedIds[0]
             : selectedIds.length > 1
               ? `${selectedIds.length} shapes`
               : null
       );
-  }, [editingTextId, selectedIds]);
+  }, [textEditing.editingTextId, selectedIds]);
 
   // ── Attach transformer to selected nodes (exclude connectors) ────
   useEffect(() => {
@@ -267,7 +250,7 @@ export default function CanvasStage({
     const stage = stageRef.current;
     if (!tr || !stage) return;
 
-    if (selectedIds.length === 0 || editingTextId) {
+    if (selectedIds.length === 0 || textEditing.editingTextId) {
       tr.nodes([]);
       tr.getLayer()?.batchDraw();
       return;
@@ -275,7 +258,7 @@ export default function CanvasStage({
 
     // Don't attach transformer to connector shapes or the connector source shape
     const excludeIds = new Set(shapes.filter((s) => s.type === "connector").map((s) => s.id));
-    if (connectorFromId) excludeIds.add(connectorFromId);
+    if (connector.connectorFromId) excludeIds.add(connector.connectorFromId);
     const nodes = selectedIds
       .filter((id) => !excludeIds.has(id))
       .map((id) => stage.findOne(`#${id}`))
@@ -283,7 +266,7 @@ export default function CanvasStage({
 
     tr.nodes(nodes);
     tr.getLayer()?.batchDraw();
-  }, [connectorFromId, editingTextId, selectedIds, shapes]);
+  }, [connector.connectorFromId, textEditing.editingTextId, selectedIds, shapes]);
 
   // ── Resize observer ───────────────────────────────────────────────
   useEffect(() => {
@@ -376,27 +359,6 @@ export default function CanvasStage({
     [syncViewport]
   );
 
-  // Helper: is the connector "from" endpoint already set?
-  const hasConnectorFrom = useCallback(
-    () => connectorFromIdRef.current !== null || connectorFromPointRef.current !== null,
-    []
-  );
-
-  // Helper: build the "from" arg for addConnector
-  const buildConnectorFrom = useCallback(() => {
-    if (connectorFromIdRef.current) return { id: connectorFromIdRef.current };
-    if (connectorFromPointRef.current) return { point: connectorFromPointRef.current };
-    return null;
-  }, []);
-
-  // Helper: clear all connector "from" state
-  const clearConnectorFrom = useCallback(() => {
-    connectorFromIdRef.current = null;
-    connectorFromPointRef.current = null;
-    setConnectorFromId(null);
-    setConnectorPreview(null);
-  }, []);
-
   // ── Mouse down ────────────────────────────────────────────────────
   const handleMouseDown = useCallback(
     (e: Konva.KonvaEventObject<MouseEvent>) => {
@@ -409,26 +371,8 @@ export default function CanvasStage({
       const worldX = (pos.x - vp.x) / vp.scale;
       const worldY = (pos.y - vp.y) / vp.scale;
 
-      // Connector tool: empty canvas click
-      if (useDebugStore.getState().activeTool === "connector") {
-        if (!hasConnectorFrom()) {
-          // First click on empty canvas — record from point
-          connectorFromPointRef.current = { x: worldX, y: worldY };
-          setConnectorFromId(null); // no shape source
-          setConnectorPreview(null);
-        } else {
-          // Second click on empty canvas — create freestanding connector
-          const from = buildConnectorFrom();
-          if (from) {
-            useCanvasStore
-              .getState()
-              .addConnector(from, { point: { x: worldX, y: worldY } }, "arrow");
-            useDebugStore.getState().setActiveTool("pointer");
-          }
-          clearConnectorFrom();
-        }
-        return;
-      }
+      // Connector tool: delegate to hook
+      if (connector.handleCanvasClick(worldX, worldY)) return;
 
       const isHand = spaceHeldRef.current || useDebugStore.getState().activeTool === "hand";
 
@@ -459,7 +403,7 @@ export default function CanvasStage({
         }
       }
     },
-    [clearSelection]
+    [clearSelection, connector]
   );
 
   // ── Mouse move ────────────────────────────────────────────────────
@@ -480,26 +424,7 @@ export default function CanvasStage({
     });
 
     // Connector preview line
-    if (connectorFromIdRef.current || connectorFromPointRef.current) {
-      let fromCx: number, fromCy: number;
-      if (connectorFromIdRef.current) {
-        const fromShape = useCanvasStore
-          .getState()
-          .shapes.find((s) => s.id === connectorFromIdRef.current);
-        if (fromShape) {
-          const fb = getShapeBounds(fromShape);
-          fromCx = fb.x + fb.width / 2;
-          fromCy = fb.y + fb.height / 2;
-        } else {
-          fromCx = worldX;
-          fromCy = worldY;
-        }
-      } else {
-        fromCx = connectorFromPointRef.current!.x;
-        fromCy = connectorFromPointRef.current!.y;
-      }
-      setConnectorPreview([fromCx, fromCy, worldX, worldY]);
-    }
+    connector.updatePreview(worldX, worldY);
 
     if (isSelectingRef.current) {
       const start = selectionStartRef.current;
@@ -530,7 +455,7 @@ export default function CanvasStage({
       stage.batchDraw();
       syncViewport();
     }
-  }, [syncViewport, throttledSetPointer]);
+  }, [syncViewport, throttledSetPointer, connector]);
 
   // ── Mouse up ──────────────────────────────────────────────────────
   const handleMouseUp = useCallback(
@@ -582,28 +507,8 @@ export default function CanvasStage({
 
       if (spaceHeldRef.current || useDebugStore.getState().activeTool === "hand") return;
 
-      // Connector tool: click source, then click target
-      if (useDebugStore.getState().activeTool === "connector") {
-        const shape = useCanvasStore.getState().shapes.find((s) => s.id === id);
-        if (!shape || shape.type === "connector") return; // can't connect to a connector
-
-        if (!hasConnectorFrom()) {
-          // First click on a shape — set source
-          connectorFromIdRef.current = id;
-          connectorFromPointRef.current = null;
-          setConnectorFromId(id);
-          setSelected([id]);
-        } else {
-          // Second click on a shape — create connector (from shape or point → to shape)
-          const from = buildConnectorFrom();
-          if (from && !("id" in from && from.id === id)) {
-            useCanvasStore.getState().addConnector(from, { id }, "arrow");
-            useDebugStore.getState().setActiveTool("pointer");
-          }
-          clearConnectorFrom();
-        }
-        return;
-      }
+      // Connector tool: delegate to hook
+      if (connector.handleShapeClick(id)) return;
 
       const evt = e.evt as MouseEvent;
       if (evt.shiftKey || evt.metaKey || evt.ctrlKey) {
@@ -612,7 +517,7 @@ export default function CanvasStage({
         setSelected([id]);
       }
     },
-    [setSelected, toggleSelected]
+    [setSelected, toggleSelected, connector]
   );
 
   // ── Shape drag handlers ───────────────────────────────────────────
@@ -707,202 +612,7 @@ export default function CanvasStage({
     [updateShape, updateShapes, onLiveDragEnd]
   );
 
-  const beginTextEditing = useCallback((id: string) => {
-    const shape = useCanvasStore.getState().shapes.find((s) => s.id === id);
-    if (!shape) return;
-    // Support text, sticky, and frame shape types for inline editing
-    if (shape.type !== "text" && shape.type !== "sticky" && shape.type !== "frame") return;
-
-    editingShapeTypeRef.current = shape.type;
-    setEditingTextId(id);
-    const currentText = shape.type === "frame" ? shape.title : shape.text;
-    setEditingTextValue(currentText);
-
-    const stage = stageRef.current;
-    if (stage) {
-      const node = stage.findOne(`#${id}`);
-      if (node) {
-        if (shape.type === "sticky" || shape.type === "frame") {
-          // For sticky/frame, only hide the Text child — keep the background visible
-          const group = node as Konva.Group;
-          const textChild = group.findOne("Text");
-          if (textChild) textChild.visible(false);
-        } else {
-          node.visible(false);
-        }
-        stage.batchDraw();
-      }
-    }
-
-    // Focus and set cursor position: select all for default text, else cursor at end
-    const isDefault =
-      (shape.type === "text" && currentText === "Text") ||
-      (shape.type === "frame" && currentText === "Frame");
-    setTimeout(() => {
-      const ta = textareaRef.current;
-      if (!ta) return;
-      ta.focus();
-      if (isDefault) {
-        ta.select();
-      } else {
-        ta.selectionStart = ta.selectionEnd = currentText.length;
-      }
-    }, 0);
-  }, []);
-
-  // ── Double-click to edit text ────────────────────────────────────
-  const handleShapeDblClick = useCallback(
-    (id: string) => {
-      beginTextEditing(id);
-    },
-    [beginTextEditing]
-  );
-
-  useEffect(() => {
-    const onStartTextEdit = (evt: Event) => {
-      const customEvt = evt as CustomEvent<{ id?: string }>;
-      const id = customEvt.detail?.id;
-      if (!id) return;
-      beginTextEditing(id);
-    };
-
-    window.addEventListener("start-text-edit", onStartTextEdit as EventListener);
-    return () => window.removeEventListener("start-text-edit", onStartTextEdit as EventListener);
-  }, [beginTextEditing]);
-
-  const restoreEditingNode = useCallback(() => {
-    const stage = stageRef.current;
-    if (!stage || !editingTextId) return;
-    const node = stage.findOne(`#${editingTextId}`);
-    if (node) {
-      if (editingShapeTypeRef.current === "sticky" || editingShapeTypeRef.current === "frame") {
-        const group = node as Konva.Group;
-        const textChild = group.findOne("Text");
-        if (textChild) textChild.visible(true);
-      } else {
-        node.visible(true);
-      }
-      stage.batchDraw();
-    }
-  }, [editingTextId]);
-
-  const commitTextEdit = useCallback(() => {
-    if (!editingTextId) return;
-    const store = useCanvasStore.getState();
-    const shapeType = editingShapeTypeRef.current;
-    store.pushHistory();
-    if (shapeType === "frame") {
-      store.updateShape(editingTextId, { title: editingTextValue || "Frame" });
-    } else {
-      store.updateShape(editingTextId, {
-        text: editingTextValue || (shapeType === "sticky" ? "" : "Text"),
-      });
-    }
-
-    restoreEditingNode();
-
-    editingShapeTypeRef.current = null;
-    setEditingTextId(null);
-    setEditingTextValue("");
-  }, [editingTextId, editingTextValue, restoreEditingNode]);
-
-  // Compute textarea position for the editing shape
-  const editingTextStyle = useMemo(() => {
-    if (!editingTextId) return null;
-    const shape = shapes.find((s) => s.id === editingTextId);
-    if (!shape) return null;
-
-    const vp = viewportRef.current;
-
-    if (shape.type === "text") {
-      const x = shape.x * vp.scale + vp.x;
-      const y = shape.y * vp.scale + vp.y;
-      const width = (shape.width ?? 200) * vp.scale;
-      const fontSize = shape.fontSize * vp.scale;
-      return {
-        position: "absolute" as const,
-        left: x,
-        top: y,
-        width,
-        minHeight: fontSize + 4,
-        fontSize,
-        fontFamily: shape.fontFamily,
-        color: shape.fill,
-        border: "none",
-        borderRadius: 0,
-        background: "transparent",
-        outline: "none",
-        resize: "none" as const,
-        padding: 0,
-        margin: 0,
-        lineHeight: 1,
-        overflow: "hidden" as const,
-        zIndex: 100,
-      };
-    }
-
-    if (shape.type === "sticky") {
-      const padX = 12;
-      const padY = 12;
-      const x = (shape.x + padX) * vp.scale + vp.x;
-      const y = (shape.y + padY) * vp.scale + vp.y;
-      const width = (shape.w - padX * 2) * vp.scale;
-      const height = (shape.h - padY * 2) * vp.scale;
-      const fontSize = (shape.fontSize ?? 16) * vp.scale;
-      return {
-        position: "absolute" as const,
-        left: x,
-        top: y,
-        width,
-        height,
-        fontSize,
-        fontFamily: "system-ui, sans-serif",
-        color: "#18181b",
-        border: "none",
-        borderRadius: 0,
-        background: "transparent",
-        outline: "none",
-        boxShadow: "inset 0 0 0 2px #3b82f6",
-        resize: "none" as const,
-        padding: 0,
-        margin: 0,
-        lineHeight: 1.4,
-        overflow: "hidden" as const,
-        zIndex: 100,
-        wordBreak: "break-word" as const,
-      };
-    }
-
-    if (shape.type === "frame") {
-      const x = (shape.x + 8) * vp.scale + vp.x;
-      const y = (shape.y - 20) * vp.scale + vp.y;
-      const fontSize = 13 * vp.scale;
-      const width = Math.max((shape.w - 16) * vp.scale, 60);
-      return {
-        position: "absolute" as const,
-        left: x,
-        top: y,
-        width,
-        height: fontSize + 6,
-        fontSize,
-        fontFamily: "system-ui, sans-serif",
-        color: "#71717a",
-        border: "none",
-        borderRadius: 2,
-        background: "transparent",
-        outline: "none",
-        boxShadow: "0 0 0 1px #3b82f6",
-        resize: "none" as const,
-        padding: 0,
-        margin: 0,
-        lineHeight: 1.2,
-        overflow: "hidden" as const,
-        zIndex: 100,
-      };
-    }
-
-    return null;
-  }, [editingTextId, shapes]);
+  // (text editing functions moved to useTextEditing hook)
 
   // ── Transform end ─────────────────────────────────────────────────
   const handleTransformEnd = useCallback(() => {
@@ -942,22 +652,6 @@ export default function CanvasStage({
   }, [updateShapes]);
 
   // ── Connector endpoint handles for selected connectors ───────────
-  // Edge intersection: find where a ray from center toward target hits the bounding rect
-  const edgeIntersect = useCallback(
-    (bounds: Bounds, cx: number, cy: number, tx: number, ty: number) => {
-      const dx = tx - cx;
-      const dy = ty - cy;
-      if (dx === 0 && dy === 0) return { x: cx, y: cy };
-      const hw = bounds.width / 2;
-      const hh = bounds.height / 2;
-      const sx = dx !== 0 ? hw / Math.abs(dx) : Infinity;
-      const sy = dy !== 0 ? hh / Math.abs(dy) : Infinity;
-      const s = Math.min(sx, sy);
-      return { x: cx + dx * s, y: cy + dy * s };
-    },
-    []
-  );
-
   const selectedConnectorEndpoints = useMemo(() => {
     if (selectedIds.length === 0) return [];
     const result: Array<{
@@ -1006,17 +700,17 @@ export default function CanvasStage({
 
       // Compute edge intersection for connected shapes, raw point for freestanding
       const fromPt = fromBounds
-        ? edgeIntersect(fromBounds, fromCx, fromCy, toCx, toCy)
+        ? edgeIntersection(fromBounds, fromCx, fromCy, toCx, toCy)
         : { x: fromCx, y: fromCy };
       const toPt = toBounds
-        ? edgeIntersect(toBounds, toCx, toCy, fromCx, fromCy)
+        ? edgeIntersection(toBounds, toCx, toCy, fromCx, fromCy)
         : { x: toCx, y: toCy };
 
       result.push({ connectorId: id, end: "from", x: fromPt.x, y: fromPt.y });
       result.push({ connectorId: id, end: "to", x: toPt.x, y: toPt.y });
     }
     return result;
-  }, [selectedIds, allShapesWithDrag, edgeIntersect]);
+  }, [selectedIds, allShapesWithDrag]);
 
   const handleEndpointDragEnd = useCallback(
     (connectorId: string, end: "from" | "to", e: Konva.KonvaEventObject<DragEvent>) => {
@@ -1086,21 +780,23 @@ export default function CanvasStage({
               isSelected={selectedIdSet.has(shape.id)}
               isDark={isDark}
               allShapes={allShapesWithDrag}
-              isConnectorHover={activeTool === "connector" && hoveredShapeId === shape.id}
+              isConnectorHover={activeTool === "connector" && connector.hoveredShapeId === shape.id}
               onSelect={handleShapeClick}
               onDragStart={handleDragStart}
               onDragMove={handleDragMove}
               onDragEnd={handleDragEnd}
-              onDblClick={handleShapeDblClick}
-              onMouseEnter={activeTool === "connector" ? setHoveredShapeId : undefined}
-              onMouseLeave={activeTool === "connector" ? () => setHoveredShapeId(null) : undefined}
+              onDblClick={textEditing.handleShapeDblClick}
+              onMouseEnter={activeTool === "connector" ? connector.setHoveredShapeId : undefined}
+              onMouseLeave={
+                activeTool === "connector" ? () => connector.setHoveredShapeId(null) : undefined
+              }
             />
           ))}
 
           {/* Connector preview line while creating */}
-          {connectorPreview && (
+          {connector.connectorPreview && (
             <Line
-              points={connectorPreview}
+              points={connector.connectorPreview}
               stroke="#3b82f6"
               strokeWidth={2}
               dash={[8, 4]}
@@ -1176,7 +872,7 @@ export default function CanvasStage({
           />
 
           {selectionBounds &&
-            !editingTextId &&
+            !textEditing.editingTextId &&
             interaction !== "dragging" &&
             !isTransforming &&
             // Hide when every selected shape is a connector (no meaningful dimensions)
@@ -1188,39 +884,14 @@ export default function CanvasStage({
       </Stage>
 
       {/* Text/sticky editing overlay */}
-      {editingTextId && editingTextStyle && (
+      {textEditing.editingTextId && textEditing.editingTextStyle && (
         <textarea
-          ref={textareaRef}
-          value={editingTextValue}
-          onChange={(e) => {
-            const val = e.target.value;
-            setEditingTextValue(val);
-            // Stream text changes live to the store (and thus to Firestore)
-            if (editingTextId) {
-              const field = editingShapeTypeRef.current === "frame" ? "title" : "text";
-              useCanvasStore.getState().updateShape(editingTextId, { [field]: val });
-            }
-          }}
-          onBlur={commitTextEdit}
-          onKeyDown={(e) => {
-            // For sticky notes, allow Enter for newlines; commit with Escape or Cmd+Enter
-            const isSticky = editingShapeTypeRef.current === "sticky";
-            if (e.key === "Enter" && !e.shiftKey && !isSticky) {
-              e.preventDefault();
-              commitTextEdit();
-            }
-            if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && isSticky) {
-              e.preventDefault();
-              commitTextEdit();
-            }
-            if (e.key === "Escape") {
-              restoreEditingNode();
-              editingShapeTypeRef.current = null;
-              setEditingTextId(null);
-              setEditingTextValue("");
-            }
-          }}
-          style={editingTextStyle}
+          ref={textEditing.textareaRef}
+          value={textEditing.editingTextValue}
+          onChange={textEditing.handleTextareaChange}
+          onBlur={textEditing.commitTextEdit}
+          onKeyDown={textEditing.handleTextareaKeyDown}
+          style={textEditing.editingTextStyle}
         />
       )}
     </div>
