@@ -74,16 +74,24 @@ export default function CanvasStage({
   const [selectionBounds, setSelectionBounds] = useState<Bounds | null>(null);
   const [isTransforming, setIsTransforming] = useState(false);
 
-  // Track dragging shape IDs for live drag broadcast
-  const draggingIdsRef = useRef<string[]>([]);
-
-  // Connector creation (extracted hook)
-  const connector = useConnectorCreation();
-
-  // Live drag positions for connector tracking (avoids store/Firestore writes during drag)
+  // ── DragSession: tracks all drag state in refs to avoid React re-renders ──
+  interface DragSession {
+    anchorId: string;
+    anchorStartX: number;
+    anchorStartY: number;
+    ids: string[];
+    basePositions: Map<string, { x: number; y: number }>;
+  }
+  const dragSessionRef = useRef<DragSession | null>(null);
+  // RAF-batched drag positions: written to ref, flushed once per frame
+  const dragPositionsRef = useRef<Map<string, { x: number; y: number }>>(new Map());
+  const dragRafRef = useRef<number>(0);
   const [dragPositions, setDragPositions] = useState<Map<string, { x: number; y: number }>>(
     () => new Map()
   );
+
+  // Connector creation (extracted hook)
+  const connector = useConnectorCreation();
 
   // Live endpoint drag for connector re-attachment
   const [endpointDrag, setEndpointDrag] = useState<{
@@ -533,31 +541,45 @@ export default function CanvasStage({
     [setSelected, toggleSelected, connector]
   );
 
-  // ── Shape drag handlers ───────────────────────────────────────────
+  // ── Shape drag handlers (DragSession + RAF batching) ─────────────
   const handleDragStart = useCallback(
     (id: string) => {
       useDebugStore.getState().setInteraction("dragging");
-      // Save history BEFORE the drag so the move is undoable
       useCanvasStore.getState().pushHistory();
-      const ids = useCanvasStore.getState().selectedIds;
-      if (!ids.includes(id)) {
-        setSelected([id]);
-        draggingIdsRef.current = [id];
-      } else {
-        draggingIdsRef.current = ids;
+
+      const store = useCanvasStore.getState();
+      const ids = store.selectedIds.includes(id) ? store.selectedIds : [id];
+      if (!store.selectedIds.includes(id)) setSelected([id]);
+
+      // Build base positions from store (not Konva nodes)
+      const shapeMap = new Map(store.shapes.map((s) => [s.id, s]));
+      const basePositions = new Map<string, { x: number; y: number }>();
+      for (const sid of ids) {
+        const s = shapeMap.get(sid);
+        if (s) basePositions.set(sid, { x: s.x, y: s.y });
       }
+
+      const anchor = shapeMap.get(id);
+      dragSessionRef.current = {
+        anchorId: id,
+        anchorStartX: anchor?.x ?? 0,
+        anchorStartY: anchor?.y ?? 0,
+        ids,
+        basePositions,
+      };
     },
     [setSelected]
   );
 
-  // ── Live drag move handler: broadcast positions via RTDB ──────────
+  // ── Live drag move: compute from anchor delta, RAF-batch the state update ──
   const handleDragMove = useCallback(
     (id: string, e: Konva.KonvaEventObject<DragEvent>) => {
       const node = e.target;
       const stage = stageRef.current;
-      if (!stage) return;
+      const session = dragSessionRef.current;
+      if (!stage || !session) return;
 
-      // Update cursor position during drag (Stage onMouseMove may not fire)
+      // Update cursor position during drag
       const pos = stage.getPointerPosition();
       if (pos) {
         const vp = viewportRef.current;
@@ -569,20 +591,27 @@ export default function CanvasStage({
         });
       }
 
-      // Update live drag positions so connectors follow shapes in real-time
-      const ids = draggingIdsRef.current;
+      // Compute all positions from anchor delta (no stage.findOne calls)
+      const dx = node.x() - session.anchorStartX;
+      const dy = node.y() - session.anchorStartY;
+
       const newPositions = new Map<string, { x: number; y: number }>();
-      if (ids.length <= 1) {
-        newPositions.set(id, { x: node.x(), y: node.y() });
-      } else {
-        for (const sid of ids) {
-          const sNode = stage.findOne(`#${sid}`);
-          if (sNode) {
-            newPositions.set(sid, { x: sNode.x(), y: sNode.y() });
-          }
+      for (const [sid, base] of session.basePositions) {
+        if (sid === id) {
+          newPositions.set(sid, { x: node.x(), y: node.y() });
+        } else {
+          newPositions.set(sid, { x: base.x + dx, y: base.y + dy });
         }
       }
-      setDragPositions(newPositions);
+
+      // Store in ref (no React render) and schedule single RAF flush
+      dragPositionsRef.current = newPositions;
+      if (!dragRafRef.current) {
+        dragRafRef.current = requestAnimationFrame(() => {
+          dragRafRef.current = 0;
+          setDragPositions(new Map(dragPositionsRef.current));
+        });
+      }
 
       // Broadcast positions via RTDB for remote users
       if (!onLiveDrag) return;
@@ -597,29 +626,38 @@ export default function CanvasStage({
 
   const handleDragEnd = useCallback(
     (id: string, e: Konva.KonvaEventObject<DragEvent>) => {
-      const node = e.target;
-      const stage = stageRef.current;
+      const session = dragSessionRef.current;
+      if (!session) return;
 
-      // Update all dragging shapes in store
-      const ids = draggingIdsRef.current;
-      if (ids.length <= 1) {
-        updateShape(id, { x: node.x(), y: node.y() });
-      } else if (stage) {
-        const updates: Array<{ id: string; patch: Partial<Shape> }> = [];
-        for (const sid of ids) {
-          const sNode = stage.findOne(`#${sid}`);
-          if (sNode) {
-            updates.push({ id: sid, patch: { x: sNode.x(), y: sNode.y() } });
-          }
+      const node = e.target;
+      const dx = node.x() - session.anchorStartX;
+      const dy = node.y() - session.anchorStartY;
+
+      // Batch update all dragged shapes from anchor delta
+      const updates: Array<{ id: string; patch: Partial<Shape> }> = [];
+      for (const [sid, base] of session.basePositions) {
+        if (sid === id) {
+          updates.push({ id: sid, patch: { x: node.x(), y: node.y() } });
+        } else {
+          updates.push({ id: sid, patch: { x: base.x + dx, y: base.y + dy } });
         }
+      }
+      if (updates.length <= 1) {
+        updateShape(id, { x: node.x(), y: node.y() });
+      } else {
         updateShapes(updates);
       }
 
-      draggingIdsRef.current = [];
+      // Clean up drag session
+      dragSessionRef.current = null;
+      dragPositionsRef.current = new Map();
+      if (dragRafRef.current) {
+        cancelAnimationFrame(dragRafRef.current);
+        dragRafRef.current = 0;
+      }
       setDragPositions(new Map());
       useDebugStore.getState().setInteraction("idle");
 
-      // Clear live drag overlay on RTDB
       onLiveDragEnd?.();
     },
     [updateShape, updateShapes, onLiveDragEnd]
