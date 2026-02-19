@@ -84,11 +84,11 @@ export default function CanvasStage({
   }
   const dragSessionRef = useRef<DragSession | null>(null);
   // RAF-batched drag positions: written to ref, flushed once per frame
+  // Reuse a single Map to reduce GC pressure (Fix 3)
   const dragPositionsRef = useRef<Map<string, { x: number; y: number }>>(new Map());
   const dragRafRef = useRef<number>(0);
-  const [dragPositions, setDragPositions] = useState<Map<string, { x: number; y: number }>>(
-    () => new Map()
-  );
+  // Counter increments per RAF frame during drag to trigger re-render for connectors
+  const [dragEpoch, setDragEpoch] = useState(0);
 
   // Connector creation (extracted hook)
   const connector = useConnectorCreation();
@@ -116,35 +116,25 @@ export default function CanvasStage({
 
   const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds]);
 
-  // Merge live drag positions + endpoint drag into shapes so connectors track in real-time
+  // Merge endpoint drag into shapes for connector re-attachment preview.
+  // During shape drag, positions are applied per-shape in the render loop via
+  // dragPositionsRef to avoid remapping the entire array every frame (Fix 1).
   const allShapesWithDrag = useMemo(() => {
-    let result = shapes;
+    if (!endpointDrag) return shapes;
 
-    if (dragPositions.size > 0) {
-      result = result.map((s) => {
-        const dp = dragPositions.get(s.id);
-        return dp ? { ...s, x: dp.x, y: dp.y } : s;
-      });
-    }
-
-    // Apply live endpoint drag: temporarily override the connector's from/to
-    if (endpointDrag) {
-      result = result.map((s) => {
-        if (s.id !== endpointDrag.connectorId || s.type !== "connector") return s;
-        if (endpointDrag.end === "from") {
-          return {
-            ...s,
-            fromId: null,
-            fromPoint: { x: endpointDrag.x, y: endpointDrag.y },
-          } as Shape;
-        } else {
-          return { ...s, toId: null, toPoint: { x: endpointDrag.x, y: endpointDrag.y } } as Shape;
-        }
-      });
-    }
-
-    return result;
-  }, [shapes, dragPositions, endpointDrag]);
+    return shapes.map((s) => {
+      if (s.id !== endpointDrag.connectorId || s.type !== "connector") return s;
+      if (endpointDrag.end === "from") {
+        return {
+          ...s,
+          fromId: null,
+          fromPoint: { x: endpointDrag.x, y: endpointDrag.y },
+        } as Shape;
+      } else {
+        return { ...s, toId: null, toPoint: { x: endpointDrag.x, y: endpointDrag.y } } as Shape;
+      }
+    });
+  }, [shapes, endpointDrag]);
 
   // Sort shapes by zIndex for rendering (use drag-merged shapes so connectors update live)
   const sortedShapes = useMemo(
@@ -158,6 +148,20 @@ export default function CanvasStage({
     [allShapesWithDrag]
   );
 
+  // Drag-aware shapes for connectors only — applies drag positions from ref
+  // so connectors track their endpoints during drag. Only rebuilds on dragEpoch
+  // (once per RAF frame) instead of remapping all shapes (Fix 1).
+  const connectorAllShapes = useMemo(() => {
+    const dp = dragPositionsRef.current;
+    if (dp.size === 0) return allShapesWithDrag;
+    // Only remap shapes that are being dragged
+    return allShapesWithDrag.map((s) => {
+      const pos = dp.get(s.id);
+      return pos ? { ...s, x: pos.x, y: pos.y } : s;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- dragEpoch triggers reads from dragPositionsRef
+  }, [allShapesWithDrag, dragEpoch]);
+
   // Connector ID set — memoized separately so transformer doesn't re-run on every shape change
   const connectorIds = useMemo(
     () => new Set(shapes.filter((s) => s.type === "connector").map((s) => s.id)),
@@ -165,6 +169,9 @@ export default function CanvasStage({
   );
 
   // ── Viewport culling: only render shapes visible on screen ──
+  // Uses gridViewport to re-cull on pan/zoom. During drag this still fires but
+  // sortedShapes is frozen (drag positions live in ref, not state), so the
+  // filter just re-runs cheaply on the same input (Fix 1).
   const visibleShapes = useMemo(() => {
     const vp = viewportRef.current;
     const pad = 200; // render shapes slightly outside viewport for smooth scroll
@@ -181,7 +188,8 @@ export default function CanvasStage({
         b.x + b.width >= vpLeft && b.x <= vpRight && b.y + b.height >= vpTop && b.y <= vpBottom
       );
     });
-  }, [sortedShapes, selectedIdSet, gridViewport]); // gridViewport triggers re-cull on pan/zoom
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- gridViewport intentionally triggers re-cull on pan/zoom
+  }, [sortedShapes, selectedIdSet, gridViewport]);
 
   // Cursor style based on tool
   const cursorStyle = useMemo(() => {
@@ -619,31 +627,32 @@ export default function CanvasStage({
       const dx = node.x() - session.anchorStartX;
       const dy = node.y() - session.anchorStartY;
 
-      const newPositions = new Map<string, { x: number; y: number }>();
+      // Reuse existing Map to reduce GC pressure (Fix 3)
+      const positions = dragPositionsRef.current;
+      positions.clear();
       for (const [sid, base] of session.basePositions) {
         if (sid === id) {
-          newPositions.set(sid, { x: node.x(), y: node.y() });
+          positions.set(sid, { x: node.x(), y: node.y() });
         } else {
-          newPositions.set(sid, { x: base.x + dx, y: base.y + dy });
+          positions.set(sid, { x: base.x + dx, y: base.y + dy });
         }
       }
 
-      // Store in ref (no React render) and schedule single RAF flush
-      dragPositionsRef.current = newPositions;
+      // Schedule single RAF flush — bump epoch to trigger re-render (Fix 1)
       if (!dragRafRef.current) {
         dragRafRef.current = requestAnimationFrame(() => {
           dragRafRef.current = 0;
-          setDragPositions(new Map(dragPositionsRef.current));
+          setDragEpoch((e) => e + 1);
         });
       }
 
       // Broadcast positions via RTDB for remote users
       if (!onLiveDrag) return;
-      const positions: Array<{ id: string; x: number; y: number }> = [];
-      for (const [sid, p] of newPositions) {
-        positions.push({ id: sid, x: p.x, y: p.y });
+      const broadcast: Array<{ id: string; x: number; y: number }> = [];
+      for (const [sid, p] of positions) {
+        broadcast.push({ id: sid, x: p.x, y: p.y });
       }
-      onLiveDrag(positions);
+      onLiveDrag(broadcast);
     },
     [onLiveDrag, throttledSetPointer]
   );
@@ -677,12 +686,12 @@ export default function CanvasStage({
 
       // Clean up drag session
       dragSessionRef.current = null;
-      dragPositionsRef.current = new Map();
+      dragPositionsRef.current.clear();
       if (dragRafRef.current) {
         cancelAnimationFrame(dragRafRef.current);
         dragRafRef.current = 0;
       }
-      setDragPositions(new Map());
+      setDragEpoch((e) => e + 1);
       useDebugStore.getState().setInteraction("idle");
 
       onLiveDragEnd?.();
@@ -866,7 +875,7 @@ export default function CanvasStage({
               shape={shape}
               isSelected={selectedIdSet.has(shape.id)}
               isDark={isDark}
-              allShapes={shape.type === "connector" ? allShapesWithDrag : undefined}
+              allShapes={shape.type === "connector" ? connectorAllShapes : undefined}
               isConnectorHover={activeTool === "connector" && connector.hoveredShapeId === shape.id}
               onSelect={handleShapeClick}
               onDragStart={handleDragStart}

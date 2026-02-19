@@ -35,8 +35,9 @@ export default function BoardPage() {
 
   const { user, profile, loading: authLoading, actionLoading, signOut } = useAuth();
 
-  const [boardReady, setBoardReady] = useState(false);
-  const [boardName, setBoardName] = useState("");
+  const renderOnly = isRenderOnly();
+  const [boardReady, setBoardReady] = useState(renderOnly);
+  const [boardName, setBoardName] = useState(renderOnly ? "Local Board (render-only)" : "");
   const [showDebug, setShowDebug] = useState(false);
   const cursorBroadcasterRef = useRef<ReturnType<typeof createCursorBroadcaster> | null>(null);
   const liveDragBroadcasterRef = useRef<ReturnType<typeof createLiveDragBroadcaster> | null>(null);
@@ -49,21 +50,12 @@ export default function BoardPage() {
   const liveDragsRef = useRef<LiveDragData>({});
 
   // ── Initialize board + sync ────────────────────────────────────────
-  const renderOnly = isRenderOnly();
 
   useEffect(() => {
     if (!user || !profile || !boardId) return;
 
     // In render-only mode, skip all Firebase operations
-    if (renderOnly) {
-      setBoardName("Local Board (render-only)");
-      setBoardReady(true);
-      return () => {
-        setBoardReady(false);
-        useCanvasStore.getState().setShapes([]);
-        useCanvasStore.getState().setSelected([]);
-      };
-    }
+    if (renderOnly) return;
 
     let unsubObjects: (() => void) | null = null;
     let unsubLiveDrags: (() => void) | null = null;
@@ -205,7 +197,9 @@ export default function BoardPage() {
     if (!boardReady) return;
 
     // Poll the debug store pointer at ~30fps
+    // Skip during drag — positions are already broadcast via onLiveDrag (Fix 2)
     const interval = setInterval(() => {
+      if (useDebugStore.getState().interaction === "dragging") return;
       const pointer = useDebugStore.getState().pointer;
       // Always broadcast — (0,0) is a valid world position
       cursorBroadcasterRef.current?.broadcast(pointer.worldX, pointer.worldY);
