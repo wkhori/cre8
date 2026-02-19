@@ -11,6 +11,8 @@ interface ShapeRendererProps {
   isSelected: boolean;
   isDark?: boolean;
   allShapes?: Shape[];
+  /** Monotonically increasing counter that forces connector re-render during drag */
+  epoch?: number;
   isConnectorHover?: boolean;
   onSelect: (id: string, e: Konva.KonvaEventObject<MouseEvent | TouchEvent>) => void;
   onDragStart: (id: string) => void;

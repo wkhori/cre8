@@ -59,6 +59,10 @@ export default function CanvasStage({
 
   // Reactive viewport + size for DotGrid (updated on same throttle as debug store)
   const [gridViewport, setGridViewport] = useState({ x: 0, y: 0, scale: 1 });
+  // Separate cull viewport for visibleShapes — only updates when viewport moves
+  // enough to change which shapes are visible (reduces re-cull during zoom)
+  const [cullViewport, setCullViewport] = useState({ x: 0, y: 0, scale: 1 });
+  const lastCullRef = useRef({ x: 0, y: 0, scale: 1 });
   const [stageSize, setStageSize] = useState({ width: 800, height: 600 });
 
   // Text/sticky editing (extracted hook)
@@ -188,8 +192,8 @@ export default function CanvasStage({
         b.x + b.width >= vpLeft && b.x <= vpRight && b.y + b.height >= vpTop && b.y <= vpBottom
       );
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- gridViewport intentionally triggers re-cull on pan/zoom
-  }, [sortedShapes, selectedIdSet, gridViewport]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- cullViewport intentionally triggers re-cull on significant pan/zoom
+  }, [sortedShapes, selectedIdSet, cullViewport]);
 
   // Cursor style based on tool
   const cursorStyle = useMemo(() => {
@@ -354,6 +358,8 @@ export default function CanvasStage({
       stage.batchDraw();
       useDebugStore.getState().setViewport({ scale: 1, x: 0, y: 0 });
       setGridViewport({ scale: 1, x: 0, y: 0 });
+      setCullViewport({ scale: 1, x: 0, y: 0 });
+      lastCullRef.current = { scale: 1, x: 0, y: 0 };
     };
     window.addEventListener("reset-canvas-view", handleReset);
     return () => window.removeEventListener("reset-canvas-view", handleReset);
@@ -375,6 +381,21 @@ export default function CanvasStage({
     const vp = { ...viewportRef.current };
     throttledSetViewport(vp);
     throttledSetGrid(vp);
+
+    // Only update cull viewport when the view has shifted enough to change
+    // which shapes are visible. The 200px culling padding gives us room to
+    // delay updates. This prevents visibleShapes from recomputing on every
+    // wheel tick when objects are selected.
+    const last = lastCullRef.current;
+    const w = sizeRef.current.width;
+    const threshold = w * 0.15; // ~15% of screen width in pixels
+    const dx = Math.abs(vp.x - last.x);
+    const dy = Math.abs(vp.y - last.y);
+    const dScale = Math.abs(vp.scale - last.scale) / last.scale;
+    if (dx > threshold || dy > threshold || dScale > 0.25) {
+      lastCullRef.current = vp;
+      setCullViewport(vp);
+    }
   }, [throttledSetViewport, throttledSetGrid]);
 
   // ── Wheel zoom at cursor ──────────────────────────────────────────
@@ -876,6 +897,7 @@ export default function CanvasStage({
               isSelected={selectedIdSet.has(shape.id)}
               isDark={isDark}
               allShapes={shape.type === "connector" ? connectorAllShapes : undefined}
+              epoch={shape.type === "connector" ? dragEpoch : undefined}
               isConnectorHover={activeTool === "connector" && connector.hoveredShapeId === shape.id}
               onSelect={handleShapeClick}
               onDragStart={handleDragStart}
