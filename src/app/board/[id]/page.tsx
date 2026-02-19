@@ -162,6 +162,9 @@ export default function BoardPage() {
       cursorBroadcasterRef.current = null;
       liveDragBroadcasterRef.current?.clear();
       liveDragBroadcasterRef.current = null;
+      // Clear canvas so next board doesn't flash stale shapes
+      useCanvasStore.getState().setShapes([]);
+      useCanvasStore.getState().setSelected([]);
     };
 
     // Clean up BEFORE sign-out so RTDB writes happen while still authenticated
