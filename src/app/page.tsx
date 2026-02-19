@@ -31,7 +31,7 @@ export default function Home() {
 
   useEffect(() => {
     if (!loading && user) {
-      router.replace("/board/default");
+      router.replace("/boards");
     }
   }, [loading, router, user]);
 

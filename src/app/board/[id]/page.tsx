@@ -12,6 +12,7 @@ import {
   deleteObjects,
   updateObjects,
   getOrCreateBoard,
+  updateBoard,
   createLiveDragBroadcaster,
   subscribeLiveDrags,
   type LiveDragData,
@@ -34,6 +35,7 @@ export default function BoardPage() {
   const { user, profile, loading: authLoading, actionLoading, signOut } = useAuth();
 
   const [boardReady, setBoardReady] = useState(false);
+  const [boardName, setBoardName] = useState("Untitled Board");
   const [showDebug, setShowDebug] = useState(false);
   const cursorBroadcasterRef = useRef<ReturnType<typeof createCursorBroadcaster> | null>(null);
   const liveDragBroadcasterRef = useRef<ReturnType<typeof createLiveDragBroadcaster> | null>(null);
@@ -55,7 +57,12 @@ export default function BoardPage() {
 
     const init = async () => {
       // Ensure board document exists
-      await getOrCreateBoard(boardId, user.uid);
+      const boardDoc = await getOrCreateBoard(boardId, {
+        uid: user.uid,
+        name: profile.name,
+        photoURL: profile.photoURL,
+      });
+      setBoardName(boardDoc.name);
 
       // Subscribe to board objects from Firestore (incremental)
       // All changes in a single snapshot are batched into one store update
@@ -283,6 +290,11 @@ export default function BoardPage() {
     <div className="flex h-screen flex-col bg-[#ededed] dark:bg-[#1a1a1e]">
       <BoardToolbar
         boardId={boardId}
+        boardName={boardName}
+        onBoardNameChange={async (newName: string) => {
+          await updateBoard(boardId, { name: newName });
+          setBoardName(newName);
+        }}
         user={user}
         profile={profile!}
         boardReady={boardReady}
