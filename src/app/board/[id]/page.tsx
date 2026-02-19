@@ -245,12 +245,21 @@ export default function BoardPage() {
         }
       }
 
-      // Find modified shapes
+      // Find modified shapes — only send fields that actually changed
       const modified: Array<{ id: string; patch: Partial<Shape> }> = [];
       for (const shape of curr) {
         const prev = prevMap.get(shape.id);
         if (prev && prev !== shape && !skipIds.has(shape.id)) {
-          modified.push({ id: shape.id, patch: shape });
+          const patch: Record<string, unknown> = {};
+          for (const key of Object.keys(shape) as (keyof Shape)[]) {
+            if (shape[key] !== prev[key]) {
+              patch[key] = shape[key];
+            }
+          }
+          // Only push if there are real changes (not just reference inequality)
+          if (Object.keys(patch).length > 0) {
+            modified.push({ id: shape.id, patch: patch as Partial<Shape> });
+          }
         }
       }
 

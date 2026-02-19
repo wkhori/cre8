@@ -49,7 +49,6 @@ export default function CanvasStage({
 
   const activeTool = useDebugStore((s) => s.activeTool);
   const interaction = useDebugStore((s) => s.interaction);
-  const viewportScale = useDebugStore((s) => s.viewport.scale);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const sizeRef = useRef({ width: 800, height: 600 });
@@ -152,10 +151,18 @@ export default function CanvasStage({
     [allShapesWithDrag]
   );
 
+  // Connector ID set — memoized separately so transformer doesn't re-run on every shape change
+  const connectorIds = useMemo(
+    () => new Set(shapes.filter((s) => s.type === "connector").map((s) => s.id)),
+    [shapes]
+  );
+
   // Drag-aware shapes for connectors only — applies drag positions from ref
   // so connectors track their endpoints during drag. Only rebuilds on dragEpoch
   // (once per RAF frame) instead of remapping all shapes (Fix 1).
+  // Skip entirely when no connectors exist on the board.
   const connectorAllShapes = useMemo(() => {
+    if (connectorIds.size === 0) return allShapesWithDrag;
     const dp = dragPositionsRef.current;
     if (dp.size === 0) return allShapesWithDrag;
     // Only remap shapes that are being dragged
@@ -164,13 +171,7 @@ export default function CanvasStage({
       return pos ? { ...s, x: pos.x, y: pos.y } : s;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- dragEpoch triggers reads from dragPositionsRef
-  }, [allShapesWithDrag, dragEpoch]);
-
-  // Connector ID set — memoized separately so transformer doesn't re-run on every shape change
-  const connectorIds = useMemo(
-    () => new Set(shapes.filter((s) => s.type === "connector").map((s) => s.id)),
-    [shapes]
-  );
+  }, [allShapesWithDrag, connectorIds.size, dragEpoch]);
 
   // ── Viewport culling: only render shapes visible on screen ──
   // Uses gridViewport to re-cull on pan/zoom. During drag this still fires but
@@ -224,6 +225,8 @@ export default function CanvasStage({
     []
   );
 
+  // Compute selection bounds only when selectedIds change (not on every shapes change).
+  // DimensionLabel is hidden during drag/transform so this doesn't need to be fast-path.
   const computeSelectionBounds = useCallback((): Bounds | null => {
     if (selectedIds.length === 0) return null;
 
@@ -257,7 +260,9 @@ export default function CanvasStage({
       }
     }
 
-    const selectedShapes = shapes.filter((shape) => selectedIds.includes(shape.id));
+    // Fallback: compute from store shapes
+    const currentShapes = useCanvasStore.getState().shapes;
+    const selectedShapes = currentShapes.filter((shape) => selectedIds.includes(shape.id));
     if (selectedShapes.length === 0) return null;
 
     let minX = Infinity;
@@ -279,7 +284,7 @@ export default function CanvasStage({
       width: maxX - minX,
       height: maxY - minY,
     };
-  }, [selectedIds, shapes]);
+  }, [selectedIds]);
 
   // ── Sync debug store ─────────────────────────────────────────────
   useEffect(() => {
@@ -957,10 +962,10 @@ export default function CanvasStage({
               key={`${ep.connectorId}-${ep.end}`}
               x={ep.x}
               y={ep.y}
-              radius={6 / viewportScale}
+              radius={6 / viewportRef.current.scale}
               fill="#fff"
               stroke="#3b82f6"
-              strokeWidth={2 / viewportScale}
+              strokeWidth={2 / viewportRef.current.scale}
               draggable
               perfectDrawEnabled={false}
               onDragMove={(e) => {
@@ -1023,7 +1028,7 @@ export default function CanvasStage({
             !isTransforming &&
             // Hide when every selected shape is a connector (no meaningful dimensions)
             !selectedIds.every((id) => shapes.find((s) => s.id === id)?.type === "connector") && (
-              <DimensionLabel bounds={selectionBounds} viewportScale={viewportScale} />
+              <DimensionLabel bounds={selectionBounds} viewportScale={viewportRef.current.scale} />
             )}
         </Layer>
         {boardId && myUid && <CursorsLayer boardId={boardId} myUid={myUid} />}
