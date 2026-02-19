@@ -155,6 +155,7 @@ export default function BoardPage() {
     init();
 
     const teardown = async () => {
+      setBoardReady(false);
       unsubObjects?.();
       unsubLiveDrags?.();
       // Await RTDB writes so they complete before auth is revoked
@@ -162,9 +163,12 @@ export default function BoardPage() {
       cursorBroadcasterRef.current = null;
       liveDragBroadcasterRef.current?.clear();
       liveDragBroadcasterRef.current = null;
-      // Clear canvas so next board doesn't flash stale shapes
+      // Guard shape clear so the local-to-Firestore sync effect ignores it
+      // (otherwise it would interpret the clear as "user deleted all shapes")
+      isSyncingRef.current++;
       useCanvasStore.getState().setShapes([]);
       useCanvasStore.getState().setSelected([]);
+      isSyncingRef.current--;
     };
 
     // Clean up BEFORE sign-out so RTDB writes happen while still authenticated
@@ -316,7 +320,7 @@ export default function BoardPage() {
           onLiveDragEnd={handleLiveDragEnd}
         />
         {showDebug && <DebugDashboard />}
-        {user && <AICommandInput boardId={boardId} userId={user.uid} />}
+        {user && <AICommandInput boardId={boardId} />}
       </div>
     </div>
   );

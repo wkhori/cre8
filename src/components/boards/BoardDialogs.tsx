@@ -234,12 +234,15 @@ export function ShareBoardDialog({ board, onOpenChange }: ShareBoardDialogProps)
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Share board</DialogTitle>
-          <DialogDescription>
-            Anyone with this link can view and edit this board.
-          </DialogDescription>
+          <DialogDescription>Anyone with this link can view and edit this board.</DialogDescription>
         </DialogHeader>
         <div className="flex gap-2">
-          <Input value={shareUrl} readOnly className="flex-1" onClick={(e) => (e.target as HTMLInputElement).select()} />
+          <Input
+            value={shareUrl}
+            readOnly
+            className="flex-1"
+            onClick={(e) => (e.target as HTMLInputElement).select()}
+          />
           <Button onClick={handleCopy} variant="outline" className="shrink-0">
             {copied ? (
               <Check className="mr-2 size-3.5 text-emerald-500" />

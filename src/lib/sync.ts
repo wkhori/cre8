@@ -161,6 +161,10 @@ export async function deleteBoard(boardId: string): Promise<void> {
 
   // Delete the board document itself
   await deleteDoc(doc(firebaseDb, "boards", boardId));
+
+  // Clean up RTDB data (cursors, presence, liveDrags)
+  const boardRtdbRef = ref(firebaseRtdb, `boards/${boardId}`);
+  await rtdbSet(boardRtdbRef, null).catch(() => {});
 }
 
 export async function duplicateBoard(

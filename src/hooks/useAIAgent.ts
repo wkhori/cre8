@@ -106,7 +106,7 @@ export function useAIAgent(boardId: string) {
         setLoading(false);
       }
     },
-    [boardId],
+    [boardId]
   );
 
   const clearError = useCallback(() => setError(null), []);

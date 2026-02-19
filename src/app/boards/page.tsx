@@ -78,14 +78,20 @@ export default function BoardsPage() {
     if (!user) return;
     setLoading(true);
     try {
-      const [owned, favorited] = await Promise.all([
+      const results = await Promise.allSettled([
         listUserBoards(user.uid),
         listFavoritedBoards(user.uid),
       ]);
-      // Merge and deduplicate
+      const owned = results[0].status === "fulfilled" ? results[0].value : [];
+      const favorited = results[1].status === "fulfilled" ? results[1].value : [];
+      if (results[0].status === "rejected")
+        console.warn("listUserBoards failed:", results[0].reason);
+      if (results[1].status === "rejected")
+        console.warn("listFavoritedBoards failed (index may be building):", results[1].reason);
+      // Merge and deduplicate (owned wins over favorited for same board)
       const map = new Map<string, BoardDoc>();
-      for (const b of owned) map.set(b.id, b);
       for (const b of favorited) map.set(b.id, b);
+      for (const b of owned) map.set(b.id, b);
       setBoards(Array.from(map.values()));
     } catch (err) {
       console.error("Failed to load boards:", err);
@@ -130,42 +136,67 @@ export default function BoardsPage() {
 
   // Action handlers
   const handleCreate = async (name: string) => {
-    const board = await createBoard(name, getOwner());
-    toast.success("Board created");
-    router.push(`/board/${board.id}`);
+    try {
+      const board = await createBoard(name, getOwner());
+      toast.success("Board created");
+      router.push(`/board/${board.id}`);
+    } catch (err) {
+      console.error("Failed to create board:", err);
+      toast.error("Failed to create board");
+    }
   };
 
   const handleRename = async (boardId: string, newName: string) => {
-    await updateBoard(boardId, { name: newName });
-    setBoards((prev) => prev.map((b) => (b.id === boardId ? { ...b, name: newName } : b)));
-    toast.success("Board renamed");
+    try {
+      await updateBoard(boardId, { name: newName });
+      setBoards((prev) => prev.map((b) => (b.id === boardId ? { ...b, name: newName } : b)));
+      toast.success("Board renamed");
+    } catch (err) {
+      console.error("Failed to rename board:", err);
+      toast.error("Failed to rename board");
+    }
   };
 
   const handleDelete = async (boardId: string) => {
-    await deleteBoard(boardId);
-    setBoards((prev) => prev.filter((b) => b.id !== boardId));
-    toast.success("Board deleted");
+    try {
+      await deleteBoard(boardId);
+      setBoards((prev) => prev.filter((b) => b.id !== boardId));
+      toast.success("Board deleted");
+    } catch (err) {
+      console.error("Failed to delete board:", err);
+      toast.error("Failed to delete board");
+    }
   };
 
   const handleDuplicate = async (board: BoardDoc) => {
-    const newBoard = await duplicateBoard(board.id, `${board.name} (copy)`, getOwner());
-    toast.success("Board duplicated");
-    router.push(`/board/${newBoard.id}`);
+    try {
+      const newBoard = await duplicateBoard(board.id, `${board.name} (copy)`, getOwner());
+      toast.success("Board duplicated");
+      router.push(`/board/${newBoard.id}`);
+    } catch (err) {
+      console.error("Failed to duplicate board:", err);
+      toast.error("Failed to duplicate board");
+    }
   };
 
   const handleToggleFavorite = async (board: BoardDoc) => {
     const isFav = (board.favoriteOf ?? []).includes(user!.uid);
-    await toggleFavorite(board.id, user!.uid, isFav);
-    setBoards((prev) =>
-      prev.map((b) => {
-        if (b.id !== board.id) return b;
-        const favs = b.favoriteOf ?? [];
-        return {
-          ...b,
-          favoriteOf: isFav ? favs.filter((uid) => uid !== user!.uid) : [...favs, user!.uid],
-        };
-      })
-    );
+    try {
+      await toggleFavorite(board.id, user!.uid, isFav);
+      setBoards((prev) =>
+        prev.map((b) => {
+          if (b.id !== board.id) return b;
+          const favs = b.favoriteOf ?? [];
+          return {
+            ...b,
+            favoriteOf: isFav ? favs.filter((uid) => uid !== user!.uid) : [...favs, user!.uid],
+          };
+        })
+      );
+    } catch (err) {
+      console.error("Failed to update favorite:", err);
+      toast.error("Failed to update favorite");
+    }
   };
 
   // Loading / auth states
@@ -340,7 +371,7 @@ export default function BoardsPage() {
             {/* Create new card */}
             <button
               onClick={() => setCreateOpen(true)}
-              className="flex h-full min-h-[200px] flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-zinc-300 bg-white/50 text-zinc-500 transition-colors hover:border-zinc-400 hover:bg-zinc-50 hover:text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900/30 dark:text-zinc-500 dark:hover:border-zinc-600 dark:hover:bg-zinc-900/50 dark:hover:text-zinc-300"
+              className="flex h-full min-h-50 flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-zinc-300 bg-white/50 text-zinc-500 transition-colors hover:border-zinc-400 hover:bg-zinc-50 hover:text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900/30 dark:text-zinc-500 dark:hover:border-zinc-600 dark:hover:bg-zinc-900/50 dark:hover:text-zinc-300"
             >
               <Plus className="size-6" />
               <span className="text-sm font-medium">New board</span>

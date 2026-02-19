@@ -134,7 +134,8 @@ export const AI_TOOLS: Anthropic.Messages.Tool[] = [
   },
   {
     name: "createFrame",
-    description: "Create a frame to visually group content. Frames render behind other objects. Title appears above the top-left corner.",
+    description:
+      "Create a frame to visually group content. Frames render behind other objects. Title appears above the top-left corner.",
     input_schema: {
       type: "object",
       properties: {
@@ -178,7 +179,10 @@ export const AI_TOOLS: Anthropic.Messages.Tool[] = [
         y: { type: "number", description: "Y of top-left corner" },
         fontSize: { type: "number", description: "Font size in px (default 24)" },
         fill: { type: "string", description: "Text color as hex" },
-        width: { type: "number", description: "Max text width in px. Auto-calculated from text length if omitted." },
+        width: {
+          type: "number",
+          description: "Max text width in px. Auto-calculated from text length if omitted.",
+        },
       },
       required: ["text", "x", "y"],
     },
@@ -263,7 +267,8 @@ export const AI_TOOLS: Anthropic.Messages.Tool[] = [
   },
   {
     name: "getBoardState",
-    description: "Get all current objects on the board with their IDs, positions, and properties. Use this before modifying existing objects.",
+    description:
+      "Get all current objects on the board with their IDs, positions, and properties. Use this before modifying existing objects.",
     input_schema: {
       type: "object",
       properties: {},

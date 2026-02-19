@@ -9,9 +9,7 @@ import { z } from "zod";
 const RequestSchema = z.object({
   command: z.string().min(1).max(2000),
   boardState: z.array(z.record(z.string(), z.unknown())),
-  viewportCenter: z
-    .object({ x: z.number(), y: z.number() })
-    .optional(),
+  viewportCenter: z.object({ x: z.number(), y: z.number() }).optional(),
 });
 
 // ── Temp ID generation (server-side, for tracking across tool rounds) ──
@@ -21,7 +19,9 @@ function generateTempId(): string {
 }
 
 // ── Board state formatter ──────────────────────────────────────────
-function getShapeBounds(s: Record<string, unknown>): { x: number; y: number; w: number; h: number } | null {
+function getShapeBounds(
+  s: Record<string, unknown>
+): { x: number; y: number; w: number; h: number } | null {
   const type = s.type as string;
   const x = s.x as number;
   const y = s.y as number;
@@ -49,7 +49,7 @@ function getShapeBounds(s: Record<string, unknown>): { x: number; y: number; w: 
 // Compact summary: just count + bounds (used in initial user message)
 function formatBoardSummary(
   shapes: Record<string, unknown>[],
-  viewportCenter?: { x: number; y: number },
+  viewportCenter?: { x: number; y: number }
 ): string {
   if (shapes.length === 0) return "The board is currently empty.";
 
@@ -66,7 +66,8 @@ function formatBoardSummary(
   if (viewportCenter) {
     const vcx = viewportCenter.x;
     const vcy = viewportCenter.y;
-    const isFarFromContent = vcx > maxX + 200 || vcy > maxY + 200 || vcx < minX - 200 || vcy < minY - 200;
+    const isFarFromContent =
+      vcx > maxX + 200 || vcy > maxY + 200 || vcx < minX - 200 || vcy < minY - 200;
 
     if (isFarFromContent) {
       summary += ` The user's viewport is far from existing content — place new objects near viewport center (${vcx}, ${vcy}).`;
@@ -120,7 +121,7 @@ function simulateToolCall(
   toolName: string,
   toolInput: Record<string, unknown>,
   boardState: Record<string, unknown>[],
-  tempIdMap: Map<string, string>,
+  tempIdMap: Map<string, string>
 ): { operation: AIOperation | null; result: string; extraOps?: AIOperation[] } {
   switch (toolName) {
     case "createStickyNote": {
@@ -549,7 +550,12 @@ function simulateToolCall(
       tempIdMap.set(flowId, flowId);
       return {
         operation: null,
-        result: JSON.stringify({ success: true, flowchartId: flowId, createdIds, operationCount: ops.length }),
+        result: JSON.stringify({
+          success: true,
+          flowchartId: flowId,
+          createdIds,
+          operationCount: ops.length,
+        }),
         extraOps: ops,
       };
     }
@@ -557,7 +563,11 @@ function simulateToolCall(
     case "createMindMap": {
       const mapId = generateTempId();
       const centerLabel = toolInput.centerLabel as string;
-      const branches = toolInput.branches as { label: string; color?: string; children?: string[] }[];
+      const branches = toolInput.branches as {
+        label: string;
+        color?: string;
+        children?: string[];
+      }[];
       const cx = toolInput.x as number;
       const cy = toolInput.y as number;
       const createdIds: string[] = [];
@@ -613,7 +623,16 @@ function simulateToolCall(
         createdIds.push(branchId);
         tempIdMap.set(branchId, branchId);
 
-        const defaultColors = ["#3b82f6", "#22c55e", "#f59e0b", "#ef4444", "#ec4899", "#06b6d4", "#f97316", "#8b5cf6"];
+        const defaultColors = [
+          "#3b82f6",
+          "#22c55e",
+          "#f59e0b",
+          "#ef4444",
+          "#ec4899",
+          "#06b6d4",
+          "#f97316",
+          "#8b5cf6",
+        ];
         const fillColor = branch.color ?? defaultColors[i % defaultColors.length];
 
         ops.push({
@@ -674,7 +693,8 @@ function simulateToolCall(
           const perpX = -sin;
           const perpY = cos;
 
-          const totalH = branch.children.length * stickyH + (branch.children.length - 1) * stickyGap;
+          const totalH =
+            branch.children.length * stickyH + (branch.children.length - 1) * stickyGap;
 
           branch.children.forEach((childText, j) => {
             // Offset along perpendicular to spread children out
@@ -714,7 +734,12 @@ function simulateToolCall(
       tempIdMap.set(mapId, mapId);
       return {
         operation: null,
-        result: JSON.stringify({ success: true, mindMapId: mapId, createdIds, operationCount: ops.length }),
+        result: JSON.stringify({
+          success: true,
+          mindMapId: mapId,
+          createdIds,
+          operationCount: ops.length,
+        }),
         extraOps: ops,
       };
     }
@@ -740,7 +765,7 @@ export async function POST(request: NextRequest) {
     if (!parsed.success) {
       return NextResponse.json(
         { success: false, error: "Invalid request: " + parsed.error.message },
-        { status: 400 },
+        { status: 400 }
       );
     }
 
@@ -749,7 +774,7 @@ export async function POST(request: NextRequest) {
     if (!process.env.ANTHROPIC_API_KEY) {
       return NextResponse.json(
         { success: false, error: "AI agent not configured (missing API key)" },
-        { status: 500 },
+        { status: 500 }
       );
     }
 
@@ -779,9 +804,7 @@ export async function POST(request: NextRequest) {
     const userMessage = `Today is ${today}.\n\nCurrent board state:\n${boardSummary}${viewportHint}\n\nUser command: ${command}`;
 
     // Build initial messages
-    let messages: Anthropic.Messages.MessageParam[] = [
-      { role: "user", content: userMessage },
-    ];
+    let messages: Anthropic.Messages.MessageParam[] = [{ role: "user", content: userMessage }];
 
     const operations: AIOperation[] = [];
     const tempIdMap = new Map<string, string>();
@@ -818,8 +841,7 @@ export async function POST(request: NextRequest) {
 
       // Find tool_use blocks
       const toolUseBlocks = response.content.filter(
-        (block): block is Anthropic.Messages.ToolUseBlock =>
-          block.type === "tool_use",
+        (block): block is Anthropic.Messages.ToolUseBlock => block.type === "tool_use"
       );
 
       generation?.end({
@@ -848,7 +870,7 @@ export async function POST(request: NextRequest) {
           toolBlock.name,
           toolBlock.input as Record<string, unknown>,
           boardState,
-          tempIdMap,
+          tempIdMap
         );
 
         if (operation) {
@@ -913,9 +935,6 @@ export async function POST(request: NextRequest) {
     const langfuse = getLangfuse();
     langfuse?.flushAsync().catch(() => {});
 
-    return NextResponse.json(
-      { success: false, error: message },
-      { status: 500 },
-    );
+    return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
 }

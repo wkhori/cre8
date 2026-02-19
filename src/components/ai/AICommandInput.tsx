@@ -9,17 +9,15 @@ import { cn } from "@/lib/utils";
 
 interface AICommandInputProps {
   boardId: string;
-  userId: string;
 }
 
-export default function AICommandInput({ boardId, userId }: AICommandInputProps) {
+export default function AICommandInput({ boardId }: AICommandInputProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [command, setCommand] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const { submitCommand, loading, error, lastResult, history, clearError } =
-    useAIAgent(boardId);
+  const { submitCommand, loading, error, lastResult, history, clearError } = useAIAgent(boardId);
 
   // Focus input when panel opens
   useEffect(() => {
@@ -52,7 +50,7 @@ export default function AICommandInput({ boardId, userId }: AICommandInputProps)
       // Stop propagation so canvas keyboard shortcuts don't fire
       e.stopPropagation();
     },
-    [handleSubmit],
+    [handleSubmit]
   );
 
   // Toggle button (always visible)
@@ -64,7 +62,7 @@ export default function AICommandInput({ boardId, userId }: AICommandInputProps)
           "fixed bottom-4 right-4 z-50 flex items-center gap-2 rounded-full",
           "border border-zinc-200/80 bg-white/90 px-4 py-2.5 text-sm font-medium text-zinc-700",
           "shadow-lg backdrop-blur-sm transition-all hover:bg-zinc-50 hover:shadow-xl",
-          "dark:border-zinc-700/80 dark:bg-zinc-900/90 dark:text-zinc-200 dark:hover:bg-zinc-800",
+          "dark:border-zinc-700/80 dark:bg-zinc-900/90 dark:text-zinc-200 dark:hover:bg-zinc-800"
         )}
       >
         <Sparkles className="size-4" />
@@ -78,7 +76,7 @@ export default function AICommandInput({ boardId, userId }: AICommandInputProps)
       className={cn(
         "fixed bottom-4 right-4 z-50 w-80 rounded-lg border shadow-xl",
         "border-zinc-200/80 bg-white/95 backdrop-blur-sm",
-        "dark:border-zinc-700/80 dark:bg-zinc-900/95",
+        "dark:border-zinc-700/80 dark:bg-zinc-900/95"
       )}
     >
       {/* Header */}
@@ -113,7 +111,7 @@ export default function AICommandInput({ boardId, userId }: AICommandInputProps)
               "placeholder:text-zinc-400",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/50",
               "disabled:cursor-not-allowed disabled:opacity-50",
-              "dark:border-zinc-700 dark:placeholder:text-zinc-500",
+              "dark:border-zinc-700 dark:placeholder:text-zinc-500"
             )}
           />
           <Button
@@ -122,25 +120,17 @@ export default function AICommandInput({ boardId, userId }: AICommandInputProps)
             disabled={loading || !command.trim()}
             className="shrink-0"
           >
-            {loading ? (
-              <Loader2 className="size-4 animate-spin" />
-            ) : (
-              <Send className="size-4" />
-            )}
+            {loading ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
           </Button>
         </div>
 
         {/* Status feedback */}
-        {loading && (
-          <p className="mt-2 text-xs text-zinc-500">Processing command...</p>
-        )}
+        {loading && <p className="mt-2 text-xs text-zinc-500">Processing command...</p>}
         {error && !loading && (
           <p className="mt-2 text-xs text-red-500 dark:text-red-400">{error}</p>
         )}
         {lastResult?.success && !loading && (
-          <p className="mt-2 text-xs text-green-600 dark:text-green-400">
-            {lastResult.message}
-          </p>
+          <p className="mt-2 text-xs text-green-600 dark:text-green-400">{lastResult.message}</p>
         )}
       </div>
 
@@ -152,11 +142,7 @@ export default function AICommandInput({ boardId, userId }: AICommandInputProps)
             className="flex w-full items-center justify-between px-3 py-1.5 text-[11px] text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
           >
             <span>History ({history.length})</span>
-            {showHistory ? (
-              <ChevronUp className="size-3" />
-            ) : (
-              <ChevronDown className="size-3" />
-            )}
+            {showHistory ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />}
           </button>
           {showHistory && (
             <div className="max-h-40 overflow-y-auto px-3 pb-2">
@@ -171,14 +157,12 @@ export default function AICommandInput({ boardId, userId }: AICommandInputProps)
                       "mt-0.5 shrink-0 rounded px-1 py-0.5 text-[9px] font-medium leading-none",
                       entry.result.success
                         ? "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400"
-                        : "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400",
+                        : "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400"
                     )}
                   >
                     {entry.result.success ? "OK" : "ERR"}
                   </span>
-                  <span className="truncate text-zinc-600 dark:text-zinc-300">
-                    {entry.command}
-                  </span>
+                  <span className="truncate text-zinc-600 dark:text-zinc-300">{entry.command}</span>
                 </button>
               ))}
             </div>
@@ -189,8 +173,7 @@ export default function AICommandInput({ boardId, userId }: AICommandInputProps)
       {/* Example commands hint */}
       <div className="border-t border-zinc-200/80 px-3 py-2 dark:border-zinc-700/80">
         <p className="text-[10px] text-zinc-400 dark:text-zinc-500">
-          Try: &quot;Create a SWOT analysis&quot; or &quot;Add 3 sticky notes for action
-          items&quot;
+          Try: &quot;Create a SWOT analysis&quot; or &quot;Add 3 sticky notes for action items&quot;
         </p>
       </div>
     </div>
