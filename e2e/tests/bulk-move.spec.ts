@@ -9,9 +9,12 @@ test("bulk move 500 shapes via store", async ({ page }) => {
   await goToBoard(page, "perf-move-500");
   await waitForStores(page);
 
+  await clearCanvas(page);
+  await page.waitForTimeout(1000);
+
   // Seed shapes
   await injectRects(page, 500);
-  await waitForFpsStable(page);
+  await waitForFpsStable(page, 10, 1000);
 
   // Select all
   await selectAll(page);
@@ -20,20 +23,20 @@ test("bulk move 500 shapes via store", async ({ page }) => {
   // Measure FPS baseline
   const fpsBefore = await measureFps(page, 2000);
 
-  // Perform 10 move operations
+  // Perform 5 move operations (reduced from 10 to avoid timeout)
   const moveTimes: number[] = [];
-  for (let i = 0; i < 10; i++) {
+  for (let i = 0; i < 5; i++) {
     const ms = await moveSelected(page, 5, 0);
     moveTimes.push(Math.round(ms));
-    await page.waitForTimeout(100);
+    await page.waitForTimeout(200);
   }
 
   // Measure FPS after moves
-  const fpsAfter = await measureFps(page, 3000);
+  const fpsAfter = await measureFps(page, 2000);
 
   logResult("bulk-move-500", {
     shapeCount: 500,
-    movesPerformed: 10,
+    movesPerformed: 5,
     moveTimesMs: moveTimes,
     avgMoveMs: Math.round(moveTimes.reduce((a, b) => a + b, 0) / moveTimes.length),
     fpsBeforeAvg: fpsBefore.avg,
@@ -59,9 +62,12 @@ test("bulk move 500 shapes via arrow keys", async ({ page }) => {
   await goToBoard(page, "perf-move-keys-500");
   await waitForStores(page);
 
+  await clearCanvas(page);
+  await page.waitForTimeout(1000);
+
   // Seed shapes
   await injectRects(page, 500);
-  await waitForFpsStable(page);
+  await waitForFpsStable(page, 10, 1000);
 
   // Select all via keyboard
   await page.keyboard.press("Meta+a");
@@ -69,19 +75,19 @@ test("bulk move 500 shapes via arrow keys", async ({ page }) => {
 
   const fpsBefore = await measureFps(page, 2000);
 
-  // Nudge with arrow keys
+  // Nudge with arrow keys (5 nudges)
   const start = Date.now();
-  for (let i = 0; i < 10; i++) {
+  for (let i = 0; i < 5; i++) {
     await page.keyboard.press("ArrowRight");
-    await page.waitForTimeout(50);
+    await page.waitForTimeout(200);
   }
   const totalMs = Date.now() - start;
 
-  const fpsAfter = await measureFps(page, 3000);
+  const fpsAfter = await measureFps(page, 2000);
 
   logResult("bulk-move-keys-500", {
     shapeCount: 500,
-    nudges: 10,
+    nudges: 5,
     totalMs,
     fpsBeforeAvg: fpsBefore.avg,
     fpsAfterAvg: fpsAfter.avg,

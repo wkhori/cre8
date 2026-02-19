@@ -56,6 +56,17 @@ export async function measureFps(page: Page, durationMs: number): Promise<FpsSam
       let lastTime = performance.now();
       const startTime = performance.now();
 
+      // Safety timeout: resolve even if rAF stops firing
+      const safetyTimeout = setTimeout(() => {
+        if (frameCount > 0) {
+          const elapsed = performance.now() - lastTime;
+          if (elapsed > 50) {
+            fpsSamples.push(Math.round((frameCount / elapsed) * 1000));
+          }
+        }
+        resolve(fpsSamples);
+      }, duration + 5000);
+
       function loop(now: number) {
         frameCount++;
         const elapsed = now - lastTime;
@@ -71,6 +82,7 @@ export async function measureFps(page: Page, durationMs: number): Promise<FpsSam
         if (now - startTime < duration) {
           requestAnimationFrame(loop);
         } else {
+          clearTimeout(safetyTimeout);
           // Final partial window
           if (frameCount > 0) {
             const elapsed2 = now - lastTime;

@@ -9,8 +9,11 @@ test("render 500 shapes during pan", async ({ page }) => {
   await goToBoard(page, "perf-render-pan");
   await waitForStores(page);
 
+  await clearCanvas(page);
+  await page.waitForTimeout(1000);
+
   await injectRects(page, 500);
-  await waitForFpsStable(page);
+  await waitForFpsStable(page, 10, 1000);
 
   // Baseline FPS (idle)
   const fpsIdle = await measureFps(page, 2000);
@@ -55,8 +58,11 @@ test("render 500 shapes during zoom", async ({ page }) => {
   await goToBoard(page, "perf-render-zoom");
   await waitForStores(page);
 
+  await clearCanvas(page);
+  await page.waitForTimeout(1000);
+
   await injectRects(page, 500);
-  await waitForFpsStable(page);
+  await waitForFpsStable(page, 10, 1000);
 
   const fpsIdle = await measureFps(page, 2000);
 
