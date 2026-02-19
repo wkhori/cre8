@@ -144,6 +144,29 @@ export default function CanvasStage({
     [allShapesWithDrag]
   );
 
+  // Viewport culling — only render shapes whose bounds intersect the visible area
+  const visibleShapes = useMemo(() => {
+    const { x: panX, y: panY, scale } = gridViewport;
+    const { width: sw, height: sh } = stageSize;
+    // Visible world-coordinate bounds with generous padding for shapes near edges
+    const pad = 100;
+    const worldLeft = -panX / scale - pad;
+    const worldTop = -panY / scale - pad;
+    const worldRight = (sw - panX) / scale + pad;
+    const worldBottom = (sh - panY) / scale + pad;
+
+    return sortedShapes.filter((shape) => {
+      // Always render selected shapes and connectors (connectors may span viewport)
+      if (selectedIdSet.has(shape.id) || shape.type === "connector") return true;
+      const b = getShapeBounds(shape);
+      const sx = b.x;
+      const sy = b.y;
+      const ex = b.x + b.width;
+      const ey = b.y + b.height;
+      return ex >= worldLeft && sx <= worldRight && ey >= worldTop && sy <= worldBottom;
+    });
+  }, [sortedShapes, gridViewport, stageSize, selectedIdSet]);
+
   // Cursor style based on tool
   const cursorStyle = useMemo(() => {
     if (effectiveTool === "hand") {
@@ -312,17 +335,10 @@ export default function CanvasStage({
     return () => window.removeEventListener("reset-canvas-view", handleReset);
   }, []);
 
-  // ── Konva node count ──────────────────────────────────────────────
+  // Konva node count — derive from shapes length instead of expensive stage.find()
   useEffect(() => {
-    const interval = setInterval(() => {
-      const stage = stageRef.current;
-      if (stage) {
-        const allNodes = stage.find("Rect, Ellipse, Text, Line");
-        useDebugStore.getState().setKonvaNodeCount(allNodes.length + 1);
-      }
-    }, 1000);
-    return () => clearInterval(interval);
-  }, []);
+    useDebugStore.getState().setKonvaNodeCount(shapes.length);
+  }, [shapes.length]);
 
   useEffect(() => {
     setSelectionBounds(computeSelectionBounds());
@@ -795,7 +811,7 @@ export default function CanvasStage({
           />
         </Layer>
         <Layer ref={layerRef}>
-          {sortedShapes.map((shape) => (
+          {visibleShapes.map((shape) => (
             <ShapeRenderer
               key={shape.id}
               shape={shape}
