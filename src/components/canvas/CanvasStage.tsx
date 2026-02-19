@@ -152,6 +152,37 @@ export default function CanvasStage({
     [allShapesWithDrag]
   );
 
+  // O(1) shape lookup map — used by connector endpoints and transformer
+  const shapesById = useMemo(
+    () => new Map(allShapesWithDrag.map((s) => [s.id, s])),
+    [allShapesWithDrag]
+  );
+
+  // Connector ID set — memoized separately so transformer doesn't re-run on every shape change
+  const connectorIds = useMemo(
+    () => new Set(shapes.filter((s) => s.type === "connector").map((s) => s.id)),
+    [shapes]
+  );
+
+  // ── Viewport culling: only render shapes visible on screen ──
+  const visibleShapes = useMemo(() => {
+    const vp = viewportRef.current;
+    const pad = 200; // render shapes slightly outside viewport for smooth scroll
+    const vpLeft = -vp.x / vp.scale - pad;
+    const vpTop = -vp.y / vp.scale - pad;
+    const vpRight = vpLeft + sizeRef.current.width / vp.scale + pad * 2;
+    const vpBottom = vpTop + sizeRef.current.height / vp.scale + pad * 2;
+
+    return sortedShapes.filter((shape) => {
+      // Always render selected shapes and connectors
+      if (selectedIdSet.has(shape.id) || shape.type === "connector") return true;
+      const b = getShapeBounds(shape);
+      return (
+        b.x + b.width >= vpLeft && b.x <= vpRight && b.y + b.height >= vpTop && b.y <= vpBottom
+      );
+    });
+  }, [sortedShapes, selectedIdSet, gridViewport]); // gridViewport triggers re-cull on pan/zoom
+
   // Cursor style based on tool
   const cursorStyle = useMemo(() => {
     if (effectiveTool === "hand") {
@@ -270,7 +301,7 @@ export default function CanvasStage({
     }
 
     // Don't attach transformer to connector shapes or the connector source shape
-    const excludeIds = new Set(shapes.filter((s) => s.type === "connector").map((s) => s.id));
+    const excludeIds = new Set(connectorIds);
     if (connector.connectorFromId) excludeIds.add(connector.connectorFromId);
     const nodes = selectedIds
       .filter((id) => !excludeIds.has(id))
@@ -279,7 +310,7 @@ export default function CanvasStage({
 
     tr.nodes(nodes);
     tr.getLayer()?.batchDraw();
-  }, [connector.connectorFromId, textEditing.editingTextId, selectedIds, shapes]);
+  }, [connector.connectorFromId, textEditing.editingTextId, selectedIds, connectorIds]);
 
   // ── Resize observer ───────────────────────────────────────────────
   useEffect(() => {
@@ -320,17 +351,10 @@ export default function CanvasStage({
     return () => window.removeEventListener("reset-canvas-view", handleReset);
   }, []);
 
-  // ── Konva node count ──────────────────────────────────────────────
+  // ── Konva node count (derived from shapes length, no stage traversal) ──
   useEffect(() => {
-    const interval = setInterval(() => {
-      const stage = stageRef.current;
-      if (stage) {
-        const allNodes = stage.find("Rect, Ellipse, Text, Line");
-        useDebugStore.getState().setKonvaNodeCount(allNodes.length + 1);
-      }
-    }, 1000);
-    return () => clearInterval(interval);
-  }, []);
+    useDebugStore.getState().setKonvaNodeCount(shapes.length);
+  }, [shapes.length]);
 
   useEffect(() => {
     setSelectionBounds(computeSelectionBounds());
@@ -712,16 +736,16 @@ export default function CanvasStage({
       y: number;
     }> = [];
     for (const id of selectedIds) {
-      const shape = allShapesWithDrag.find((s) => s.id === id);
+      const shape = shapesById.get(id);
       if (!shape || shape.type !== "connector") continue;
       const c = shape as ConnectorShape;
 
-      // Resolve centers and bounds for both endpoints
+      // Resolve centers and bounds for both endpoints (O(1) lookups)
       let fromCx: number | null = null,
         fromCy: number | null = null,
         fromBounds: Bounds | null = null;
       if (c.fromId) {
-        const fs = allShapesWithDrag.find((s) => s.id === c.fromId);
+        const fs = shapesById.get(c.fromId);
         if (fs) {
           fromBounds = getShapeBounds(fs);
           fromCx = fromBounds.x + fromBounds.width / 2;
@@ -736,7 +760,7 @@ export default function CanvasStage({
         toCy: number | null = null,
         toBounds: Bounds | null = null;
       if (c.toId) {
-        const ts = allShapesWithDrag.find((s) => s.id === c.toId);
+        const ts = shapesById.get(c.toId);
         if (ts) {
           toBounds = getShapeBounds(ts);
           toCx = toBounds.x + toBounds.width / 2;
@@ -761,7 +785,7 @@ export default function CanvasStage({
       result.push({ connectorId: id, end: "to", x: toPt.x, y: toPt.y });
     }
     return result;
-  }, [selectedIds, allShapesWithDrag]);
+  }, [selectedIds, shapesById]);
 
   const handleEndpointDragEnd = useCallback(
     (connectorId: string, end: "from" | "to", e: Konva.KonvaEventObject<DragEvent>) => {
@@ -833,7 +857,7 @@ export default function CanvasStage({
           />
         </Layer>
         <Layer ref={layerRef}>
-          {sortedShapes.map((shape) => (
+          {visibleShapes.map((shape) => (
             <ShapeRenderer
               key={shape.id}
               shape={shape}
