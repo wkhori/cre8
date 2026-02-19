@@ -21,9 +21,7 @@ import type { AIOperation } from "@/lib/ai-tools";
  *
  * All coordinates are TOP-LEFT — no center conversion needed.
  */
-export function executeAIOperations(
-  operations: AIOperation[],
-): Map<string, string> {
+export function executeAIOperations(operations: AIOperation[]): Map<string, string> {
   const store = useCanvasStore.getState();
   const tempIdMap = new Map<string, string>();
 
@@ -34,13 +32,11 @@ export function executeAIOperations(
   const newShapes: Shape[] = [];
   const updates: Array<{ id: string; patch: Partial<Shape> }> = [];
   const deletions: string[] = [];
-  let baseZIndex = store.shapes.length === 0
-    ? 0
-    : Math.max(...store.shapes.map((s) => s.zIndex)) + 1;
+  let baseZIndex =
+    store.shapes.length === 0 ? 0 : Math.max(...store.shapes.map((s) => s.zIndex)) + 1;
 
   const isDark =
-    typeof document !== "undefined" &&
-    document.documentElement.classList.contains("dark");
+    typeof document !== "undefined" && document.documentElement.classList.contains("dark");
 
   for (const op of operations) {
     switch (op.type) {
@@ -123,10 +119,8 @@ export function executeAIOperations(
         const id = generateId();
         tempIdMap.set(op.tempId, id);
         const fontSize = op.fontSize ?? 24;
-        const estimatedWidth = op.width ?? Math.min(
-          800,
-          Math.max(100, Math.ceil(op.text.length * fontSize * 0.6) + 20),
-        );
+        const estimatedWidth =
+          op.width ?? Math.min(800, Math.max(100, Math.ceil(op.text.length * fontSize * 0.6) + 20));
         newShapes.push({
           id,
           type: "text",

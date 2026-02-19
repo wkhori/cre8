@@ -1,7 +1,8 @@
 "use client";
 
 import Image from "next/image";
-import { useCallback } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import type { User } from "firebase/auth";
 import { useCanvasStore } from "@/store/canvas-store";
 import { useDebugStore } from "@/store/debug-store";
@@ -33,6 +34,8 @@ import {
   LogOut,
   Moon,
   Bug,
+  ChevronLeft,
+  Pencil,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import ColorPicker from "@/components/canvas/ColorPicker";
@@ -57,6 +60,8 @@ function ToolbarDivider() {
 
 interface BoardToolbarProps {
   boardId: string;
+  boardName: string;
+  onBoardNameChange: (name: string) => Promise<void>;
   user: User;
   profile: { name: string; photoURL: string | null };
   boardReady: boolean;
@@ -66,8 +71,82 @@ interface BoardToolbarProps {
   signOut: () => Promise<void>;
 }
 
+function InlineBoardName({
+  name,
+  onSave,
+}: {
+  name: string;
+  onSave: (name: string) => Promise<void>;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(name);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    setValue(name);
+  }, [name]);
+
+  useEffect(() => {
+    if (editing) {
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    }
+  }, [editing]);
+
+  const save = async () => {
+    const trimmed = value.trim();
+    if (trimmed && trimmed !== name) {
+      try {
+        await onSave(trimmed);
+      } catch {
+        setValue(name);
+      }
+    } else {
+      setValue(name);
+    }
+    setEditing(false);
+  };
+
+  if (editing) {
+    return (
+      <input
+        ref={inputRef}
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onBlur={save}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") save();
+          if (e.key === "Escape") {
+            setValue(name);
+            setEditing(false);
+          }
+          e.stopPropagation();
+        }}
+        className="h-6 w-40 rounded border border-zinc-300 bg-transparent px-1.5 text-sm font-medium text-zinc-900 outline-none focus:border-zinc-500 dark:border-zinc-600 dark:text-zinc-100 dark:focus:border-zinc-400"
+      />
+    );
+  }
+
+  if (!name) {
+    return <span className="h-5 w-24 animate-pulse rounded bg-zinc-200 dark:bg-zinc-700" />;
+  }
+
+  return (
+    <button
+      onClick={() => setEditing(true)}
+      className="group/name flex items-center gap-1 rounded px-1 py-0.5 text-sm font-medium text-zinc-900 hover:bg-zinc-100 dark:text-zinc-100 dark:hover:bg-zinc-800"
+      title="Click to rename"
+    >
+      <span className="max-w-40 truncate">{name}</span>
+      <Pencil className="size-3 opacity-0 group-hover/name:opacity-50" />
+    </button>
+  );
+}
+
 export default function BoardToolbar({
   boardId,
+  boardName,
+  onBoardNameChange,
   user,
   profile,
   boardReady,
@@ -76,6 +155,7 @@ export default function BoardToolbar({
   actionLoading,
   signOut,
 }: BoardToolbarProps) {
+  const router = useRouter();
   const { theme, setTheme } = useTheme();
 
   const selectedIds = useCanvasStore((s) => s.selectedIds);
@@ -136,18 +216,22 @@ export default function BoardToolbar({
     <header className="sticky top-0 z-40 flex h-11 shrink-0 items-center border-b border-zinc-200/80 bg-white/90 px-3 backdrop-blur-lg dark:border-zinc-800/80 dark:bg-zinc-950/90">
       {/* Left: Logo + tool modes */}
       <div className="flex items-center gap-1">
-        <div className="mr-2 flex items-center gap-1.5">
-          <Image
-            src={theme === "dark" ? "/logo-dark.svg" : "/logo-light.svg"}
-            alt="cre8"
-            width={22}
-            height={22}
-            className="rounded-lg"
-          />
-          <span className="text-sm font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
-            cre8
-          </span>
-        </div>
+        <Button
+          size="icon-xs"
+          variant="ghost"
+          onClick={() => router.push("/boards")}
+          title="Back to boards"
+        >
+          <ChevronLeft className="size-3.5" />
+        </Button>
+        <Image
+          src={theme === "dark" ? "/logo-dark.svg" : "/logo-light.svg"}
+          alt="cre8"
+          width={20}
+          height={20}
+          className="rounded-lg"
+        />
+        <InlineBoardName name={boardName} onSave={onBoardNameChange} />
 
         <ToolbarDivider />
 
