@@ -47,3 +47,4 @@ notes.md
 PLAN.md
 test-results/*
 playwright-report/*
+e2e/perf-results/*

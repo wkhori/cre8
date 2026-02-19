@@ -32,5 +32,5 @@ export default defineConfig({
     timeout: 30_000,
   },
 
-  reporter: [["list"], ["html", { open: "never" }]],
+  reporter: [["list"], ["html", { open: "never" }], ["./perf-reporter.ts"]],
 });
