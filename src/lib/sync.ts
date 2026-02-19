@@ -341,7 +341,7 @@ export function createLiveDragBroadcaster(boardId: string, uid: string) {
       }
       rtdbSet(dragRef, data);
     },
-    66 // ~15Hz — good balance between smoothness and write volume
+    33 // ~30Hz — matches cursor broadcast rate, lerp smooths on receiver
   );
 
   const clear = () => {
@@ -390,12 +390,24 @@ export function subscribeLiveDrags(
 // These are the shared operations that both the UI and AI agent call.
 // Each writes to Firestore; the onSnapshot listener syncs to all clients.
 
-export async function createObject(boardId: string, shape: Shape, userId: string): Promise<string> {
-  const id = shape.id || generateId();
-  const shapeWithId = { ...shape, id };
-  const objRef = doc(firebaseDb, "boards", boardId, "objects", id);
-  await setDoc(objRef, shapeToFirestore(shapeWithId, userId));
-  return id;
+export async function createObjects(
+  boardId: string,
+  shapes: Shape[],
+  userId: string
+): Promise<void> {
+  if (shapes.length === 0) return;
+  // Firestore batch limit is 500 writes
+  const batchSize = 499;
+  for (let i = 0; i < shapes.length; i += batchSize) {
+    const batch = writeBatch(firebaseDb);
+    const chunk = shapes.slice(i, i + batchSize);
+    for (const shape of chunk) {
+      const id = shape.id || generateId();
+      const objRef = doc(firebaseDb, "boards", boardId, "objects", id);
+      batch.set(objRef, shapeToFirestore({ ...shape, id }, userId));
+    }
+    await batch.commit();
+  }
 }
 
 export async function updateObject(

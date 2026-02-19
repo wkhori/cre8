@@ -8,14 +8,13 @@ import { useDebugStore } from "@/store/debug-store";
 import { useAuth } from "@/components/auth/AuthProvider";
 import {
   subscribeBoardObjects,
-  createObject,
+  createObjects,
   deleteObjects,
   updateObjects,
   getOrCreateBoard,
   updateBoard,
   createLiveDragBroadcaster,
   subscribeLiveDrags,
-  type LiveDragData,
   type BoardObjectChange,
 } from "@/lib/sync";
 import { joinBoard, createCursorBroadcaster } from "@/lib/presence";
@@ -46,10 +45,10 @@ export default function BoardPage() {
   const remoteShapeIdsRef = useRef<Set<string>>(new Set());
   // IDs recently updated from Firestore — skip writing these back
   const recentSyncedIdsRef = useRef<Set<string>>(new Set());
-  // Track live drag overlay from remote users (ref only — NOT in store)
-  const liveDragsRef = useRef<LiveDragData>({});
-  // Counter to trigger CanvasStage re-render when remote drag positions change
-  const [remoteDragEpoch, setRemoteDragEpoch] = useState(0);
+  // IDs we recently wrote TO Firestore — skip echo-back from onSnapshot
+  const pendingLocalWriteIds = useRef<Set<string>>(new Set());
+  // Original positions of shapes before remote drag overlay — used to restore on drag end
+  const remoteDragOriginals = useRef<Map<string, { x: number; y: number }>>(new Map());
 
   // ── Initialize board + sync ────────────────────────────────────────
 
@@ -89,6 +88,11 @@ export default function BoardPage() {
           const currentShapes = store.shapes;
           const currentIds = new Set(currentShapes.map((s) => s.id));
 
+          // Drain pending local write IDs — these are echo-backs from our
+          // own Firestore writes and should not overwrite local state
+          const localEchoIds = pendingLocalWriteIds.current;
+          pendingLocalWriteIds.current = new Set();
+
           // Collect all changes into maps for single-pass merge
           // (avoids O(N²) from per-change .map() over entire array)
           const modifiedMap = new Map<string, Shape>();
@@ -97,6 +101,12 @@ export default function BoardPage() {
 
           for (const change of changes) {
             recentSyncedIdsRef.current.add(change.shape.id);
+
+            // Skip echo-back of our own writes (prevents jitter on drop)
+            if (localEchoIds.has(change.shape.id) && change.type !== "removed") {
+              remoteShapeIdsRef.current.add(change.shape.id);
+              continue;
+            }
 
             switch (change.type) {
               case "added":
@@ -131,7 +141,10 @@ export default function BoardPage() {
             newShapes = [...newShapes, ...added];
           }
 
-          store.setShapes(newShapes);
+          // Only update store if there are actual changes to apply
+          if (newShapes !== currentShapes) {
+            store.setShapes(newShapes);
+          }
 
           // Remove deleted shapes from selection
           if (removedIds.size > 0) {
@@ -145,13 +158,52 @@ export default function BoardPage() {
       });
 
       // Subscribe to live drag positions from remote users.
-      // Positions stay in liveDragsRef (NOT written to store) to avoid
-      // the local→Firestore subscriber writing them back as local changes.
-      // CanvasStage reads this ref directly for rendering.
+      // Positions go directly into the zustand store (guarded by isSyncingRef
+      // so the Firestore write-back subscriber ignores them). This ensures
+      // React renders shapes, Transformer, and DimensionLabels consistently
+      // from a single source of truth.
       unsubLiveDrags = subscribeLiveDrags(boardId, user.uid, (drags) => {
-        liveDragsRef.current = drags;
-        // Trigger CanvasStage re-render to pick up new positions
-        setRemoteDragEpoch((e) => e + 1);
+        const store = useCanvasStore.getState();
+        const originals = remoteDragOriginals.current;
+        const dragIds = new Set(Object.keys(drags));
+
+        // If drags cleared (remote user released), restore original positions.
+        // The final committed positions will arrive via Firestore onSnapshot.
+        if (dragIds.size === 0) {
+          if (originals.size > 0) {
+            isSyncingRef.current++;
+            const restored = store.shapes.map((s) => {
+              const orig = originals.get(s.id);
+              return orig ? { ...s, x: orig.x, y: orig.y } : s;
+            });
+            store.setShapes(restored);
+            isSyncingRef.current--;
+            originals.clear();
+          }
+          return;
+        }
+
+        // Save original positions for shapes we haven't saved yet
+        const shapeMap = new Map(store.shapes.map((s) => [s.id, s]));
+        for (const id of dragIds) {
+          if (!originals.has(id)) {
+            const shape = shapeMap.get(id);
+            if (shape) originals.set(id, { x: shape.x, y: shape.y });
+          }
+        }
+        // Clean up originals for shapes no longer being dragged
+        for (const id of originals.keys()) {
+          if (!dragIds.has(id)) originals.delete(id);
+        }
+
+        // Apply remote drag positions to store (guarded to skip Firestore write-back)
+        isSyncingRef.current++;
+        const updated = store.shapes.map((s) => {
+          const drag = drags[s.id];
+          return drag ? { ...s, x: drag.x, y: drag.y } : s;
+        });
+        store.setShapes(updated);
+        isSyncingRef.current--;
       });
 
       // Create live drag broadcaster
@@ -276,16 +328,18 @@ export default function BoardPage() {
 
       prevShapes = curr;
 
-      // Write to Firestore (fire-and-forget)
+      // Write to Firestore (fire-and-forget, batched)
+      // Track IDs so we skip the echo-back from our own onSnapshot
       if (added.length > 0) {
-        for (const shape of added) {
-          createObject(boardId, shape, user.uid);
-        }
+        for (const s of added) pendingLocalWriteIds.current.add(s.id);
+        createObjects(boardId, added, user.uid);
       }
       if (deleted.length > 0) {
+        for (const id of deleted) pendingLocalWriteIds.current.add(id);
         deleteObjects(boardId, deleted);
       }
       if (modified.length > 0) {
+        for (const m of modified) pendingLocalWriteIds.current.add(m.id);
         updateObjects(boardId, modified, user.uid);
       }
     });
@@ -346,8 +400,6 @@ export default function BoardPage() {
           myUid={user.uid}
           onLiveDrag={handleLiveDrag}
           onLiveDragEnd={handleLiveDragEnd}
-          remoteDragsRef={liveDragsRef}
-          remoteDragEpoch={remoteDragEpoch}
         />
         {showDebug && <DebugDashboard />}
         {user && <AICommandInput boardId={boardId} />}

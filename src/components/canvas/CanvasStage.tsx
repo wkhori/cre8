@@ -25,12 +25,6 @@ interface CanvasStageProps {
   myUid?: string;
   onLiveDrag?: (shapes: Array<{ id: string; x: number; y: number }>) => void;
   onLiveDragEnd?: () => void;
-  /** Remote drag positions ref — kept out of store to avoid write-back loop */
-  remoteDragsRef?: React.RefObject<
-    Record<string, { x: number; y: number; uid: string; ts: number }>
-  >;
-  /** Counter that increments when remoteDragsRef changes, to trigger re-render */
-  remoteDragEpoch?: number;
 }
 
 export default function CanvasStage({
@@ -38,8 +32,6 @@ export default function CanvasStage({
   myUid,
   onLiveDrag,
   onLiveDragEnd,
-  remoteDragsRef,
-  remoteDragEpoch,
 }: CanvasStageProps) {
   const stageRef = useRef<Konva.Stage | null>(null);
   const layerRef = useRef<Konva.Layer | null>(null);
@@ -137,7 +129,7 @@ export default function CanvasStage({
   // Connector endpoints hook (needs shapesById)
   const connectorEP = useConnectorEndpoints(shapesById, selectedIds, shapes);
 
-  // Drag-aware shapes for connectors — applies local drag, remote drag, + endpoint drag
+  // Drag-aware shapes for connectors — applies local drag + endpoint drag
   // This is the ONLY memo that rebuilds during drag/endpoint drag
   const connectorAllShapes = useMemo(() => {
     let base = shapes;
@@ -156,33 +148,17 @@ export default function CanvasStage({
 
     if (connectorIds.size === 0) return base;
 
-    // Merge local + remote drag positions
+    // Apply local drag positions for connector tracking
     const dp = drag.dragPositionsRef.current;
-    const rd = remoteDragsRef?.current;
-    const hasLocal = dp.size > 0;
-    const hasRemote = rd && Object.keys(rd).length > 0;
-    if (!hasLocal && !hasRemote) return base;
+    if (dp.size === 0) return base;
 
     return base.map((s) => {
       const localPos = dp.get(s.id);
       if (localPos) return { ...s, x: localPos.x, y: localPos.y };
-      const remotePos = rd?.[s.id];
-      if (remotePos) return { ...s, x: remotePos.x, y: remotePos.y };
       return s;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shapes, connectorIds.size, drag.dragEpoch, connectorEP.endpointDrag, remoteDragEpoch]);
-
-  // Apply remote drag positions to sorted shapes for rendering
-  const renderShapes = useMemo(() => {
-    const rd = remoteDragsRef?.current;
-    if (!rd || Object.keys(rd).length === 0) return sortedShapes;
-    return sortedShapes.map((s) => {
-      const pos = rd[s.id];
-      return pos ? { ...s, x: pos.x, y: pos.y } : s;
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sortedShapes, remoteDragEpoch]);
+  }, [shapes, connectorIds.size, drag.dragEpoch, connectorEP.endpointDrag]);
 
   // Viewport culling: only render shapes visible on screen
   const visibleShapes = useMemo(() => {
@@ -193,7 +169,7 @@ export default function CanvasStage({
     const vpRight = vpLeft + viewport.sizeRef.current.width / vp.scale + pad * 2;
     const vpBottom = vpTop + viewport.sizeRef.current.height / vp.scale + pad * 2;
 
-    return renderShapes.filter((shape) => {
+    return sortedShapes.filter((shape) => {
       if (selectedIdSet.has(shape.id) || shape.type === "connector") return true;
       const b = getShapeBounds(shape);
       return (
@@ -201,7 +177,7 @@ export default function CanvasStage({
       );
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [renderShapes, selectedIdSet, viewport.cullViewport]);
+  }, [sortedShapes, selectedIdSet, viewport.cullViewport]);
 
   // Transformer hook
   const transformer = useTransformer(
