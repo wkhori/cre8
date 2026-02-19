@@ -282,6 +282,11 @@ export default function BoardPage() {
     }
   }, [authLoading, router, user]);
 
+  // Expose stores for Playwright perf tests (dev only)
+  if (typeof window !== "undefined" && process.env.NODE_ENV === "development") {
+    (window as any).__cre8 = { canvas: useCanvasStore, debug: useDebugStore };
+  }
+
   if (authLoading || !user) {
     return (
       <div className="flex h-screen items-center justify-center bg-zinc-50 dark:bg-zinc-950">
