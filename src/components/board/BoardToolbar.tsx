@@ -127,6 +127,10 @@ function InlineBoardName({
     );
   }
 
+  if (!name) {
+    return <span className="h-5 w-24 animate-pulse rounded bg-zinc-200 dark:bg-zinc-700" />;
+  }
+
   return (
     <button
       onClick={() => setEditing(true)}

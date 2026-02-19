@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { pickGradient, getTimestamp, BOARD_GRADIENTS } from "./board-utils";
+import { pickGradient, getTimestamp, randomBoardName, BOARD_GRADIENTS } from "./board-utils";
 
 describe("pickGradient", () => {
   it("returns a gradient from the palette for any board ID", () => {
@@ -14,8 +14,17 @@ describe("pickGradient", () => {
   });
 
   it("returns different gradients for different board IDs", () => {
-    // With 6 gradients, testing several IDs should produce at least 2 unique results
-    const ids = ["board-1", "board-2", "board-3", "board-4", "board-5", "board-6"];
+    // With 8 gradients, testing several IDs should produce at least 2 unique results
+    const ids = [
+      "board-1",
+      "board-2",
+      "board-3",
+      "board-4",
+      "board-5",
+      "board-6",
+      "board-7",
+      "board-8",
+    ];
     const results = new Set(ids.map(pickGradient));
     expect(results.size).toBeGreaterThan(1);
   });
@@ -76,5 +85,20 @@ describe("getTimestamp", () => {
 
   it("handles zero correctly", () => {
     expect(getTimestamp(0)).toBe(0);
+  });
+});
+
+describe("randomBoardName", () => {
+  it("returns a two-word name", () => {
+    const name = randomBoardName();
+    const parts = name.split(" ");
+    expect(parts.length).toBe(2);
+    expect(parts[0].length).toBeGreaterThan(0);
+    expect(parts[1].length).toBeGreaterThan(0);
+  });
+
+  it("generates different names across multiple calls", () => {
+    const names = new Set(Array.from({ length: 20 }, () => randomBoardName()));
+    expect(names.size).toBeGreaterThan(1);
   });
 });

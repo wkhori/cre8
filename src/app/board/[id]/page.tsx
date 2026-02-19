@@ -35,7 +35,7 @@ export default function BoardPage() {
   const { user, profile, loading: authLoading, actionLoading, signOut } = useAuth();
 
   const [boardReady, setBoardReady] = useState(false);
-  const [boardName, setBoardName] = useState("Untitled Board");
+  const [boardName, setBoardName] = useState("");
   const [showDebug, setShowDebug] = useState(false);
   const cursorBroadcasterRef = useRef<ReturnType<typeof createCursorBroadcaster> | null>(null);
   const liveDragBroadcasterRef = useRef<ReturnType<typeof createLiveDragBroadcaster> | null>(null);

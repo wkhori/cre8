@@ -38,14 +38,8 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import BoardCard from "@/components/boards/BoardCard";
-import {
-  CreateBoardDialog,
-  RenameBoardDialog,
-  DeleteBoardDialog,
-  ShareBoardDialog,
-} from "@/components/boards/BoardDialogs";
-
-import { getTimestamp } from "@/lib/board-utils";
+import { DeleteBoardDialog } from "@/components/boards/BoardDialogs";
+import { getTimestamp, randomBoardName } from "@/lib/board-utils";
 
 type SortBy = "recent" | "name" | "created";
 type Filter = "all" | "favorites";
@@ -57,14 +51,12 @@ export default function BoardsPage() {
 
   const [boards, setBoards] = useState<BoardDoc[]>([]);
   const [loading, setLoading] = useState(true);
+  const [creating, setCreating] = useState(false);
   const [filter, setFilter] = useState<Filter>("all");
   const [sortBy, setSortBy] = useState<SortBy>("recent");
 
-  // Dialog states
-  const [createOpen, setCreateOpen] = useState(false);
-  const [renameTarget, setRenameTarget] = useState<BoardDoc | null>(null);
+  // Dialog states — only delete still needs confirmation
   const [deleteTarget, setDeleteTarget] = useState<BoardDoc | null>(null);
-  const [shareTarget, setShareTarget] = useState<BoardDoc | null>(null);
 
   // Auth guard
   useEffect(() => {
@@ -135,14 +127,17 @@ export default function BoardsPage() {
   );
 
   // Action handlers
-  const handleCreate = async (name: string) => {
+  const handleCreateInstant = async () => {
+    if (creating) return;
+    setCreating(true);
     try {
+      const name = randomBoardName();
       const board = await createBoard(name, getOwner());
-      toast.success("Board created");
       router.push(`/board/${board.id}`);
     } catch (err) {
       console.error("Failed to create board:", err);
       toast.error("Failed to create board");
+      setCreating(false);
     }
   };
 
@@ -234,9 +229,13 @@ export default function BoardsPage() {
 
           <div className="flex-1" />
 
-          {/* New board button */}
-          <Button size="sm" onClick={() => setCreateOpen(true)}>
-            <Plus className="mr-1.5 size-3.5" />
+          {/* New board button — instant create */}
+          <Button size="sm" onClick={handleCreateInstant} disabled={creating}>
+            {creating ? (
+              <Loader2 className="mr-1.5 size-3.5 animate-spin" />
+            ) : (
+              <Plus className="mr-1.5 size-3.5" />
+            )}
             New board
           </Button>
 
@@ -360,8 +359,12 @@ export default function BoardsPage() {
                 : "Create your first board to start collaborating with your team."}
             </p>
             {filter === "all" && (
-              <Button onClick={() => setCreateOpen(true)}>
-                <Plus className="mr-1.5 size-3.5" />
+              <Button onClick={handleCreateInstant} disabled={creating}>
+                {creating ? (
+                  <Loader2 className="mr-1.5 size-3.5 animate-spin" />
+                ) : (
+                  <Plus className="mr-1.5 size-3.5" />
+                )}
                 Create your first board
               </Button>
             )}
@@ -370,10 +373,11 @@ export default function BoardsPage() {
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
             {/* Create new card */}
             <button
-              onClick={() => setCreateOpen(true)}
-              className="flex h-full min-h-50 flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-zinc-300 bg-white/50 text-zinc-500 transition-colors hover:border-zinc-400 hover:bg-zinc-50 hover:text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900/30 dark:text-zinc-500 dark:hover:border-zinc-600 dark:hover:bg-zinc-900/50 dark:hover:text-zinc-300"
+              onClick={handleCreateInstant}
+              disabled={creating}
+              className="flex h-full min-h-50 flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-zinc-300 bg-white/50 text-zinc-500 transition-all duration-200 hover:border-zinc-400 hover:bg-zinc-50 hover:text-zinc-700 active:scale-[0.98] disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900/30 dark:text-zinc-500 dark:hover:border-zinc-600 dark:hover:bg-zinc-900/50 dark:hover:text-zinc-300"
             >
-              <Plus className="size-6" />
+              {creating ? <Loader2 className="size-6 animate-spin" /> : <Plus className="size-6" />}
               <span className="text-sm font-medium">New board</span>
             </button>
 
@@ -382,30 +386,22 @@ export default function BoardsPage() {
                 key={board.id}
                 board={board}
                 currentUserId={user.uid}
-                onRename={setRenameTarget}
+                onRename={handleRename}
                 onDelete={setDeleteTarget}
                 onDuplicate={handleDuplicate}
                 onToggleFavorite={handleToggleFavorite}
-                onShare={setShareTarget}
               />
             ))}
           </div>
         )}
       </main>
 
-      {/* Dialogs */}
-      <CreateBoardDialog open={createOpen} onOpenChange={setCreateOpen} onCreate={handleCreate} />
-      <RenameBoardDialog
-        board={renameTarget}
-        onOpenChange={() => setRenameTarget(null)}
-        onRename={handleRename}
-      />
+      {/* Only delete needs a confirmation dialog */}
       <DeleteBoardDialog
         board={deleteTarget}
         onOpenChange={() => setDeleteTarget(null)}
         onDelete={handleDelete}
       />
-      <ShareBoardDialog board={shareTarget} onOpenChange={() => setShareTarget(null)} />
     </div>
   );
 }
