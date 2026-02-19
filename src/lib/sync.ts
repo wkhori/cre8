@@ -21,7 +21,6 @@ import { ref, set as rtdbSet, onValue } from "firebase/database";
 import { firebaseDb, firebaseRtdb } from "@/lib/firebase-client";
 import type { Shape } from "@/lib/types";
 import { generateId } from "@/lib/id";
-import { throttle } from "@/lib/throttle";
 
 // ── Board document ────────────────────────────────────────────────────
 
@@ -301,6 +300,8 @@ export function subscribeBoardObjects(
       // Batch all changes from this snapshot
       const changes: BoardObjectChange[] = [];
       for (const change of snapshot.docChanges()) {
+        // Ignore local pending writes; those are already represented by local state.
+        if (change.doc.metadata.hasPendingWrites) continue;
         const shape = firestoreToShape(change.doc.id, change.doc.data());
         changes.push({ type: change.type, shape });
       }
@@ -332,19 +333,77 @@ export interface LiveDragData {
  */
 export function createLiveDragBroadcaster(boardId: string, uid: string) {
   const dragRef = ref(firebaseRtdb, `boards/${boardId}/liveDrags`);
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  let pending: Array<{ id: string; x: number; y: number }> | null = null;
+  let lastSentAt = 0;
+  let lastSignature = "";
 
-  const broadcast = throttle(
-    (shapes: Array<{ id: string; x: number; y: number }>) => {
-      const data: LiveDragData = {};
-      for (const s of shapes) {
-        data[s.id] = { x: s.x, y: s.y, uid, ts: Date.now() };
-      }
-      rtdbSet(dragRef, data);
-    },
-    66 // ~15Hz — good balance between smoothness and write volume
-  );
+  const getIntervalMs = (count: number) => {
+    if (count <= 50) return 66;
+    if (count <= 200) return 120;
+    return 200;
+  };
+
+  const quantize = (value: number) => Math.round(value / 2) * 2;
+
+  const buildPayload = (shapes: Array<{ id: string; x: number; y: number }>) => {
+    const byId = new Map<string, { x: number; y: number }>();
+    for (const shape of shapes) {
+      byId.set(shape.id, { x: quantize(shape.x), y: quantize(shape.y) });
+    }
+
+    const entries = [...byId.entries()].sort(([a], [b]) => a.localeCompare(b));
+    const signature = entries.map(([id, p]) => `${id}:${p.x}:${p.y}`).join("|");
+
+    const data: LiveDragData = {};
+    const ts = Date.now();
+    for (const [id, p] of entries) {
+      data[id] = { x: p.x, y: p.y, uid, ts };
+    }
+
+    return { data, signature, count: entries.length };
+  };
+
+  const flush = () => {
+    timer = null;
+    if (!pending) return;
+
+    const shapes = pending;
+    pending = null;
+    const { data, signature, count } = buildPayload(shapes);
+    if (count === 0) return;
+
+    if (signature !== lastSignature) {
+      lastSignature = signature;
+      lastSentAt = Date.now();
+      rtdbSet(dragRef, data).catch(() => {});
+    }
+
+    if (pending) {
+      schedule();
+    }
+  };
+
+  const schedule = () => {
+    if (!pending || timer) return;
+    const intervalMs = getIntervalMs(pending.length);
+    const elapsedMs = Date.now() - lastSentAt;
+    const waitMs = Math.max(0, intervalMs - elapsedMs);
+    timer = setTimeout(flush, waitMs);
+  };
+
+  const broadcast = (shapes: Array<{ id: string; x: number; y: number }>) => {
+    pending = shapes;
+    schedule();
+  };
 
   const clear = () => {
+    pending = null;
+    lastSignature = "";
+    if (timer) {
+      clearTimeout(timer);
+      timer = null;
+    }
     rtdbSet(dragRef, null).catch(() => {}); // expected during sign-out
   };
 

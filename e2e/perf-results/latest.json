@@ -1,0 +1,100 @@
+{
+  "timestamp": "2026-02-19T16:59:08.967Z",
+  "status": "passed",
+  "durationMs": 184456.48200000002,
+  "results": [
+    {
+      "test": "drag-50-shapes",
+      "shapeCount": 50,
+      "dragMs": 245,
+      "fpsIdle": {
+        "min": 120,
+        "max": 121,
+        "avg": 120,
+        "samples": [
+          121,
+          120,
+          120,
+          120
+        ]
+      },
+      "fpsDrag": {
+        "min": 119,
+        "max": 121,
+        "avg": 120,
+        "samples": [
+          121,
+          120,
+          119
+        ]
+      },
+      "fpsAfter": {
+        "min": 120,
+        "max": 120,
+        "avg": 120,
+        "samples": [
+          120,
+          120,
+          120,
+          120
+        ]
+      }
+    },
+    {
+      "test": "drag-200-shapes",
+      "shapeCount": 200,
+      "dragMs": 11656,
+      "fpsIdle": {
+        "min": 120,
+        "max": 123,
+        "avg": 121,
+        "samples": [
+          123,
+          120,
+          120,
+          120
+        ]
+      },
+      "fpsDrag": {
+        "min": 1,
+        "max": 9,
+        "avg": 4,
+        "samples": [
+          5,
+          3,
+          3,
+          3,
+          3,
+          3,
+          3,
+          2,
+          3,
+          3,
+          2,
+          2,
+          2,
+          2,
+          1,
+          9,
+          9,
+          9,
+          8,
+          9,
+          8,
+          5
+        ]
+      },
+      "fpsAfter": {
+        "min": 23,
+        "max": 102,
+        "avg": 67,
+        "samples": [
+          66,
+          78,
+          23,
+          102
+        ]
+      }
+    }
+  ]
+}

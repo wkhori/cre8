@@ -28,6 +28,14 @@ interface CanvasStageProps {
   onLiveDragEnd?: () => void;
 }
 
+interface DragSession {
+  ids: string[];
+  anchorId: string;
+  anchorStart: { x: number; y: number };
+  basePositions: Map<string, { x: number; y: number }>;
+  latestPositions: Map<string, { x: number; y: number }>;
+}
+
 export default function CanvasStage({
   boardId,
   myUid,
@@ -74,9 +82,6 @@ export default function CanvasStage({
   const [selectionBounds, setSelectionBounds] = useState<Bounds | null>(null);
   const [isTransforming, setIsTransforming] = useState(false);
 
-  // Track dragging shape IDs for live drag broadcast
-  const draggingIdsRef = useRef<string[]>([]);
-
   // Connector creation (extracted hook)
   const connector = useConnectorCreation();
 
@@ -84,6 +89,9 @@ export default function CanvasStage({
   const [dragPositions, setDragPositions] = useState<Map<string, { x: number; y: number }>>(
     () => new Map()
   );
+  const dragSessionRef = useRef<DragSession | null>(null);
+  const dragPositionsPendingRef = useRef<Map<string, { x: number; y: number }> | null>(null);
+  const dragRafRef = useRef<number | null>(null);
 
   // Live endpoint drag for connector re-attachment
   const [endpointDrag, setEndpointDrag] = useState<{
@@ -137,6 +145,11 @@ export default function CanvasStage({
 
     return result;
   }, [shapes, dragPositions, endpointDrag]);
+  const allShapesById = useMemo(
+    () => new Map(allShapesWithDrag.map((shape) => [shape.id, shape])),
+    [allShapesWithDrag]
+  );
+  const shapesById = useMemo(() => new Map(shapes.map((shape) => [shape.id, shape])), [shapes]);
 
   // Sort shapes by zIndex for rendering (use drag-merged shapes so connectors update live)
   const sortedShapes = useMemo(
@@ -195,6 +208,35 @@ export default function CanvasStage({
     () => throttle(useDebugStore.getState().setViewport, 50),
     []
   );
+
+  const queueDragOverlay = useCallback((positions: Map<string, { x: number; y: number }>) => {
+    dragPositionsPendingRef.current = positions;
+    if (dragRafRef.current != null) return;
+    dragRafRef.current = requestAnimationFrame(() => {
+      dragRafRef.current = null;
+      const pending = dragPositionsPendingRef.current;
+      dragPositionsPendingRef.current = null;
+      if (!pending) return;
+      setDragPositions(new Map(pending));
+    });
+  }, []);
+
+  const clearDragOverlay = useCallback(() => {
+    if (dragRafRef.current != null) {
+      cancelAnimationFrame(dragRafRef.current);
+      dragRafRef.current = null;
+    }
+    dragPositionsPendingRef.current = null;
+    setDragPositions(new Map());
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (dragRafRef.current != null) {
+        cancelAnimationFrame(dragRafRef.current);
+      }
+    };
+  }, []);
 
   const computeSelectionBounds = useCallback((): Bounds | null => {
     if (selectedIds.length === 0) return null;
@@ -558,19 +600,41 @@ export default function CanvasStage({
 
   // ── Shape drag handlers ───────────────────────────────────────────
   const handleDragStart = useCallback(
-    (id: string) => {
+    (id: string, e: Konva.KonvaEventObject<DragEvent>) => {
       useDebugStore.getState().setInteraction("dragging");
       // Save history BEFORE the drag so the move is undoable
-      useCanvasStore.getState().pushHistory();
-      const ids = useCanvasStore.getState().selectedIds;
-      if (!ids.includes(id)) {
+      const store = useCanvasStore.getState();
+      store.pushHistory();
+      const ids = store.selectedIds.includes(id) ? store.selectedIds : [id];
+      if (!store.selectedIds.includes(id)) {
         setSelected([id]);
-        draggingIdsRef.current = [id];
-      } else {
-        draggingIdsRef.current = ids;
       }
+
+      const shapeById = new Map(store.shapes.map((shape) => [shape.id, shape]));
+      const basePositions = new Map<string, { x: number; y: number }>();
+      for (const sid of ids) {
+        const shape = shapeById.get(sid);
+        if (shape) {
+          basePositions.set(sid, { x: shape.x, y: shape.y });
+        }
+      }
+      if (!basePositions.has(id)) {
+        basePositions.set(id, { x: e.target.x(), y: e.target.y() });
+      }
+
+      const anchorStart = basePositions.get(id) ?? { x: e.target.x(), y: e.target.y() };
+      const latestPositions = new Map(basePositions);
+      latestPositions.set(id, { x: e.target.x(), y: e.target.y() });
+      dragSessionRef.current = {
+        ids: [...ids],
+        anchorId: id,
+        anchorStart,
+        basePositions,
+        latestPositions,
+      };
+      queueDragOverlay(latestPositions);
     },
-    [setSelected]
+    [setSelected, queueDragOverlay]
   );
 
   // ── Live drag move handler: broadcast positions via RTDB ──────────
@@ -593,19 +657,28 @@ export default function CanvasStage({
       }
 
       // Update live drag positions so connectors follow shapes in real-time
-      const ids = draggingIdsRef.current;
       const newPositions = new Map<string, { x: number; y: number }>();
-      if (ids.length <= 1) {
+      const session = dragSessionRef.current;
+      if (!session || session.ids.length <= 1) {
         newPositions.set(id, { x: node.x(), y: node.y() });
       } else {
-        for (const sid of ids) {
-          const sNode = stage.findOne(`#${sid}`);
-          if (sNode) {
-            newPositions.set(sid, { x: sNode.x(), y: sNode.y() });
+        const draggedBase =
+          session.basePositions.get(id) ??
+          session.basePositions.get(session.anchorId) ??
+          session.anchorStart;
+        const dx = node.x() - draggedBase.x;
+        const dy = node.y() - draggedBase.y;
+        for (const sid of session.ids) {
+          const base = session.basePositions.get(sid);
+          if (base) {
+            newPositions.set(sid, { x: base.x + dx, y: base.y + dy });
           }
         }
       }
-      setDragPositions(newPositions);
+      if (session) {
+        session.latestPositions = newPositions;
+      }
+      queueDragOverlay(newPositions);
 
       // Broadcast positions via RTDB for remote users
       if (!onLiveDrag) return;
@@ -615,37 +688,40 @@ export default function CanvasStage({
       }
       onLiveDrag(positions);
     },
-    [onLiveDrag, throttledSetPointer]
+    [onLiveDrag, throttledSetPointer, queueDragOverlay]
   );
 
   const handleDragEnd = useCallback(
     (id: string, e: Konva.KonvaEventObject<DragEvent>) => {
       const node = e.target;
-      const stage = stageRef.current;
+      const session = dragSessionRef.current;
+      const latestPositions = session?.latestPositions ?? new Map<string, { x: number; y: number }>();
 
-      // Update all dragging shapes in store
-      const ids = draggingIdsRef.current;
-      if (ids.length <= 1) {
-        updateShape(id, { x: node.x(), y: node.y() });
-      } else if (stage) {
+      // Update all dragging shapes in store using the final derived positions.
+      if (!session || session.ids.length <= 1) {
+        const singlePos = latestPositions.get(id) ?? { x: node.x(), y: node.y() };
+        updateShape(id, { x: singlePos.x, y: singlePos.y });
+      } else {
         const updates: Array<{ id: string; patch: Partial<Shape> }> = [];
-        for (const sid of ids) {
-          const sNode = stage.findOne(`#${sid}`);
-          if (sNode) {
-            updates.push({ id: sid, patch: { x: sNode.x(), y: sNode.y() } });
+        for (const sid of session.ids) {
+          const finalPos = latestPositions.get(sid);
+          if (finalPos) {
+            updates.push({ id: sid, patch: { x: finalPos.x, y: finalPos.y } });
           }
         }
-        updateShapes(updates);
+        if (updates.length > 0) {
+          updateShapes(updates);
+        }
       }
 
-      draggingIdsRef.current = [];
-      setDragPositions(new Map());
+      dragSessionRef.current = null;
+      clearDragOverlay();
       useDebugStore.getState().setInteraction("idle");
 
       // Clear live drag overlay on RTDB
       onLiveDragEnd?.();
     },
-    [updateShape, updateShapes, onLiveDragEnd]
+    [updateShape, updateShapes, onLiveDragEnd, clearDragOverlay]
   );
 
   // (text editing functions moved to useTextEditing hook)
@@ -697,7 +773,7 @@ export default function CanvasStage({
       y: number;
     }> = [];
     for (const id of selectedIds) {
-      const shape = allShapesWithDrag.find((s) => s.id === id);
+      const shape = allShapesById.get(id);
       if (!shape || shape.type !== "connector") continue;
       const c = shape as ConnectorShape;
 
@@ -706,7 +782,7 @@ export default function CanvasStage({
         fromCy: number | null = null,
         fromBounds: Bounds | null = null;
       if (c.fromId) {
-        const fs = allShapesWithDrag.find((s) => s.id === c.fromId);
+        const fs = allShapesById.get(c.fromId);
         if (fs) {
           fromBounds = getShapeBounds(fs);
           fromCx = fromBounds.x + fromBounds.width / 2;
@@ -721,7 +797,7 @@ export default function CanvasStage({
         toCy: number | null = null,
         toBounds: Bounds | null = null;
       if (c.toId) {
-        const ts = allShapesWithDrag.find((s) => s.id === c.toId);
+        const ts = allShapesById.get(c.toId);
         if (ts) {
           toBounds = getShapeBounds(ts);
           toCx = toBounds.x + toBounds.width / 2;
@@ -746,7 +822,7 @@ export default function CanvasStage({
       result.push({ connectorId: id, end: "to", x: toPt.x, y: toPt.y });
     }
     return result;
-  }, [selectedIds, allShapesWithDrag]);
+  }, [selectedIds, allShapesById]);
 
   const handleEndpointDragEnd = useCallback(
     (connectorId: string, end: "from" | "to", e: Konva.KonvaEventObject<DragEvent>) => {
@@ -824,7 +900,7 @@ export default function CanvasStage({
               shape={shape}
               isSelected={selectedIdSet.has(shape.id)}
               isDark={isDark}
-              allShapes={allShapesWithDrag}
+              allShapes={shape.type === "connector" ? allShapesWithDrag : undefined}
               isConnectorHover={activeTool === "connector" && connector.hoveredShapeId === shape.id}
               onSelect={handleShapeClick}
               onDragStart={handleDragStart}
@@ -921,7 +997,7 @@ export default function CanvasStage({
             interaction !== "dragging" &&
             !isTransforming &&
             // Hide when every selected shape is a connector (no meaningful dimensions)
-            !selectedIds.every((id) => shapes.find((s) => s.id === id)?.type === "connector") && (
+            !selectedIds.every((id) => shapesById.get(id)?.type === "connector") && (
               <DimensionLabel bounds={selectionBounds} viewportScale={viewportScale} />
             )}
         </Layer>
