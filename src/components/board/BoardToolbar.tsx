@@ -93,10 +93,14 @@ function InlineBoardName({
     }
   }, [editing]);
 
-  const save = () => {
+  const save = async () => {
     const trimmed = value.trim();
     if (trimmed && trimmed !== name) {
-      onSave(trimmed);
+      try {
+        await onSave(trimmed);
+      } catch {
+        setValue(name);
+      }
     } else {
       setValue(name);
     }

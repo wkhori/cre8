@@ -181,15 +181,26 @@ export async function duplicateBoard(
 
   // Copy all objects to the new board with new IDs
   if (snapshot.size > 0) {
+    // Build old→new ID mapping so connectors can remap fromId/toId
+    const idMap = new Map<string, string>();
+    for (const d of snapshot.docs) {
+      idMap.set(d.id, generateId());
+    }
+
     const batchSize = 500;
     const docs = snapshot.docs;
     for (let i = 0; i < docs.length; i += batchSize) {
       const batch = writeBatch(firebaseDb);
       const chunk = docs.slice(i, i + batchSize);
       for (const d of chunk) {
-        const newId = generateId();
+        const newId = idMap.get(d.id)!;
         const newObjRef = doc(firebaseDb, "boards", newBoard.id, "objects", newId);
         const data = d.data();
+        // Remap connector references to new shape IDs
+        if (data.type === "connector") {
+          if (data.fromId && idMap.has(data.fromId)) data.fromId = idMap.get(data.fromId);
+          if (data.toId && idMap.has(data.toId)) data.toId = idMap.get(data.toId);
+        }
         batch.set(newObjRef, {
           ...data,
           id: newId,
