@@ -40,22 +40,63 @@ export default function BoardPage() {
   const [showDebug, setShowDebug] = useState(false);
   const cursorBroadcasterRef = useRef<ReturnType<typeof createCursorBroadcaster> | null>(null);
   const liveDragBroadcasterRef = useRef<ReturnType<typeof createLiveDragBroadcaster> | null>(null);
-  const isSyncingRef = useRef(0); // counter: >0 means we're applying remote changes
-  // Track which shape IDs we know exist in Firestore (to avoid duplicate creates)
-  const remoteShapeIdsRef = useRef<Set<string>>(new Set());
-  // IDs recently updated from Firestore — skip writing these back
-  const recentSyncedIdsRef = useRef<Set<string>>(new Set());
-  // IDs we recently wrote TO Firestore — skip echo-back from onSnapshot
-  const pendingLocalWriteIds = useRef<Set<string>>(new Set());
-  // Original positions of shapes before remote drag overlay — used to restore on drag end
-  const remoteDragOriginals = useRef<Map<string, { x: number; y: number }>>(new Map());
+
+  // Sync guard: >0 means we're applying remote changes.
+  // The zustand subscriber checks this synchronously and skips outbound writes.
+  // This is the ONLY mechanism needed to prevent Firestore→store→Firestore loops.
+  const isSyncingRef = useRef(0);
+
+  // Shape IDs currently being dragged/transformed by the local user.
+  // Inbound remote changes for these shapes are deferred until interaction ends.
+  const lockedIdsRef = useRef<Set<string>>(new Set());
+  const deferredChangesRef = useRef<Map<string, Shape | null>>(new Map());
+
+  const lockShapes = useCallback((ids: string[]) => {
+    for (const id of ids) lockedIdsRef.current.add(id);
+  }, []);
+
+  const unlockShapes = useCallback(() => {
+    const deferred = deferredChangesRef.current;
+    if (deferred.size > 0) {
+      isSyncingRef.current++;
+      try {
+        const store = useCanvasStore.getState();
+        let shapes = store.shapes;
+        const toRemove = new Set<string>();
+        const toModify = new Map<string, Shape>();
+
+        for (const [id, shape] of deferred) {
+          if (shape === null) toRemove.add(id);
+          else toModify.set(id, shape);
+        }
+
+        if (toRemove.size > 0 || toModify.size > 0) {
+          const existingIds = new Set(shapes.map((s) => s.id));
+          shapes = shapes.filter((s) => !toRemove.has(s.id)).map((s) => toModify.get(s.id) ?? s);
+          for (const [id, shape] of toModify) {
+            if (shape && !existingIds.has(id)) shapes.push(shape);
+          }
+          store.setShapes(shapes);
+        }
+
+        if (toRemove.size > 0) {
+          const selectedIds = store.selectedIds.filter((id) => !toRemove.has(id));
+          if (selectedIds.length !== store.selectedIds.length) {
+            store.setSelected(selectedIds);
+          }
+        }
+      } finally {
+        isSyncingRef.current--;
+      }
+      deferred.clear();
+    }
+    lockedIdsRef.current.clear();
+  }, []);
 
   // ── Initialize board + sync ────────────────────────────────────────
 
   useEffect(() => {
     if (!user || !profile || !boardId) return;
-
-    // In render-only mode, skip all Firebase operations
     if (renderOnly) return;
 
     let unsubObjects: (() => void) | null = null;
@@ -63,7 +104,6 @@ export default function BoardPage() {
     let leaveBoard: (() => Promise<void>) | null = null;
 
     const init = async () => {
-      // Ensure board document exists
       const boardDoc = await getOrCreateBoard(boardId, {
         uid: user.uid,
         name: profile.name,
@@ -71,150 +111,99 @@ export default function BoardPage() {
       });
       setBoardName(boardDoc.name);
 
-      // Subscribe to board objects from Firestore (incremental)
-      // All changes in a single snapshot are batched into one store update
-      // to avoid cascading re-renders and sync loops.
+      // Firestore object sync
       unsubObjects = subscribeBoardObjects(boardId, {
         onInitial: (remoteShapes) => {
           isSyncingRef.current++;
-          remoteShapeIdsRef.current = new Set(remoteShapes.map((s) => s.id));
-          for (const s of remoteShapes) recentSyncedIdsRef.current.add(s.id);
           useCanvasStore.getState().setShapes(remoteShapes);
           isSyncingRef.current--;
         },
+
         onChanges: (changes: BoardObjectChange[]) => {
           isSyncingRef.current++;
-          const store = useCanvasStore.getState();
-          const currentShapes = store.shapes;
-          const currentIds = new Set(currentShapes.map((s) => s.id));
+          try {
+            const store = useCanvasStore.getState();
+            const currentShapes = store.shapes;
+            const currentIds = new Set(currentShapes.map((s) => s.id));
+            const locked = lockedIdsRef.current;
 
-          // Drain pending local write IDs — these are echo-backs from our
-          // own Firestore writes and should not overwrite local state
-          const localEchoIds = pendingLocalWriteIds.current;
-          pendingLocalWriteIds.current = new Set();
+            const modifiedMap = new Map<string, Shape>();
+            const removedIds = new Set<string>();
+            const added: Shape[] = [];
 
-          // Collect all changes into maps for single-pass merge
-          // (avoids O(N²) from per-change .map() over entire array)
-          const modifiedMap = new Map<string, Shape>();
-          const removedIds = new Set<string>();
-          const added: Shape[] = [];
+            for (const change of changes) {
+              const id = change.shape.id;
 
-          for (const change of changes) {
-            recentSyncedIdsRef.current.add(change.shape.id);
+              // Defer changes for shapes being dragged/transformed locally
+              if (locked.has(id)) {
+                deferredChangesRef.current.set(id, change.type === "removed" ? null : change.shape);
+                continue;
+              }
 
-            // Skip echo-back of our own writes (prevents jitter on drop)
-            if (localEchoIds.has(change.shape.id) && change.type !== "removed") {
-              remoteShapeIdsRef.current.add(change.shape.id);
-              continue;
+              switch (change.type) {
+                case "added":
+                  if (currentIds.has(id)) modifiedMap.set(id, change.shape);
+                  else added.push(change.shape);
+                  break;
+                case "modified":
+                  modifiedMap.set(id, change.shape);
+                  break;
+                case "removed":
+                  removedIds.add(id);
+                  break;
+              }
             }
 
-            switch (change.type) {
-              case "added":
-                remoteShapeIdsRef.current.add(change.shape.id);
-                if (currentIds.has(change.shape.id)) {
-                  modifiedMap.set(change.shape.id, change.shape);
-                } else {
-                  added.push(change.shape);
-                }
-                break;
-              case "modified":
-                modifiedMap.set(change.shape.id, change.shape);
-                break;
-              case "removed":
-                remoteShapeIdsRef.current.delete(change.shape.id);
-                removedIds.add(change.shape.id);
-                break;
+            let newShapes = currentShapes;
+            if (removedIds.size > 0 || modifiedMap.size > 0) {
+              newShapes = currentShapes
+                .filter((s) => !removedIds.has(s.id))
+                .map((s) => modifiedMap.get(s.id) ?? s);
             }
-          }
-
-          // Single-pass merge: filter removed, apply modified, append added
-          let newShapes = currentShapes;
-          if (removedIds.size > 0 || modifiedMap.size > 0) {
-            newShapes = currentShapes
-              .filter((s) => !removedIds.has(s.id))
-              .map((s) => {
-                const mod = modifiedMap.get(s.id);
-                return mod ? { ...s, ...mod } : s;
-              });
-          }
-          if (added.length > 0) {
-            newShapes = [...newShapes, ...added];
-          }
-
-          // Only update store if there are actual changes to apply
-          if (newShapes !== currentShapes) {
-            store.setShapes(newShapes);
-          }
-
-          // Remove deleted shapes from selection
-          if (removedIds.size > 0) {
-            const selectedIds = store.selectedIds.filter((id) => !removedIds.has(id));
-            if (selectedIds.length !== store.selectedIds.length) {
-              store.setSelected(selectedIds);
+            if (added.length > 0) {
+              newShapes = [...newShapes, ...added];
             }
+
+            if (newShapes !== currentShapes) {
+              store.setShapes(newShapes);
+            }
+
+            if (removedIds.size > 0) {
+              const selectedIds = store.selectedIds.filter((id) => !removedIds.has(id));
+              if (selectedIds.length !== store.selectedIds.length) {
+                store.setSelected(selectedIds);
+              }
+            }
+          } finally {
+            isSyncingRef.current--;
           }
-          isSyncingRef.current--;
         },
       });
 
-      // Subscribe to live drag positions from remote users.
-      // Positions go directly into the zustand store (guarded by isSyncingRef
-      // so the Firestore write-back subscriber ignores them). This ensures
-      // React renders shapes, Transformer, and DimensionLabels consistently
-      // from a single source of truth.
+      // Live drag from remote users
       unsubLiveDrags = subscribeLiveDrags(boardId, user.uid, (drags) => {
-        const store = useCanvasStore.getState();
-        const originals = remoteDragOriginals.current;
-        const dragIds = new Set(Object.keys(drags));
+        const dragEntries = Object.entries(drags);
+        if (dragEntries.length === 0) return;
 
-        // If drags cleared (remote user released), restore original positions.
-        // The final committed positions will arrive via Firestore onSnapshot.
-        if (dragIds.size === 0) {
-          if (originals.size > 0) {
-            isSyncingRef.current++;
-            const restored = store.shapes.map((s) => {
-              const orig = originals.get(s.id);
-              return orig ? { ...s, x: orig.x, y: orig.y } : s;
-            });
-            store.setShapes(restored);
-            isSyncingRef.current--;
-            originals.clear();
-          }
-          return;
-        }
-
-        // Save original positions for shapes we haven't saved yet
-        const shapeMap = new Map(store.shapes.map((s) => [s.id, s]));
-        for (const id of dragIds) {
-          if (!originals.has(id)) {
-            const shape = shapeMap.get(id);
-            if (shape) originals.set(id, { x: shape.x, y: shape.y });
-          }
-        }
-        // Clean up originals for shapes no longer being dragged
-        for (const id of originals.keys()) {
-          if (!dragIds.has(id)) originals.delete(id);
-        }
-
-        // Apply remote drag positions to store (guarded to skip Firestore write-back)
         isSyncingRef.current++;
-        const updated = store.shapes.map((s) => {
-          const drag = drags[s.id];
-          return drag ? { ...s, x: drag.x, y: drag.y } : s;
-        });
-        store.setShapes(updated);
-        isSyncingRef.current--;
+        try {
+          const store = useCanvasStore.getState();
+          const locked = lockedIdsRef.current;
+          const updates: Array<{ id: string; patch: Partial<Shape> }> = [];
+          for (const [id, data] of dragEntries) {
+            if (!locked.has(id)) {
+              updates.push({ id, patch: { x: data.x, y: data.y } });
+            }
+          }
+          if (updates.length > 0) store.updateShapes(updates);
+        } finally {
+          isSyncingRef.current--;
+        }
       });
 
-      // Create live drag broadcaster
       liveDragBroadcasterRef.current = createLiveDragBroadcaster(boardId, user.uid);
-
-      // Join presence
       leaveBoard = joinBoard(boardId, user.uid, profile.name, profile.photoURL);
-
-      // Create cursor broadcaster
       cursorBroadcasterRef.current = createCursorBroadcaster(boardId, user.uid, profile.name);
-
       setBoardReady(true);
     };
 
@@ -224,25 +213,20 @@ export default function BoardPage() {
       setBoardReady(false);
       unsubObjects?.();
       unsubLiveDrags?.();
-      // Await RTDB writes so they complete before auth is revoked
       await Promise.all([leaveBoard?.(), cursorBroadcasterRef.current?.cleanup()]);
       cursorBroadcasterRef.current = null;
       liveDragBroadcasterRef.current?.clear();
       liveDragBroadcasterRef.current = null;
-      // Guard shape clear so the local-to-Firestore sync effect ignores it
-      // (otherwise it would interpret the clear as "user deleted all shapes")
       isSyncingRef.current++;
       useCanvasStore.getState().setShapes([]);
       useCanvasStore.getState().setSelected([]);
       isSyncingRef.current--;
     };
 
-    // Clean up BEFORE sign-out so RTDB writes happen while still authenticated
     const onBeforeSignOut = () => {
       teardown();
     };
     window.addEventListener("before-sign-out", onBeforeSignOut);
-    // Also clean up on tab close / navigation away
     window.addEventListener("beforeunload", onBeforeSignOut);
 
     return () => {
@@ -250,14 +234,12 @@ export default function BoardPage() {
       window.removeEventListener("beforeunload", onBeforeSignOut);
       teardown();
     };
-  }, [user, profile, boardId, renderOnly]);
+  }, [user, profile, boardId, renderOnly, unlockShapes]);
 
   // ── Broadcast cursor position ───────────────────────────────────────
+
   useEffect(() => {
     if (!boardReady) return;
-
-    // Poll the debug store pointer at ~30fps
-    // Skip if position unchanged — avoids ~30 RTDB writes/sec when idle
     let lastX = NaN;
     let lastY = NaN;
     const interval = setInterval(() => {
@@ -271,55 +253,46 @@ export default function BoardPage() {
   }, [boardReady]);
 
   // ── Sync local mutations to Firestore ───────────────────────────────
+
   useEffect(() => {
     if (!boardReady || !user || renderOnly) return;
 
     let prevShapes = useCanvasStore.getState().shapes;
 
     const unsub = useCanvasStore.subscribe((state) => {
-      // Skip if this update came FROM Firestore/RTDB
+      // isSyncingRef is checked synchronously — zustand subscribers fire
+      // inside set(), so this runs BEFORE isSyncingRef is decremented.
       if (isSyncingRef.current > 0) {
         prevShapes = state.shapes;
         return;
       }
 
       const curr = state.shapes;
+      if (curr === prevShapes) return;
+
       const prevMap = new Map(prevShapes.map((s) => [s.id, s]));
       const currMap = new Map(curr.map((s) => [s.id, s]));
 
-      // Drain the recently-synced IDs set — these were just applied from
-      // Firestore/RTDB and should not be written back.
-      const skipIds = recentSyncedIdsRef.current;
-      recentSyncedIdsRef.current = new Set();
-
-      // Find added shapes
       const added: Shape[] = [];
       for (const shape of curr) {
-        if (!prevMap.has(shape.id) && !skipIds.has(shape.id)) {
-          added.push(shape);
-        }
+        if (!prevMap.has(shape.id)) added.push(shape);
       }
 
-      // Find deleted shapes
       const deleted: string[] = [];
       for (const shape of prevShapes) {
-        if (!currMap.has(shape.id) && !skipIds.has(shape.id)) {
-          deleted.push(shape.id);
-        }
+        if (!currMap.has(shape.id)) deleted.push(shape.id);
       }
 
-      // Find modified shapes — only send fields that actually changed
       const modified: Array<{ id: string; patch: Partial<Shape> }> = [];
       for (const shape of curr) {
         const prev = prevMap.get(shape.id);
-        if (prev && prev !== shape && !skipIds.has(shape.id)) {
+        if (prev && prev !== shape) {
           const patch: Record<string, unknown> = {};
           for (const key of Object.keys(shape) as (keyof Shape)[]) {
             if (shape[key] !== prev[key]) {
               patch[key] = shape[key];
             }
           }
-          // Only push if there are real changes (not just reference inequality)
           if (Object.keys(patch).length > 0) {
             modified.push({ id: shape.id, patch: patch as Partial<Shape> });
           }
@@ -328,27 +301,14 @@ export default function BoardPage() {
 
       prevShapes = curr;
 
-      // Write to Firestore (fire-and-forget, batched)
-      // Track IDs so we skip the echo-back from our own onSnapshot
-      if (added.length > 0) {
-        for (const s of added) pendingLocalWriteIds.current.add(s.id);
-        createObjects(boardId, added, user.uid);
-      }
-      if (deleted.length > 0) {
-        for (const id of deleted) pendingLocalWriteIds.current.add(id);
-        deleteObjects(boardId, deleted);
-      }
-      if (modified.length > 0) {
-        for (const m of modified) pendingLocalWriteIds.current.add(m.id);
-        updateObjects(boardId, modified, user.uid);
-      }
+      if (added.length > 0) createObjects(boardId, added, user.uid);
+      if (deleted.length > 0) deleteObjects(boardId, deleted);
+      if (modified.length > 0) updateObjects(boardId, modified, user.uid);
     });
 
     return unsub;
   }, [boardReady, boardId, user, renderOnly]);
 
-  // ── Expose live drag broadcaster to CanvasStage ─────────────────────
-  // CanvasStage will call this during drag to broadcast positions via RTDB
   const handleLiveDrag = useCallback((shapes: Array<{ id: string; x: number; y: number }>) => {
     liveDragBroadcasterRef.current?.broadcast(shapes);
   }, []);
@@ -358,10 +318,9 @@ export default function BoardPage() {
   }, []);
 
   // ── Auth guard ──────────────────────────────────────────────────────
+
   useEffect(() => {
-    if (!authLoading && !user) {
-      router.replace("/");
-    }
+    if (!authLoading && !user) router.replace("/");
   }, [authLoading, router, user]);
 
   if (authLoading || !user) {
@@ -393,13 +352,14 @@ export default function BoardPage() {
         signOut={signOut}
       />
 
-      {/* ── Canvas area ── */}
       <div className="relative flex-1">
         <CanvasStage
           boardId={boardId}
           myUid={user.uid}
           onLiveDrag={handleLiveDrag}
           onLiveDragEnd={handleLiveDragEnd}
+          onLockShapes={lockShapes}
+          onUnlockShapes={unlockShapes}
         />
         {showDebug && <DebugDashboard />}
         {user && <AICommandInput boardId={boardId} />}

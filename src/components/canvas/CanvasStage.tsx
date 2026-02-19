@@ -25,6 +25,8 @@ interface CanvasStageProps {
   myUid?: string;
   onLiveDrag?: (shapes: Array<{ id: string; x: number; y: number }>) => void;
   onLiveDragEnd?: () => void;
+  onLockShapes?: (ids: string[]) => void;
+  onUnlockShapes?: () => void;
 }
 
 export default function CanvasStage({
@@ -32,6 +34,8 @@ export default function CanvasStage({
   myUid,
   onLiveDrag,
   onLiveDragEnd,
+  onLockShapes,
+  onUnlockShapes,
 }: CanvasStageProps) {
   const stageRef = useRef<Konva.Stage | null>(null);
   const layerRef = useRef<Konva.Layer | null>(null);
@@ -59,7 +63,9 @@ export default function CanvasStage({
     viewport.viewportRef,
     viewport.throttledSetPointer,
     onLiveDrag,
-    onLiveDragEnd
+    onLiveDragEnd,
+    onLockShapes,
+    onUnlockShapes
   );
 
   const rubberBand = useRubberBandSelection(stageRef, layerRef, viewport.viewportRef);
@@ -185,7 +191,9 @@ export default function CanvasStage({
     transformerRef,
     connectorIds,
     textEditing.editingTextId,
-    connector.connectorFromId
+    connector.connectorFromId,
+    onLockShapes,
+    onUnlockShapes
   );
 
   // Cursor style

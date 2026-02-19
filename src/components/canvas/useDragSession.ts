@@ -30,7 +30,9 @@ export function useDragSession(
     worldY: number;
   }) => void,
   onLiveDrag?: (shapes: Array<{ id: string; x: number; y: number }>) => void,
-  onLiveDragEnd?: () => void
+  onLiveDragEnd?: () => void,
+  onLockShapes?: (ids: string[]) => void,
+  onUnlockShapes?: () => void
 ) {
   const dragSessionRef = useRef<DragSession | null>(null);
   // RAF-batched drag positions: written to ref, flushed once per frame
@@ -54,7 +56,9 @@ export function useDragSession(
       const ids = store.selectedIds.includes(id) ? store.selectedIds : [id];
       if (!store.selectedIds.includes(id)) setSelected([id]);
 
-      // Build base positions from store (not Konva nodes)
+      // Lock these shapes so inbound remote changes are deferred
+      onLockShapes?.(ids);
+
       const shapeMap = new Map(store.shapes.map((s) => [s.id, s]));
       const basePositions = new Map<string, { x: number; y: number }>();
       for (const sid of ids) {
@@ -71,7 +75,7 @@ export function useDragSession(
         basePositions,
       };
     },
-    [setSelected]
+    [setSelected, onLockShapes]
   );
 
   const handleDragMove = useCallback(
@@ -169,8 +173,9 @@ export function useDragSession(
       useDebugStore.getState().setInteraction("idle");
 
       onLiveDragEnd?.();
+      onUnlockShapes?.();
     },
-    [stageRef, updateShape, updateShapes, onLiveDragEnd]
+    [stageRef, updateShape, updateShapes, onLiveDragEnd, onUnlockShapes]
   );
 
   return {

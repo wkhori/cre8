@@ -11,7 +11,9 @@ export function useTransformer(
   transformerRef: React.RefObject<Konva.Transformer | null>,
   connectorIds: Set<string>,
   textEditingId: string | null,
-  connectorFromId: string | null
+  connectorFromId: string | null,
+  onLockShapes?: (ids: string[]) => void,
+  onUnlockShapes?: () => void
 ) {
   const [isTransforming, setIsTransforming] = useState(false);
 
@@ -43,7 +45,9 @@ export function useTransformer(
 
   const handleTransformStart = useCallback(() => {
     setIsTransforming(true);
-  }, []);
+    const ids = useCanvasStore.getState().selectedIds;
+    if (ids.length > 0) onLockShapes?.(ids);
+  }, [onLockShapes]);
 
   const handleTransformEnd = useCallback(() => {
     const tr = transformerRef.current;
@@ -79,7 +83,8 @@ export function useTransformer(
     }
     updateShapes(updates);
     setIsTransforming(false);
-  }, [transformerRef, updateShapes]);
+    onUnlockShapes?.();
+  }, [transformerRef, updateShapes, onUnlockShapes]);
 
   return {
     isTransforming,
