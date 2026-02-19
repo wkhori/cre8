@@ -9,12 +9,12 @@ export async function injectRects(page: Page, count: number): Promise<number> {
     const store = (window as any).__cre8?.canvas;
     if (!store) throw new Error("__cre8.canvas store not found on window");
     const state = store.getState();
-    const start = performance.now();
+    const positions: Array<{ x: number; y: number }> = [];
     for (let i = 0; i < n; i++) {
-      const x = 100 + (i % 25) * 60;
-      const y = 100 + Math.floor(i / 25) * 60;
-      state.addRect(x, y);
+      positions.push({ x: 100 + (i % 25) * 60, y: 100 + Math.floor(i / 25) * 60 });
     }
+    const start = performance.now();
+    state.addRects(positions);
     return performance.now() - start;
   }, count);
 }

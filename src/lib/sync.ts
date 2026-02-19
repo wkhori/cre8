@@ -398,6 +398,27 @@ export async function createObject(boardId: string, shape: Shape, userId: string
   return id;
 }
 
+export async function createObjects(
+  boardId: string,
+  shapes: Shape[],
+  userId: string
+): Promise<void> {
+  if (shapes.length === 0) return;
+  // Firestore batch limit is 500 writes
+  const batchSize = 500;
+  for (let i = 0; i < shapes.length; i += batchSize) {
+    const batch = writeBatch(firebaseDb);
+    const chunk = shapes.slice(i, i + batchSize);
+    for (const shape of chunk) {
+      const id = shape.id || generateId();
+      const shapeWithId = { ...shape, id };
+      const objRef = doc(firebaseDb, "boards", boardId, "objects", id);
+      batch.set(objRef, shapeToFirestore(shapeWithId, userId));
+    }
+    await batch.commit();
+  }
+}
+
 export async function updateObject(
   boardId: string,
   shapeId: string,

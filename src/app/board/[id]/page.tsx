@@ -9,6 +9,7 @@ import { useAuth } from "@/components/auth/AuthProvider";
 import {
   subscribeBoardObjects,
   createObject,
+  createObjects,
   deleteObjects,
   updateObjects,
   getOrCreateBoard,
@@ -248,10 +249,12 @@ export default function BoardPage() {
 
       prevShapes = curr;
 
-      // Write to Firestore (fire-and-forget)
+      // Write to Firestore (fire-and-forget, batched)
       if (added.length > 0) {
-        for (const shape of added) {
-          createObject(boardId, shape, user.uid);
+        if (added.length === 1) {
+          createObject(boardId, added[0], user.uid);
+        } else {
+          createObjects(boardId, added, user.uid);
         }
       }
       if (deleted.length > 0) {
@@ -284,6 +287,7 @@ export default function BoardPage() {
 
   // Expose stores for Playwright perf tests (dev only)
   if (typeof window !== "undefined" && process.env.NODE_ENV === "development") {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (window as any).__cre8 = { canvas: useCanvasStore, debug: useDebugStore };
   }
 

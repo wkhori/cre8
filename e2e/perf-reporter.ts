@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import * as fs from "fs";
 import * as path from "path";
 import type { Reporter, TestCase, TestResult, FullResult } from "@playwright/test/reporter";
@@ -72,42 +73,42 @@ export default class PerfReporter implements Reporter {
     > = {
       "bulk-create-100": {
         metric: "FPS after",
-        target: "> 30",
+        target: "> 60",
         extract: (d) => `${(d.fpsAfter as any)?.avg ?? "?"} avg`,
-        pass: (d) => ((d.fpsAfter as any)?.avg ?? 0) > 30,
+        pass: (d) => ((d.fpsAfter as any)?.avg ?? 0) > 60,
       },
       "bulk-create-250": {
         metric: "FPS after",
-        target: "> 30",
+        target: "> 60",
         extract: (d) =>
           `${(d.fpsAfter as any)?.avg ?? "?"} avg (min ${(d.fpsAfter as any)?.min ?? "?"})`,
-        pass: (d) => ((d.fpsAfter as any)?.avg ?? 0) > 30,
+        pass: (d) => ((d.fpsAfter as any)?.avg ?? 0) > 60,
       },
       "bulk-create-500": {
         metric: "FPS after",
-        target: "> 30",
+        target: "> 60",
         extract: (d) =>
           `${(d.fpsAfter as any)?.avg ?? "?"} avg (min ${(d.fpsAfter as any)?.min ?? "?"})`,
-        pass: (d) => ((d.fpsAfter as any)?.avg ?? 0) > 30,
+        pass: (d) => ((d.fpsAfter as any)?.avg ?? 0) > 60,
       },
       "duplicate-250-to-500": {
         metric: "FPS after",
-        target: "> 30",
+        target: "> 60",
         extract: (d) => `${(d.fpsAfter as any)?.avg ?? "?"} avg`,
-        pass: (d) => ((d.fpsAfter as any)?.avg ?? 0) > 30,
+        pass: (d) => ((d.fpsAfter as any)?.avg ?? 0) > 60,
       },
       "duplicate-500-to-1000": {
         metric: "FPS after",
-        target: "> 30",
+        target: "> 60",
         extract: (d) =>
           `${(d.fpsAfter as any)?.avg ?? "?"} avg (min ${(d.fpsAfter as any)?.min ?? "?"})`,
-        pass: (d) => ((d.fpsAfter as any)?.avg ?? 0) > 30,
+        pass: (d) => ((d.fpsAfter as any)?.avg ?? 0) > 60,
       },
       "bulk-move-500": {
         metric: "FPS before",
-        target: "> 20",
+        target: "> 60",
         extract: (d) => `${(d.fpsBefore as any)?.avg ?? "?"} avg`,
-        pass: (d) => ((d.fpsBefore as any)?.avg ?? 0) > 20,
+        pass: (d) => ((d.fpsBefore as any)?.avg ?? 0) > 60,
       },
       "bulk-move-keys-500": {
         metric: "Nudge time",
@@ -117,21 +118,21 @@ export default class PerfReporter implements Reporter {
       },
       "render-pan-500": {
         metric: "Idle FPS",
-        target: "> 30",
+        target: "> 60",
         extract: (d) => `${(d.fpsIdle as any)?.avg ?? "?"} avg`,
-        pass: (d) => ((d.fpsIdle as any)?.avg ?? 0) > 30,
+        pass: (d) => ((d.fpsIdle as any)?.avg ?? 0) > 60,
       },
       "render-zoom-500": {
         metric: "Idle FPS",
-        target: "> 30",
+        target: "> 60",
         extract: (d) => `${(d.fpsIdle as any)?.avg ?? "?"} avg`,
-        pass: (d) => ((d.fpsIdle as any)?.avg ?? 0) > 30,
+        pass: (d) => ((d.fpsIdle as any)?.avg ?? 0) > 60,
       },
       "sync-latency-2-clients": {
         metric: "Avg latency",
-        target: "< 2000ms",
+        target: "< 100ms",
         extract: (d) => `${d.avgMs ?? "?"}ms`,
-        pass: (d) => ((d.avgMs as number) ?? 99999) < 2000,
+        pass: (d) => ((d.avgMs as number) ?? 99999) < 100,
       },
       "bulk-sync-100": {
         metric: "Sync time",
@@ -165,15 +166,15 @@ export default class PerfReporter implements Reporter {
       },
       "workload-5-users": {
         metric: "Avg FPS after",
-        target: "> 20",
+        target: "> 60",
         extract: (d) => `${d.avgFpsAfter ?? "?"} avg (before: ${d.avgFpsBefore ?? "?"})`,
-        pass: (d) => ((d.avgFpsAfter as number) ?? 0) > 20,
+        pass: (d) => ((d.avgFpsAfter as number) ?? 0) > 60,
       },
       "workload-10-users": {
         metric: "Avg FPS after",
-        target: "> 15",
+        target: "> 60",
         extract: (d) => `${d.avgFpsAfter ?? "?"} avg (before: ${d.avgFpsBefore ?? "?"})`,
-        pass: (d) => ((d.avgFpsAfter as number) ?? 0) > 15,
+        pass: (d) => ((d.avgFpsAfter as number) ?? 0) > 60,
       },
     };
 

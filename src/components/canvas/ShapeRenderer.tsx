@@ -155,9 +155,6 @@ function ShapeRendererInner({
             height={shape.h}
             fill={shape.color}
             cornerRadius={4}
-            shadowColor="rgba(0,0,0,0.12)"
-            shadowBlur={8}
-            shadowOffsetY={2}
             perfectDrawEnabled={false}
           />
           <Text

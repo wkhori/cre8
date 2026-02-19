@@ -272,6 +272,12 @@ export default function CanvasStage({
       );
   }, [textEditing.editingTextId, selectedIds]);
 
+  // Derive connector IDs separately so transformer effect doesn't depend on full shapes array
+  const connectorIds = useMemo(
+    () => new Set(shapes.filter((s) => s.type === "connector").map((s) => s.id)),
+    [shapes]
+  );
+
   // ── Attach transformer to selected nodes (exclude connectors) ────
   useEffect(() => {
     const tr = transformerRef.current;
@@ -285,8 +291,9 @@ export default function CanvasStage({
     }
 
     // Don't attach transformer to connector shapes or the connector source shape
-    const excludeIds = new Set(shapes.filter((s) => s.type === "connector").map((s) => s.id));
-    if (connector.connectorFromId) excludeIds.add(connector.connectorFromId);
+    const excludeIds = connector.connectorFromId
+      ? new Set([...connectorIds, connector.connectorFromId])
+      : connectorIds;
     const nodes = selectedIds
       .filter((id) => !excludeIds.has(id))
       .map((id) => stage.findOne(`#${id}`))
@@ -294,7 +301,7 @@ export default function CanvasStage({
 
     tr.nodes(nodes);
     tr.getLayer()?.batchDraw();
-  }, [connector.connectorFromId, textEditing.editingTextId, selectedIds, shapes]);
+  }, [connector.connectorFromId, textEditing.editingTextId, selectedIds, connectorIds]);
 
   // ── Resize observer ───────────────────────────────────────────────
   useEffect(() => {

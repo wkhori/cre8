@@ -47,6 +47,7 @@ interface CanvasStore {
 
   // ── Shape creation ──
   addRect: (centerX: number, centerY: number) => void;
+  addRects: (positions: Array<{ x: number; y: number }>) => void;
   addCircle: (centerX: number, centerY: number) => void;
   addText: (centerX: number, centerY: number, text?: string) => string;
   addStickyNote: (centerX: number, centerY: number, text?: string, color?: string) => string;
@@ -86,8 +87,11 @@ interface CanvasStore {
 }
 
 function nextZIndex(shapes: Shape[]): number {
-  if (shapes.length === 0) return 0;
-  return Math.max(...shapes.map((s) => s.zIndex)) + 1;
+  let max = -1;
+  for (let i = 0; i < shapes.length; i++) {
+    if (shapes[i].zIndex > max) max = shapes[i].zIndex;
+  }
+  return max + 1;
 }
 
 function baseProps(shapes: Shape[]): Pick<BaseShape, "rotation" | "opacity" | "zIndex"> {
@@ -175,6 +179,30 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
       ...baseProps(state.shapes),
     };
     set({ shapes: [...state.shapes, shape], selectedIds: [shape.id] });
+  },
+
+  addRects: (positions) => {
+    const state = get();
+    state.pushHistory();
+    let z = nextZIndex(state.shapes);
+    const newShapes: RectShape[] = positions.map((pos) => {
+      const w = 80 + Math.random() * 80;
+      const h = 60 + Math.random() * 60;
+      return {
+        id: generateId(),
+        type: "rect" as const,
+        x: pos.x - w / 2,
+        y: pos.y - h / 2,
+        w,
+        h,
+        fill: randomColor(),
+        cornerRadius: 4,
+        rotation: 0,
+        opacity: 1,
+        zIndex: z++,
+      };
+    });
+    set({ shapes: [...state.shapes, ...newShapes] });
   },
 
   addCircle: (centerX, centerY) => {
