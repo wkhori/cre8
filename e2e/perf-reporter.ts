@@ -104,6 +104,20 @@ export default class PerfReporter implements Reporter {
           `${(d.fpsAfter as any)?.avg ?? "?"} avg (min ${(d.fpsAfter as any)?.min ?? "?"})`,
         pass: (d) => ((d.fpsAfter as any)?.avg ?? 0) > 60,
       },
+      "drag-50-shapes": {
+        metric: "FPS during drag",
+        target: "> 60",
+        extract: (d) =>
+          `${(d.fpsDrag as any)?.avg ?? "?"} avg (min ${(d.fpsDrag as any)?.min ?? "?"})`,
+        pass: (d) => ((d.fpsDrag as any)?.avg ?? 0) > 60,
+      },
+      "drag-200-shapes": {
+        metric: "FPS during drag",
+        target: "> 60",
+        extract: (d) =>
+          `${(d.fpsDrag as any)?.avg ?? "?"} avg (min ${(d.fpsDrag as any)?.min ?? "?"})`,
+        pass: (d) => ((d.fpsDrag as any)?.avg ?? 0) > 60,
+      },
       "bulk-move-500": {
         metric: "FPS before",
         target: "> 60",
