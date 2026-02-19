@@ -654,21 +654,24 @@ export default function CanvasStage({
       if (!session) return;
 
       const node = e.target;
-      const dx = node.x() - session.anchorStartX;
-      const dy = node.y() - session.anchorStartY;
+      const stage = stageRef.current;
 
-      // Batch update all dragged shapes from anchor delta
+      // Commit final positions: read actual Konva node positions (one-time, not per-frame)
       const updates: Array<{ id: string; patch: Partial<Shape> }> = [];
-      for (const [sid, base] of session.basePositions) {
-        if (sid === id) {
-          updates.push({ id: sid, patch: { x: node.x(), y: node.y() } });
-        } else {
-          updates.push({ id: sid, patch: { x: base.x + dx, y: base.y + dy } });
+      if (session.ids.length <= 1) {
+        updates.push({ id, patch: { x: node.x(), y: node.y() } });
+      } else if (stage) {
+        for (const sid of session.ids) {
+          const sNode = stage.findOne(`#${sid}`);
+          if (sNode) {
+            updates.push({ id: sid, patch: { x: sNode.x(), y: sNode.y() } });
+          }
         }
       }
-      if (updates.length <= 1) {
-        updateShape(id, { x: node.x(), y: node.y() });
-      } else {
+
+      if (updates.length <= 1 && updates.length > 0) {
+        updateShape(updates[0].id, updates[0].patch);
+      } else if (updates.length > 1) {
         updateShapes(updates);
       }
 
