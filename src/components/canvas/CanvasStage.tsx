@@ -839,7 +839,7 @@ export default function CanvasStage({
               shape={shape}
               isSelected={selectedIdSet.has(shape.id)}
               isDark={isDark}
-              allShapes={allShapesWithDrag}
+              allShapes={shape.type === "connector" ? allShapesWithDrag : undefined}
               isConnectorHover={activeTool === "connector" && connector.hoveredShapeId === shape.id}
               onSelect={handleShapeClick}
               onDragStart={handleDragStart}

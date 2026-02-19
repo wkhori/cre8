@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import { Rect, Ellipse, Text, Line, Group, Arrow } from "react-konva";
 import type Konva from "konva";
 import type { Shape } from "@/lib/types";
@@ -20,7 +21,7 @@ interface ShapeRendererProps {
   onMouseLeave?: (id: string) => void;
 }
 
-export default function ShapeRenderer({
+export default memo(function ShapeRenderer({
   shape,
   isSelected,
   isDark,
@@ -154,9 +155,6 @@ export default function ShapeRenderer({
             height={shape.h}
             fill={shape.color}
             cornerRadius={4}
-            shadowColor="rgba(0,0,0,0.12)"
-            shadowBlur={8}
-            shadowOffsetY={2}
             perfectDrawEnabled={false}
           />
           <Text
@@ -232,4 +230,4 @@ export default function ShapeRenderer({
     default:
       return null;
   }
-}
+});
