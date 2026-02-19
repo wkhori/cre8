@@ -11,6 +11,8 @@ interface ShapeRendererProps {
   isSelected: boolean;
   isDark?: boolean;
   allShapes?: Shape[];
+  shapesById?: Map<string, Shape>;
+  siblingMap?: Map<string, import("@/lib/types").ConnectorShape[]>;
   /** Monotonically increasing counter that forces connector re-render during drag */
   epoch?: number;
   isConnectorHover?: boolean;
@@ -28,6 +30,8 @@ export default memo(function ShapeRenderer({
   isSelected,
   isDark,
   allShapes,
+  shapesById,
+  siblingMap,
   isConnectorHover,
   onSelect,
   onDragStart,
@@ -202,7 +206,7 @@ export default memo(function ShapeRenderer({
 
     case "connector": {
       const pts = allShapes
-        ? computeConnectorPoints(shape, allShapes)
+        ? computeConnectorPoints(shape, allShapes, shapesById, siblingMap)
         : (shape.points ?? [0, 0, 100, 0]);
       const connectorProps = {
         ...commonProps,

@@ -94,10 +94,27 @@ export function edgeIntersection(
   return { x: cx + dx * s, y: cy + dy * s };
 }
 
-/** Compute the [x1,y1, x2,y2] line points for a connector, resolving endpoints. */
-export function computeConnectorPoints(connector: ConnectorShape, allShapes: Shape[]): number[] {
-  const fromShape = connector.fromId ? allShapes.find((s) => s.id === connector.fromId) : null;
-  const toShape = connector.toId ? allShapes.find((s) => s.id === connector.toId) : null;
+/** Build a deterministic pair key for an unordered {a, b} pair. */
+export function connectorPairKey(a: string, b: string): string {
+  return a < b ? `${a}|${b}` : `${b}|${a}`;
+}
+
+/** Compute the [x1,y1, x2,y2] line points for a connector, resolving endpoints.
+ *  Optional maps for O(1) lookups instead of O(N) scans. */
+export function computeConnectorPoints(
+  connector: ConnectorShape,
+  allShapes: Shape[],
+  shapesById?: Map<string, Shape>,
+  siblingMap?: Map<string, ConnectorShape[]>
+): number[] {
+  const fromShape = connector.fromId
+    ? (shapesById?.get(connector.fromId) ??
+      allShapes.find((s) => s.id === connector.fromId) ??
+      null)
+    : null;
+  const toShape = connector.toId
+    ? (shapesById?.get(connector.toId) ?? allShapes.find((s) => s.id === connector.toId) ?? null)
+    : null;
 
   let fromCx: number, fromCy: number, fromBounds: Bounds | null;
   if (fromShape) {
@@ -134,14 +151,16 @@ export function computeConnectorPoints(connector: ConnectorShape, allShapes: Sha
 
   // Fan-out: offset connectors that share the same unordered {fromId, toId} pair
   if (connector.fromId && connector.toId) {
-    const pairKey = [connector.fromId, connector.toId].sort().join("|");
-    const siblings = allShapes.filter(
-      (s) =>
-        s.type === "connector" &&
-        s.fromId &&
-        s.toId &&
-        [s.fromId, s.toId].sort().join("|") === pairKey
-    );
+    const pk = connectorPairKey(connector.fromId, connector.toId);
+    const siblings = siblingMap
+      ? (siblingMap.get(pk) ?? [])
+      : (allShapes.filter(
+          (s) =>
+            s.type === "connector" &&
+            s.fromId &&
+            s.toId &&
+            connectorPairKey(s.fromId, s.toId) === pk
+        ) as ConnectorShape[]);
     if (siblings.length > 1) {
       const idx = siblings.findIndex((s) => s.id === connector.id);
       const offset = (idx - (siblings.length - 1) / 2) * 20;

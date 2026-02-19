@@ -46,8 +46,10 @@ export default function BoardPage() {
   const remoteShapeIdsRef = useRef<Set<string>>(new Set());
   // IDs recently updated from Firestore — skip writing these back
   const recentSyncedIdsRef = useRef<Set<string>>(new Set());
-  // Track live drag overlay from remote users
+  // Track live drag overlay from remote users (ref only — NOT in store)
   const liveDragsRef = useRef<LiveDragData>({});
+  // Counter to trigger CanvasStage re-render when remote drag positions change
+  const [remoteDragEpoch, setRemoteDragEpoch] = useState(0);
 
   // ── Initialize board + sync ────────────────────────────────────────
 
@@ -85,10 +87,13 @@ export default function BoardPage() {
           isSyncingRef.current++;
           const store = useCanvasStore.getState();
           const currentShapes = store.shapes;
-          const currentMap = new Map(currentShapes.map((s) => [s.id, s]));
+          const currentIds = new Set(currentShapes.map((s) => s.id));
 
-          let newShapes = [...currentShapes];
-          let selectedIds = [...store.selectedIds];
+          // Collect all changes into maps for single-pass merge
+          // (avoids O(N²) from per-change .map() over entire array)
+          const modifiedMap = new Map<string, Shape>();
+          const removedIds = new Set<string>();
+          const added: Shape[] = [];
 
           for (const change of changes) {
             recentSyncedIdsRef.current.add(change.shape.id);
@@ -96,54 +101,57 @@ export default function BoardPage() {
             switch (change.type) {
               case "added":
                 remoteShapeIdsRef.current.add(change.shape.id);
-                if (currentMap.has(change.shape.id)) {
-                  // Already exists locally, update it
-                  newShapes = newShapes.map((s) =>
-                    s.id === change.shape.id ? { ...s, ...change.shape } : s
-                  );
+                if (currentIds.has(change.shape.id)) {
+                  modifiedMap.set(change.shape.id, change.shape);
                 } else {
-                  newShapes.push(change.shape);
+                  added.push(change.shape);
                 }
                 break;
               case "modified":
-                newShapes = newShapes.map((s) =>
-                  s.id === change.shape.id ? { ...s, ...change.shape } : s
-                );
+                modifiedMap.set(change.shape.id, change.shape);
                 break;
               case "removed":
                 remoteShapeIdsRef.current.delete(change.shape.id);
-                newShapes = newShapes.filter((s) => s.id !== change.shape.id);
-                selectedIds = selectedIds.filter((id) => id !== change.shape.id);
+                removedIds.add(change.shape.id);
                 break;
             }
           }
 
-          // Single store update for the entire batch
+          // Single-pass merge: filter removed, apply modified, append added
+          let newShapes = currentShapes;
+          if (removedIds.size > 0 || modifiedMap.size > 0) {
+            newShapes = currentShapes
+              .filter((s) => !removedIds.has(s.id))
+              .map((s) => {
+                const mod = modifiedMap.get(s.id);
+                return mod ? { ...s, ...mod } : s;
+              });
+          }
+          if (added.length > 0) {
+            newShapes = [...newShapes, ...added];
+          }
+
           store.setShapes(newShapes);
-          if (selectedIds.length !== store.selectedIds.length) {
-            store.setSelected(selectedIds);
+
+          // Remove deleted shapes from selection
+          if (removedIds.size > 0) {
+            const selectedIds = store.selectedIds.filter((id) => !removedIds.has(id));
+            if (selectedIds.length !== store.selectedIds.length) {
+              store.setSelected(selectedIds);
+            }
           }
           isSyncingRef.current--;
         },
       });
 
-      // Subscribe to live drag positions from remote users
+      // Subscribe to live drag positions from remote users.
+      // Positions stay in liveDragsRef (NOT written to store) to avoid
+      // the local→Firestore subscriber writing them back as local changes.
+      // CanvasStage reads this ref directly for rendering.
       unsubLiveDrags = subscribeLiveDrags(boardId, user.uid, (drags) => {
         liveDragsRef.current = drags;
-        // Apply remote drag positions directly to local shapes
-        isSyncingRef.current++;
-        const store = useCanvasStore.getState();
-        const updates: Array<{ id: string; patch: Partial<Shape> }> = [];
-        for (const [id, data] of Object.entries(drags)) {
-          if (store.shapes.find((s) => s.id === id)) {
-            updates.push({ id, patch: { x: data.x, y: data.y } });
-            recentSyncedIdsRef.current.add(id);
-          }
-        }
-        if (updates.length > 0) {
-          store.updateShapes(updates);
-        }
-        isSyncingRef.current--;
+        // Trigger CanvasStage re-render to pick up new positions
+        setRemoteDragEpoch((e) => e + 1);
       });
 
       // Create live drag broadcaster
@@ -197,11 +205,14 @@ export default function BoardPage() {
     if (!boardReady) return;
 
     // Poll the debug store pointer at ~30fps
-    // Skip during drag — positions are already broadcast via onLiveDrag (Fix 2)
+    // Skip if position unchanged — avoids ~30 RTDB writes/sec when idle
+    let lastX = NaN;
+    let lastY = NaN;
     const interval = setInterval(() => {
-      if (useDebugStore.getState().interaction === "dragging") return;
       const pointer = useDebugStore.getState().pointer;
-      // Always broadcast — (0,0) is a valid world position
+      if (pointer.worldX === lastX && pointer.worldY === lastY) return;
+      lastX = pointer.worldX;
+      lastY = pointer.worldY;
       cursorBroadcasterRef.current?.broadcast(pointer.worldX, pointer.worldY);
     }, 33);
     return () => clearInterval(interval);
@@ -335,6 +346,8 @@ export default function BoardPage() {
           myUid={user.uid}
           onLiveDrag={handleLiveDrag}
           onLiveDragEnd={handleLiveDragEnd}
+          remoteDragsRef={liveDragsRef}
+          remoteDragEpoch={remoteDragEpoch}
         />
         {showDebug && <DebugDashboard />}
         {user && <AICommandInput boardId={boardId} />}
