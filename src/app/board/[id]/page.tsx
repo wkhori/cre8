@@ -20,6 +20,7 @@ import {
 } from "@/lib/sync";
 import { joinBoard, createCursorBroadcaster } from "@/lib/presence";
 import type { Shape } from "@/lib/types";
+import { isRenderOnly } from "@/lib/sync-mode";
 import { Loader2 } from "lucide-react";
 import BoardToolbar from "@/components/board/BoardToolbar";
 
@@ -48,8 +49,21 @@ export default function BoardPage() {
   const liveDragsRef = useRef<LiveDragData>({});
 
   // ── Initialize board + sync ────────────────────────────────────────
+  const renderOnly = isRenderOnly();
+
   useEffect(() => {
     if (!user || !profile || !boardId) return;
+
+    // In render-only mode, skip all Firebase operations
+    if (renderOnly) {
+      setBoardName("Local Board (render-only)");
+      setBoardReady(true);
+      return () => {
+        setBoardReady(false);
+        useCanvasStore.getState().setShapes([]);
+        useCanvasStore.getState().setSelected([]);
+      };
+    }
 
     let unsubObjects: (() => void) | null = null;
     let unsubLiveDrags: (() => void) | null = null;
@@ -184,7 +198,7 @@ export default function BoardPage() {
       window.removeEventListener("beforeunload", onBeforeSignOut);
       teardown();
     };
-  }, [user, profile, boardId]);
+  }, [user, profile, boardId, renderOnly]);
 
   // ── Broadcast cursor position ───────────────────────────────────────
   useEffect(() => {
@@ -201,7 +215,7 @@ export default function BoardPage() {
 
   // ── Sync local mutations to Firestore ───────────────────────────────
   useEffect(() => {
-    if (!boardReady || !user) return;
+    if (!boardReady || !user || renderOnly) return;
 
     let prevShapes = useCanvasStore.getState().shapes;
 
@@ -263,7 +277,7 @@ export default function BoardPage() {
     });
 
     return unsub;
-  }, [boardReady, boardId, user]);
+  }, [boardReady, boardId, user, renderOnly]);
 
   // ── Expose live drag broadcaster to CanvasStage ─────────────────────
   // CanvasStage will call this during drag to broadcast positions via RTDB

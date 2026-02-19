@@ -87,7 +87,11 @@ interface CanvasStore {
 
 function nextZIndex(shapes: Shape[]): number {
   if (shapes.length === 0) return 0;
-  return Math.max(...shapes.map((s) => s.zIndex)) + 1;
+  let max = shapes[0].zIndex;
+  for (let i = 1; i < shapes.length; i++) {
+    if (shapes[i].zIndex > max) max = shapes[i].zIndex;
+  }
+  return max + 1;
 }
 
 function baseProps(shapes: Shape[]): Pick<BaseShape, "rotation" | "opacity" | "zIndex"> {
