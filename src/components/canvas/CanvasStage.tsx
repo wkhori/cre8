@@ -399,6 +399,10 @@ export default function CanvasStage({
   }, [throttledSetViewport, throttledSetGrid]);
 
   // ── Wheel zoom at cursor ──────────────────────────────────────────
+  // Debounce timer for re-attaching Transformer after zoom ends
+  const zoomReattachRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const savedTrNodesRef = useRef<Konva.Node[]>([]);
+
   const handleWheel = useCallback(
     (e: Konva.KonvaEventObject<WheelEvent>) => {
       e.evt.preventDefault();
@@ -424,11 +428,35 @@ export default function CanvasStage({
         y: pointer.y - mousePointTo.y * newScale,
       };
 
+      // Detach Transformer before batchDraw to avoid O(N) getClientRect
+      // on every wheel tick. Konva Transformer.update() iterates all attached
+      // nodes (~1,400ms for 500 nodes). Re-attach after zoom gesture ends.
+      const tr = transformerRef.current;
+      if (tr) {
+        const nodes = tr.nodes();
+        if (nodes.length > 0) {
+          savedTrNodesRef.current = nodes;
+          tr.nodes([]);
+        }
+      }
+
       viewportRef.current = { scale: newScale, x: newPos.x, y: newPos.y };
       stage.scale({ x: newScale, y: newScale });
       stage.position(newPos);
       stage.batchDraw();
       syncViewport();
+
+      // Debounce re-attach: only restore Transformer when zoom gesture stops
+      if (zoomReattachRef.current) clearTimeout(zoomReattachRef.current);
+      zoomReattachRef.current = setTimeout(() => {
+        zoomReattachRef.current = null;
+        const tr = transformerRef.current;
+        if (tr && savedTrNodesRef.current.length > 0) {
+          tr.nodes(savedTrNodesRef.current);
+          savedTrNodesRef.current = [];
+          tr.getLayer()?.batchDraw();
+        }
+      }, 150);
     },
     [syncViewport]
   );
