@@ -1,8 +1,16 @@
 import { type Page } from "@playwright/test";
 
-export const TEST_USERS = {
+export const TEST_USERS: Record<string, { email: string; password: string; name: string }> = {
   a: { email: "perf-a@test.cre8.app", password: "testpass123!", name: "Perf User A" },
   b: { email: "perf-b@test.cre8.app", password: "testpass123!", name: "Perf User B" },
+  c: { email: "perf-c@test.cre8.app", password: "testpass123!", name: "Perf User C" },
+  d: { email: "perf-d@test.cre8.app", password: "testpass123!", name: "Perf User D" },
+  e: { email: "perf-e@test.cre8.app", password: "testpass123!", name: "Perf User E" },
+  f: { email: "perf-f@test.cre8.app", password: "testpass123!", name: "Perf User F" },
+  g: { email: "perf-g@test.cre8.app", password: "testpass123!", name: "Perf User G" },
+  h: { email: "perf-h@test.cre8.app", password: "testpass123!", name: "Perf User H" },
+  i: { email: "perf-i@test.cre8.app", password: "testpass123!", name: "Perf User I" },
+  j: { email: "perf-j@test.cre8.app", password: "testpass123!", name: "Perf User J" },
 };
 
 /**

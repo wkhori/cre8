@@ -139,11 +139,47 @@ export default class PerfReporter implements Reporter {
         extract: (d) => `${d.syncMs ?? "?"}ms`,
         pass: (d) => ((d.syncMs as number) ?? 99999) < 30000,
       },
+      "fanout-5-users": {
+        metric: "Avg latency",
+        target: "< 3000ms",
+        extract: (d) => `${d.overallAvgMs ?? "?"}ms (max ${d.maxMs ?? "?"}ms)`,
+        pass: (d) => ((d.overallAvgMs as number) ?? 99999) < 3000,
+      },
+      "fanout-10-users": {
+        metric: "Avg latency",
+        target: "< 5000ms",
+        extract: (d) => `${d.overallAvgMs ?? "?"}ms (max ${d.maxMs ?? "?"}ms)`,
+        pass: (d) => ((d.overallAvgMs as number) ?? 99999) < 5000,
+      },
+      "concurrent-writes-5-users": {
+        metric: "Sync time",
+        target: "< 30s",
+        extract: (d) => `${d.syncMs ?? "?"}ms (${d.allSynced ? "synced" : "MISMATCH"})`,
+        pass: (d) => ((d.syncMs as number) ?? 99999) < 30000 && d.allSynced === true,
+      },
+      "concurrent-writes-10-users": {
+        metric: "Sync time",
+        target: "< 60s",
+        extract: (d) => `${d.syncMs ?? "?"}ms (${d.allSynced ? "synced" : "MISMATCH"})`,
+        pass: (d) => ((d.syncMs as number) ?? 99999) < 60000 && d.allSynced === true,
+      },
+      "workload-5-users": {
+        metric: "Avg FPS after",
+        target: "> 20",
+        extract: (d) => `${d.avgFpsAfter ?? "?"} avg (before: ${d.avgFpsBefore ?? "?"})`,
+        pass: (d) => ((d.avgFpsAfter as number) ?? 0) > 20,
+      },
+      "workload-10-users": {
+        metric: "Avg FPS after",
+        target: "> 15",
+        extract: (d) => `${d.avgFpsAfter ?? "?"} avg (before: ${d.avgFpsBefore ?? "?"})`,
+        pass: (d) => ((d.avgFpsAfter as number) ?? 0) > 15,
+      },
     };
 
     // Header
     const cols = ["Test", "Metric", "Result", "Target", "Status"];
-    const widths = [28, 14, 28, 12, 6];
+    const widths = [32, 14, 34, 12, 6];
     const header = cols.map((c, i) => c.padEnd(widths[i])).join(" ");
     console.log("\n" + header);
     console.log("-".repeat(header.length));
