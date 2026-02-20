@@ -136,6 +136,7 @@ export function createCursorBroadcaster(boardId: string, uid: string, displayNam
 
   const cleanup = async () => {
     stopped = true;
+    broadcast.cancel();
     await set(cursorRef, null).catch(() => {}); // expected during sign-out;
   };
 

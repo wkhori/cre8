@@ -22,6 +22,9 @@ import { firebaseDb, firebaseRtdb } from "@/lib/firebase-client";
 import type { Shape } from "@/lib/types";
 import { generateId } from "@/lib/id";
 import { throttle } from "@/lib/throttle";
+import { filterLiveDragData } from "@/lib/live-drag-filter";
+
+const FIRESTORE_BATCH_WRITE_LIMIT = 499;
 
 // ── Board document ────────────────────────────────────────────────────
 
@@ -326,26 +329,44 @@ export interface LiveDragData {
   [shapeId: string]: { x: number; y: number; uid: string; ts: number };
 }
 
+interface UserLiveDragPayload {
+  __clearTs?: number;
+  [shapeId: string]: { x: number; y: number; ts: number } | number | undefined;
+}
+
 /**
  * Creates a throttled broadcaster that writes dragging shape positions
  * to RTDB at ~15Hz for live preview on remote clients.
  */
 export function createLiveDragBroadcaster(boardId: string, uid: string) {
-  const dragRef = ref(firebaseRtdb, `boards/${boardId}/liveDrags`);
+  const dragRef = ref(firebaseRtdb, `boards/${boardId}/liveDrags/${uid}`);
+  let lastTs = 0;
+
+  const nextTs = () => {
+    const now = Date.now();
+    if (now <= lastTs) {
+      lastTs += 1;
+    } else {
+      lastTs = now;
+    }
+    return lastTs;
+  };
 
   const broadcast = throttle(
     (shapes: Array<{ id: string; x: number; y: number }>) => {
-      const data: LiveDragData = {};
+      const ts = nextTs();
+      const data: UserLiveDragPayload = {};
       for (const s of shapes) {
-        data[s.id] = { x: s.x, y: s.y, uid, ts: Date.now() };
+        data[s.id] = { x: s.x, y: s.y, ts };
       }
       rtdbSet(dragRef, data);
     },
-    66 // ~15Hz — good balance between smoothness and write volume
+    33 // ~30Hz — matches cursor broadcast rate, lerp smooths on receiver
   );
 
   const clear = () => {
-    rtdbSet(dragRef, null).catch(() => {}); // expected during sign-out
+    broadcast.cancel();
+    rtdbSet(dragRef, { __clearTs: nextTs() }).catch(() => {}); // expected during sign-out
   };
 
   return { broadcast, clear };
@@ -361,23 +382,60 @@ export function subscribeLiveDrags(
   onUpdate: (drags: LiveDragData) => void
 ): () => void {
   const dragRef = ref(firebaseRtdb, `boards/${boardId}/liveDrags`);
+  const lastSeenTsById = new Map<string, number>();
+  const lastClearTsByUid = new Map<string, number>();
 
   const unsubscribe = onValue(
     dragRef,
     (snapshot) => {
-      const val = snapshot.val() as LiveDragData | null;
+      const val = snapshot.val() as Record<string, UserLiveDragPayload> | null;
       if (!val) {
         onUpdate({});
         return;
       }
-      // Filter out our own drags and stale entries (>3s old)
-      const now = Date.now();
-      const filtered: LiveDragData = {};
-      for (const [id, data] of Object.entries(val)) {
-        if (data.uid !== myUid && now - data.ts < 3000) {
-          filtered[id] = data;
+      const flattened: LiveDragData = {};
+      const presentUids = new Set<string>();
+      for (const [uid, payload] of Object.entries(val)) {
+        presentUids.add(uid);
+        if (uid === myUid || !payload) continue;
+
+        const clearTs = typeof payload.__clearTs === "number" ? payload.__clearTs : undefined;
+        if (clearTs != null) {
+          const prev = lastClearTsByUid.get(uid) ?? -Infinity;
+          if (clearTs > prev) lastClearTsByUid.set(uid, clearTs);
+        }
+
+        const uidClearTs = lastClearTsByUid.get(uid) ?? -Infinity;
+        for (const [shapeId, entry] of Object.entries(payload)) {
+          if (shapeId === "__clearTs") continue;
+          if (
+            !entry ||
+            typeof entry !== "object" ||
+            typeof entry.x !== "number" ||
+            typeof entry.y !== "number" ||
+            typeof entry.ts !== "number"
+          ) {
+            continue;
+          }
+          if (entry.ts <= uidClearTs) continue;
+
+          const existing = flattened[shapeId];
+          if (!existing || entry.ts > existing.ts) {
+            flattened[shapeId] = { x: entry.x, y: entry.y, uid, ts: entry.ts };
+          }
         }
       }
+
+      for (const uid of lastClearTsByUid.keys()) {
+        if (!presentUids.has(uid)) lastClearTsByUid.delete(uid);
+      }
+
+      const filtered = filterLiveDragData(
+        flattened,
+        myUid,
+        Date.now(),
+        lastSeenTsById
+      ) as LiveDragData;
       onUpdate(filtered);
     },
     () => {} // expected during sign-out
@@ -390,12 +448,22 @@ export function subscribeLiveDrags(
 // These are the shared operations that both the UI and AI agent call.
 // Each writes to Firestore; the onSnapshot listener syncs to all clients.
 
-export async function createObject(boardId: string, shape: Shape, userId: string): Promise<string> {
-  const id = shape.id || generateId();
-  const shapeWithId = { ...shape, id };
-  const objRef = doc(firebaseDb, "boards", boardId, "objects", id);
-  await setDoc(objRef, shapeToFirestore(shapeWithId, userId));
-  return id;
+export async function createObjects(
+  boardId: string,
+  shapes: Shape[],
+  userId: string
+): Promise<void> {
+  if (shapes.length === 0) return;
+  for (let i = 0; i < shapes.length; i += FIRESTORE_BATCH_WRITE_LIMIT) {
+    const batch = writeBatch(firebaseDb);
+    const chunk = shapes.slice(i, i + FIRESTORE_BATCH_WRITE_LIMIT);
+    for (const shape of chunk) {
+      const id = shape.id || generateId();
+      const objRef = doc(firebaseDb, "boards", boardId, "objects", id);
+      batch.set(objRef, shapeToFirestore({ ...shape, id }, userId));
+    }
+    await batch.commit();
+  }
 }
 
 export async function updateObject(
@@ -418,11 +486,14 @@ export async function updateObject(
 
 export async function deleteObjects(boardId: string, shapeIds: string[]): Promise<void> {
   if (shapeIds.length === 0) return;
-  const batch = writeBatch(firebaseDb);
-  for (const id of shapeIds) {
-    batch.delete(doc(firebaseDb, "boards", boardId, "objects", id));
+  for (let i = 0; i < shapeIds.length; i += FIRESTORE_BATCH_WRITE_LIMIT) {
+    const batch = writeBatch(firebaseDb);
+    const chunk = shapeIds.slice(i, i + FIRESTORE_BATCH_WRITE_LIMIT);
+    for (const id of chunk) {
+      batch.delete(doc(firebaseDb, "boards", boardId, "objects", id));
+    }
+    await batch.commit();
   }
-  await batch.commit();
 }
 
 export async function updateObjects(
@@ -431,17 +502,21 @@ export async function updateObjects(
   userId: string
 ): Promise<void> {
   if (updates.length === 0) return;
-  const batch = writeBatch(firebaseDb);
-  for (const { id, patch } of updates) {
-    const objRef = doc(firebaseDb, "boards", boardId, "objects", id);
-    batch.update(
-      objRef,
-      stripUndefined({
-        ...patch,
-        updatedAt: serverTimestamp(),
-        updatedBy: userId,
-      })
-    );
+  for (let i = 0; i < updates.length; i += FIRESTORE_BATCH_WRITE_LIMIT) {
+    const batch = writeBatch(firebaseDb);
+    const chunk = updates.slice(i, i + FIRESTORE_BATCH_WRITE_LIMIT);
+    for (const { id, patch } of chunk) {
+      const objRef = doc(firebaseDb, "boards", boardId, "objects", id);
+      batch.set(
+        objRef,
+        stripUndefined({
+          ...patch,
+          updatedAt: serverTimestamp(),
+          updatedBy: userId,
+        }),
+        { merge: true }
+      );
+    }
+    await batch.commit();
   }
-  await batch.commit();
 }

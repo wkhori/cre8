@@ -87,11 +87,39 @@ interface CanvasStore {
 
 function nextZIndex(shapes: Shape[]): number {
   if (shapes.length === 0) return 0;
-  return Math.max(...shapes.map((s) => s.zIndex)) + 1;
+  let max = shapes[0].zIndex;
+  for (let i = 1; i < shapes.length; i++) {
+    if (shapes[i].zIndex > max) max = shapes[i].zIndex;
+  }
+  return max + 1;
 }
 
 function baseProps(shapes: Shape[]): Pick<BaseShape, "rotation" | "opacity" | "zIndex"> {
   return { rotation: 0, opacity: 1, zIndex: nextZIndex(shapes) };
+}
+
+function remapConnectorRefs(shape: Shape, idMap: Map<string, string>): Shape {
+  if (shape.type !== "connector") return shape;
+
+  const next: ConnectorShape = { ...shape };
+  if (next.fromId && idMap.has(next.fromId)) {
+    next.fromId = idMap.get(next.fromId)!;
+  }
+  if (next.toId && idMap.has(next.toId)) {
+    next.toId = idMap.get(next.toId)!;
+  }
+  return next;
+}
+
+function expandIdsWithInternalConnectors(shapes: Shape[], ids: string[]): Set<string> {
+  const idSet = new Set(ids);
+  for (const shape of shapes) {
+    if (shape.type !== "connector" || idSet.has(shape.id)) continue;
+    if (shape.fromId && shape.toId && idSet.has(shape.fromId) && idSet.has(shape.toId)) {
+      idSet.add(shape.id);
+    }
+  }
+  return idSet;
 }
 
 export const useCanvasStore = create<CanvasStore>((set, get) => ({
@@ -273,14 +301,22 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
     const state = get();
     if (ids.length === 0) return;
     state.pushHistory();
-    const originals = state.shapes.filter((s) => ids.includes(s.id));
-    const copies = originals.map((s, i) => ({
-      ...s,
-      id: generateId(),
-      x: s.x + 20,
-      y: s.y + 20,
-      zIndex: nextZIndex(state.shapes) + i,
-    }));
+    const idsToCopy = expandIdsWithInternalConnectors(state.shapes, ids);
+    const originals = state.shapes.filter((s) => idsToCopy.has(s.id));
+    const idMap = new Map<string, string>();
+    for (const shape of originals) {
+      idMap.set(shape.id, generateId());
+    }
+    const copies = originals.map((shape, i) => {
+      const copied = {
+        ...shape,
+        id: idMap.get(shape.id)!,
+        x: shape.x + 20,
+        y: shape.y + 20,
+        zIndex: nextZIndex(state.shapes) + i,
+      } as Shape;
+      return remapConnectorRefs(copied, idMap);
+    });
     set({
       shapes: [...state.shapes, ...copies],
       selectedIds: copies.map((c) => c.id),
@@ -329,7 +365,8 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
 
   copySelected: () => {
     const state = get();
-    const copied = state.shapes.filter((s) => state.selectedIds.includes(s.id));
+    const idsToCopy = expandIdsWithInternalConnectors(state.shapes, state.selectedIds);
+    const copied = state.shapes.filter((s) => idsToCopy.has(s.id));
     set({ clipboard: copied });
   },
 
@@ -337,13 +374,20 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
     const state = get();
     if (state.clipboard.length === 0) return;
     state.pushHistory();
-    const pasted = state.clipboard.map((s, i) => ({
-      ...s,
-      id: generateId(),
-      x: s.x + offsetX,
-      y: s.y + offsetY,
-      zIndex: nextZIndex(state.shapes) + i,
-    }));
+    const idMap = new Map<string, string>();
+    for (const shape of state.clipboard) {
+      idMap.set(shape.id, generateId());
+    }
+    const pasted = state.clipboard.map((shape, i) => {
+      const copied = {
+        ...shape,
+        id: idMap.get(shape.id)!,
+        x: shape.x + offsetX,
+        y: shape.y + offsetY,
+        zIndex: nextZIndex(state.shapes) + i,
+      } as Shape;
+      return remapConnectorRefs(copied, idMap);
+    });
     set({
       shapes: [...state.shapes, ...pasted],
       selectedIds: pasted.map((p) => p.id),

@@ -1,9 +1,33 @@
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function throttle<T extends (...args: any[]) => void>(fn: T, ms: number): T {
+export type Throttled<T extends (...args: any[]) => void> = T & { cancel: () => void };
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function throttle<T extends (...args: any[]) => void>(fn: T, ms: number): Throttled<T> {
   let last = 0;
   let timer: ReturnType<typeof setTimeout> | null = null;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return ((...args: any[]) => {
+  let lastArgs: any[] | null = null;
+
+  const flush = () => {
+    timer = null;
+    if (!lastArgs) return;
+    const args = lastArgs;
+    lastArgs = null;
+    last = Date.now();
+    fn(...args);
+  };
+
+  const clearPending = () => {
+    if (timer) {
+      clearTimeout(timer);
+      timer = null;
+    }
+    lastArgs = null;
+  };
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const throttled = ((...args: any[]) => {
+    lastArgs = args;
     const now = Date.now();
     const remaining = ms - (now - last);
     if (remaining <= 0) {
@@ -11,14 +35,12 @@ export function throttle<T extends (...args: any[]) => void>(fn: T, ms: number):
         clearTimeout(timer);
         timer = null;
       }
-      last = now;
-      fn(...args);
+      flush();
     } else if (!timer) {
-      timer = setTimeout(() => {
-        last = Date.now();
-        timer = null;
-        fn(...args);
-      }, remaining);
+      timer = setTimeout(flush, remaining);
     }
-  }) as T;
+  }) as Throttled<T>;
+
+  throttled.cancel = clearPending;
+  return throttled;
 }

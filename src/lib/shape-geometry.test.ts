@@ -8,7 +8,14 @@ import type {
   ConnectorShape,
   Shape,
 } from "@/lib/types";
-import { getShapeBounds, edgeIntersection, computeConnectorPoints } from "@/lib/shape-geometry";
+import {
+  getShapeBounds,
+  edgeIntersection,
+  shapeEdgeIntersection,
+  shapeContainsPoint,
+  computeConnectorPoints,
+  connectorPairKey,
+} from "@/lib/shape-geometry";
 
 describe("getShapeBounds", () => {
   it("returns position and size for a rect", () => {
@@ -168,6 +175,49 @@ describe("edgeIntersection", () => {
   });
 });
 
+describe("shapeEdgeIntersection", () => {
+  const baseProps = { rotation: 0, opacity: 1, zIndex: 0 };
+
+  it("intersects circles at the ellipse edge (not the bounding box corner)", () => {
+    const circle: CircleShape = {
+      id: "c-edge",
+      type: "circle",
+      x: 100,
+      y: 100,
+      radiusX: 50,
+      radiusY: 50,
+      fill: "#000",
+      ...baseProps,
+    };
+
+    const pt = shapeEdgeIntersection(circle, 200, 200);
+    expect(pt.x).toBeCloseTo(135.355, 2);
+    expect(pt.y).toBeCloseTo(135.355, 2);
+    expect(pt.x).not.toBeCloseTo(150, 2);
+    expect(pt.y).not.toBeCloseTo(150, 2);
+  });
+});
+
+describe("shapeContainsPoint", () => {
+  const baseProps = { rotation: 0, opacity: 1, zIndex: 0 };
+
+  it("uses ellipse hit testing for circles", () => {
+    const circle: CircleShape = {
+      id: "c-hit",
+      type: "circle",
+      x: 100,
+      y: 100,
+      radiusX: 40,
+      radiusY: 20,
+      fill: "#000",
+      ...baseProps,
+    };
+
+    expect(shapeContainsPoint(circle, 130, 100)).toBe(true);
+    expect(shapeContainsPoint(circle, 140, 120)).toBe(false);
+  });
+});
+
 describe("computeConnectorPoints", () => {
   const baseProps = { rotation: 0, opacity: 1, zIndex: 0 };
 
@@ -238,6 +288,35 @@ describe("computeConnectorPoints", () => {
     expect(pts[3]).toBe(500);
   });
 
+  it("uses ellipse-edge anchoring for circle endpoints", () => {
+    const circle: CircleShape = {
+      id: "circle-a",
+      type: "circle",
+      x: 100,
+      y: 100,
+      radiusX: 50,
+      radiusY: 50,
+      fill: "#000",
+      ...baseProps,
+    };
+    const conn: ConnectorShape = {
+      id: "c2b",
+      type: "connector",
+      x: 0,
+      y: 0,
+      fromId: "circle-a",
+      toPoint: { x: 200, y: 200 },
+      style: "arrow",
+      stroke: "#000",
+      strokeWidth: 2,
+      ...baseProps,
+    };
+
+    const pts = computeConnectorPoints(conn, [circle, conn]);
+    expect(pts[0]).toBeCloseTo(135.355, 2);
+    expect(pts[1]).toBeCloseTo(135.355, 2);
+  });
+
   it("computes point-to-point connector", () => {
     const conn: ConnectorShape = {
       id: "c3",
@@ -253,6 +332,23 @@ describe("computeConnectorPoints", () => {
     };
     const pts = computeConnectorPoints(conn, [conn]);
     expect(pts).toEqual([10, 20, 200, 300]);
+  });
+
+  it("applies connector x/y translation to free-point connector endpoints", () => {
+    const conn: ConnectorShape = {
+      id: "c3b",
+      type: "connector",
+      x: 30,
+      y: 40,
+      fromPoint: { x: 10, y: 20 },
+      toPoint: { x: 200, y: 300 },
+      style: "line",
+      stroke: "#000",
+      strokeWidth: 2,
+      ...baseProps,
+    };
+    const pts = computeConnectorPoints(conn, [conn]);
+    expect(pts).toEqual([40, 60, 230, 340]);
   });
 
   it("returns fallback for missing endpoints", () => {
@@ -302,5 +398,89 @@ describe("computeConnectorPoints", () => {
     const pts2 = computeConnectorPoints(conn2, allShapes);
     // Two parallel connectors should be offset from each other
     expect(pts1[1]).not.toBeCloseTo(pts2[1]); // Y values differ
+  });
+
+  it("uses shapesById map for O(1) endpoint lookup", () => {
+    const conn: ConnectorShape = {
+      id: "c7",
+      type: "connector",
+      x: 0,
+      y: 0,
+      fromId: "a",
+      toId: "b",
+      style: "arrow",
+      stroke: "#000",
+      strokeWidth: 2,
+      ...baseProps,
+    };
+    const allShapes: Shape[] = [rectA, rectB, conn];
+    const shapesById = new Map<string, Shape>(allShapes.map((s) => [s.id, s]));
+
+    const ptsWithMap = computeConnectorPoints(conn, allShapes, shapesById);
+    const ptsWithout = computeConnectorPoints(conn, allShapes);
+
+    // Both paths should produce identical results
+    expect(ptsWithMap[0]).toBeCloseTo(ptsWithout[0]);
+    expect(ptsWithMap[1]).toBeCloseTo(ptsWithout[1]);
+    expect(ptsWithMap[2]).toBeCloseTo(ptsWithout[2]);
+    expect(ptsWithMap[3]).toBeCloseTo(ptsWithout[3]);
+  });
+
+  it("uses siblingMap for O(1) fan-out lookup", () => {
+    const conn1: ConnectorShape = {
+      id: "c8",
+      type: "connector",
+      x: 0,
+      y: 0,
+      fromId: "a",
+      toId: "b",
+      style: "arrow",
+      stroke: "#000",
+      strokeWidth: 2,
+      ...baseProps,
+    };
+    const conn2: ConnectorShape = {
+      id: "c9",
+      type: "connector",
+      x: 0,
+      y: 0,
+      fromId: "a",
+      toId: "b",
+      style: "arrow",
+      stroke: "#000",
+      strokeWidth: 2,
+      ...baseProps,
+    };
+    const allShapes: Shape[] = [rectA, rectB, conn1, conn2];
+    const shapesById = new Map<string, Shape>(allShapes.map((s) => [s.id, s]));
+    const pk = connectorPairKey("a", "b");
+    const siblingMap = new Map([[pk, [conn1, conn2]]]);
+
+    // Map path should produce identical results to the scan path
+    const pts1Map = computeConnectorPoints(conn1, allShapes, shapesById, siblingMap);
+    const pts1NoMap = computeConnectorPoints(conn1, allShapes);
+    expect(pts1Map[0]).toBeCloseTo(pts1NoMap[0]);
+    expect(pts1Map[1]).toBeCloseTo(pts1NoMap[1]);
+    expect(pts1Map[2]).toBeCloseTo(pts1NoMap[2]);
+    expect(pts1Map[3]).toBeCloseTo(pts1NoMap[3]);
+
+    // Fan-out should still work — two siblings are offset
+    const pts2Map = computeConnectorPoints(conn2, allShapes, shapesById, siblingMap);
+    expect(pts1Map[1]).not.toBeCloseTo(pts2Map[1]);
+  });
+});
+
+describe("connectorPairKey", () => {
+  it("produces same key regardless of argument order", () => {
+    expect(connectorPairKey("a", "b")).toBe(connectorPairKey("b", "a"));
+  });
+
+  it("produces different keys for different pairs", () => {
+    expect(connectorPairKey("a", "b")).not.toBe(connectorPairKey("a", "c"));
+  });
+
+  it("uses deterministic format (smaller first)", () => {
+    expect(connectorPairKey("z", "a")).toBe("a|z");
+    expect(connectorPairKey("abc", "xyz")).toBe("abc|xyz");
   });
 });

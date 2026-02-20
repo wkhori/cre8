@@ -7,17 +7,13 @@ import { Loader2, Sparkles, Send, ChevronDown, ChevronUp, X } from "lucide-react
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
-interface AICommandInputProps {
-  boardId: string;
-}
-
-export default function AICommandInput({ boardId }: AICommandInputProps) {
+export default function AICommandInput() {
   const [isOpen, setIsOpen] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [command, setCommand] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const { submitCommand, loading, error, lastResult, history, clearError } = useAIAgent(boardId);
+  const { submitCommand, loading, error, lastResult, history, clearError } = useAIAgent();
 
   // Focus input when panel opens
   useEffect(() => {

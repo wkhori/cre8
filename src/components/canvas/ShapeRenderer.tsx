@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import { Rect, Ellipse, Text, Line, Group, Arrow } from "react-konva";
 import type Konva from "konva";
 import type { Shape } from "@/lib/types";
@@ -10,6 +11,8 @@ interface ShapeRendererProps {
   isSelected: boolean;
   isDark?: boolean;
   allShapes?: Shape[];
+  shapesById?: Map<string, Shape>;
+  siblingMap?: Map<string, import("@/lib/types").ConnectorShape[]>;
   isConnectorHover?: boolean;
   onSelect: (id: string, e: Konva.KonvaEventObject<MouseEvent | TouchEvent>) => void;
   onDragStart: (id: string) => void;
@@ -20,11 +23,13 @@ interface ShapeRendererProps {
   onMouseLeave?: (id: string) => void;
 }
 
-export default function ShapeRenderer({
+export default memo(function ShapeRenderer({
   shape,
   isSelected,
   isDark,
   allShapes,
+  shapesById,
+  siblingMap,
   isConnectorHover,
   onSelect,
   onDragStart,
@@ -154,9 +159,6 @@ export default function ShapeRenderer({
             height={shape.h}
             fill={shape.color}
             cornerRadius={4}
-            shadowColor="rgba(0,0,0,0.12)"
-            shadowBlur={8}
-            shadowOffsetY={2}
             perfectDrawEnabled={false}
           />
           <Text
@@ -202,7 +204,7 @@ export default function ShapeRenderer({
 
     case "connector": {
       const pts = allShapes
-        ? computeConnectorPoints(shape, allShapes)
+        ? computeConnectorPoints(shape, allShapes, shapesById, siblingMap)
         : (shape.points ?? [0, 0, 100, 0]);
       const connectorProps = {
         ...commonProps,
@@ -232,4 +234,4 @@ export default function ShapeRenderer({
     default:
       return null;
   }
-}
+});

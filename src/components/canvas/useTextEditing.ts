@@ -4,22 +4,14 @@ import { useRef, useEffect, useCallback, useMemo, useState } from "react";
 import type Konva from "konva";
 import type { Shape } from "@/lib/types";
 import { useCanvasStore } from "@/store/canvas-store";
+import { useDebugStore } from "@/store/debug-store";
 
-interface ViewportRef {
-  scale: number;
-  x: number;
-  y: number;
-}
-
-export function useTextEditing(
-  stageRef: React.RefObject<Konva.Stage | null>,
-  viewportRef: React.RefObject<ViewportRef>,
-  shapes: Shape[]
-) {
+export function useTextEditing(stageRef: React.RefObject<Konva.Stage | null>, shapes: Shape[]) {
   const [editingTextId, setEditingTextId] = useState<string | null>(null);
   const [editingTextValue, setEditingTextValue] = useState("");
   const editingShapeTypeRef = useRef<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const viewport = useDebugStore((s) => s.viewport);
 
   const beginTextEditing = useCallback(
     (id: string) => {
@@ -163,13 +155,11 @@ export function useTextEditing(
     const shape = shapes.find((s) => s.id === editingTextId);
     if (!shape) return null;
 
-    const vp = viewportRef.current;
-
     if (shape.type === "text") {
-      const x = shape.x * vp.scale + vp.x;
-      const y = shape.y * vp.scale + vp.y;
-      const width = (shape.width ?? 200) * vp.scale;
-      const fontSize = shape.fontSize * vp.scale;
+      const x = shape.x * viewport.scale + viewport.x;
+      const y = shape.y * viewport.scale + viewport.y;
+      const width = (shape.width ?? 200) * viewport.scale;
+      const fontSize = shape.fontSize * viewport.scale;
       return {
         position: "absolute" as const,
         left: x,
@@ -195,11 +185,11 @@ export function useTextEditing(
     if (shape.type === "sticky") {
       const padX = 12;
       const padY = 12;
-      const x = (shape.x + padX) * vp.scale + vp.x;
-      const y = (shape.y + padY) * vp.scale + vp.y;
-      const width = (shape.w - padX * 2) * vp.scale;
-      const height = (shape.h - padY * 2) * vp.scale;
-      const fontSize = (shape.fontSize ?? 16) * vp.scale;
+      const x = (shape.x + padX) * viewport.scale + viewport.x;
+      const y = (shape.y + padY) * viewport.scale + viewport.y;
+      const width = (shape.w - padX * 2) * viewport.scale;
+      const height = (shape.h - padY * 2) * viewport.scale;
+      const fontSize = (shape.fontSize ?? 16) * viewport.scale;
       return {
         position: "absolute" as const,
         left: x,
@@ -225,10 +215,10 @@ export function useTextEditing(
     }
 
     if (shape.type === "frame") {
-      const x = (shape.x + 8) * vp.scale + vp.x;
-      const y = (shape.y - 20) * vp.scale + vp.y;
-      const fontSize = 13 * vp.scale;
-      const width = Math.max((shape.w - 16) * vp.scale, 60);
+      const x = (shape.x + 8) * viewport.scale + viewport.x;
+      const y = (shape.y - 20) * viewport.scale + viewport.y;
+      const fontSize = 13 * viewport.scale;
+      const width = Math.max((shape.w - 16) * viewport.scale, 60);
       return {
         position: "absolute" as const,
         left: x,
@@ -253,7 +243,7 @@ export function useTextEditing(
     }
 
     return null;
-  }, [editingTextId, shapes, viewportRef]);
+  }, [editingTextId, shapes, viewport]);
 
   return {
     editingTextId,

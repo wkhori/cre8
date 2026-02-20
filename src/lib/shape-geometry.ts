@@ -94,54 +94,118 @@ export function edgeIntersection(
   return { x: cx + dx * s, y: cy + dy * s };
 }
 
-/** Compute the [x1,y1, x2,y2] line points for a connector, resolving endpoints. */
-export function computeConnectorPoints(connector: ConnectorShape, allShapes: Shape[]): number[] {
-  const fromShape = connector.fromId ? allShapes.find((s) => s.id === connector.fromId) : null;
-  const toShape = connector.toId ? allShapes.find((s) => s.id === connector.toId) : null;
+function ellipseEdgeIntersection(
+  cx: number,
+  cy: number,
+  rx: number,
+  ry: number,
+  tx: number,
+  ty: number
+): { x: number; y: number } {
+  const dx = tx - cx;
+  const dy = ty - cy;
+  if (dx === 0 && dy === 0) return { x: cx, y: cy };
 
-  let fromCx: number, fromCy: number, fromBounds: Bounds | null;
+  const safeRx = Math.max(rx, 1e-6);
+  const safeRy = Math.max(ry, 1e-6);
+  const scale = 1 / Math.sqrt((dx * dx) / (safeRx * safeRx) + (dy * dy) / (safeRy * safeRy));
+
+  return { x: cx + dx * scale, y: cy + dy * scale };
+}
+
+/** Find where a ray from this shape's center toward target intersects the shape edge. */
+export function shapeEdgeIntersection(
+  shape: Shape,
+  tx: number,
+  ty: number
+): { x: number; y: number } {
+  if (shape.type === "circle") {
+    return ellipseEdgeIntersection(shape.x, shape.y, shape.radiusX, shape.radiusY, tx, ty);
+  }
+
+  const bounds = getShapeBounds(shape);
+  const cx = bounds.x + bounds.width / 2;
+  const cy = bounds.y + bounds.height / 2;
+  return edgeIntersection(bounds, cx, cy, tx, ty);
+}
+
+/** Point-in-shape hit test used for connector endpoint attachment. */
+export function shapeContainsPoint(shape: Shape, x: number, y: number): boolean {
+  if (shape.type === "circle") {
+    const rx = Math.max(shape.radiusX, 1e-6);
+    const ry = Math.max(shape.radiusY, 1e-6);
+    const nx = (x - shape.x) / rx;
+    const ny = (y - shape.y) / ry;
+    return nx * nx + ny * ny <= 1;
+  }
+
+  const b = getShapeBounds(shape);
+  return x >= b.x && x <= b.x + b.width && y >= b.y && y <= b.y + b.height;
+}
+
+/** Build a deterministic pair key for an unordered {a, b} pair. */
+export function connectorPairKey(a: string, b: string): string {
+  return a < b ? `${a}|${b}` : `${b}|${a}`;
+}
+
+/** Compute the [x1,y1, x2,y2] line points for a connector, resolving endpoints.
+ *  Optional maps for O(1) lookups instead of O(N) scans. */
+export function computeConnectorPoints(
+  connector: ConnectorShape,
+  allShapes: Shape[],
+  shapesById?: Map<string, Shape>,
+  siblingMap?: Map<string, ConnectorShape[]>
+): number[] {
+  const fromShape = connector.fromId
+    ? (shapesById?.get(connector.fromId) ??
+      allShapes.find((s) => s.id === connector.fromId) ??
+      null)
+    : null;
+  const toShape = connector.toId
+    ? (shapesById?.get(connector.toId) ?? allShapes.find((s) => s.id === connector.toId) ?? null)
+    : null;
+
+  let fromCx: number, fromCy: number;
   if (fromShape) {
-    fromBounds = getShapeBounds(fromShape);
+    const fromBounds = getShapeBounds(fromShape);
     fromCx = fromBounds.x + fromBounds.width / 2;
     fromCy = fromBounds.y + fromBounds.height / 2;
   } else if (connector.fromPoint) {
-    fromBounds = null;
-    fromCx = connector.fromPoint.x;
-    fromCy = connector.fromPoint.y;
+    fromCx = connector.fromPoint.x + connector.x;
+    fromCy = connector.fromPoint.y + connector.y;
   } else {
     return [0, 0, 100, 0];
   }
 
-  let toCx: number, toCy: number, toBounds: Bounds | null;
+  let toCx: number, toCy: number;
   if (toShape) {
-    toBounds = getShapeBounds(toShape);
+    const toBounds = getShapeBounds(toShape);
     toCx = toBounds.x + toBounds.width / 2;
     toCy = toBounds.y + toBounds.height / 2;
   } else if (connector.toPoint) {
-    toBounds = null;
-    toCx = connector.toPoint.x;
-    toCy = connector.toPoint.y;
+    toCx = connector.toPoint.x + connector.x;
+    toCy = connector.toPoint.y + connector.y;
   } else {
     return [0, 0, 100, 0];
   }
 
-  const startPt = fromBounds
-    ? edgeIntersection(fromBounds, fromCx, fromCy, toCx, toCy)
+  const startPt = fromShape
+    ? shapeEdgeIntersection(fromShape, toCx, toCy)
     : { x: fromCx, y: fromCy };
-  const endPt = toBounds
-    ? edgeIntersection(toBounds, toCx, toCy, fromCx, fromCy)
-    : { x: toCx, y: toCy };
+  const endPt = toShape ? shapeEdgeIntersection(toShape, fromCx, fromCy) : { x: toCx, y: toCy };
 
   // Fan-out: offset connectors that share the same unordered {fromId, toId} pair
   if (connector.fromId && connector.toId) {
-    const pairKey = [connector.fromId, connector.toId].sort().join("|");
-    const siblings = allShapes.filter(
-      (s) =>
-        s.type === "connector" &&
-        s.fromId &&
-        s.toId &&
-        [s.fromId, s.toId].sort().join("|") === pairKey
-    );
+    const pk = connectorPairKey(connector.fromId, connector.toId);
+    const siblings = siblingMap
+      ? (siblingMap.get(pk) ?? [])
+      : (allShapes.filter(
+          (s) =>
+            s.type === "connector" &&
+            s.fromId &&
+            s.toId &&
+            connectorPairKey(s.fromId, s.toId) === pk
+        ) as ConnectorShape[]);
     if (siblings.length > 1) {
       const idx = siblings.findIndex((s) => s.id === connector.id);
       const offset = (idx - (siblings.length - 1) / 2) * 20;
