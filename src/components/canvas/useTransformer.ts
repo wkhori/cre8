@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useCallback, useState } from "react";
+import { useEffect, useCallback, useState, useRef } from "react";
 import type Konva from "konva";
 import type { Shape } from "@/lib/types";
 import { useCanvasStore } from "@/store/canvas-store";
@@ -16,6 +16,7 @@ export function useTransformer(
   onUnlockShapes?: () => void
 ) {
   const [isTransforming, setIsTransforming] = useState(false);
+  const transformLockActiveRef = useRef(false);
 
   const selectedIds = useCanvasStore((s) => s.selectedIds);
   const updateShapes = useCanvasStore((s) => s.updateShapes);
@@ -46,7 +47,10 @@ export function useTransformer(
   const handleTransformStart = useCallback(() => {
     setIsTransforming(true);
     const ids = useCanvasStore.getState().selectedIds;
-    if (ids.length > 0) onLockShapes?.(ids);
+    if (ids.length > 0) {
+      onLockShapes?.(ids);
+      transformLockActiveRef.current = true;
+    }
   }, [onLockShapes]);
 
   const handleTransformEnd = useCallback(() => {
@@ -83,8 +87,19 @@ export function useTransformer(
     }
     updateShapes(updates);
     setIsTransforming(false);
-    onUnlockShapes?.();
+    if (transformLockActiveRef.current) {
+      transformLockActiveRef.current = false;
+      onUnlockShapes?.();
+    }
   }, [transformerRef, updateShapes, onUnlockShapes]);
+
+  useEffect(() => {
+    return () => {
+      if (!transformLockActiveRef.current) return;
+      transformLockActiveRef.current = false;
+      onUnlockShapes?.();
+    };
+  }, [onUnlockShapes]);
 
   return {
     isTransforming,

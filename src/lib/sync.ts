@@ -23,6 +23,8 @@ import type { Shape } from "@/lib/types";
 import { generateId } from "@/lib/id";
 import { throttle } from "@/lib/throttle";
 
+const FIRESTORE_BATCH_WRITE_LIMIT = 499;
+
 // ── Board document ────────────────────────────────────────────────────
 
 export interface BoardOwner {
@@ -345,6 +347,7 @@ export function createLiveDragBroadcaster(boardId: string, uid: string) {
   );
 
   const clear = () => {
+    broadcast.cancel();
     rtdbSet(dragRef, null).catch(() => {}); // expected during sign-out
   };
 
@@ -396,11 +399,9 @@ export async function createObjects(
   userId: string
 ): Promise<void> {
   if (shapes.length === 0) return;
-  // Firestore batch limit is 500 writes
-  const batchSize = 499;
-  for (let i = 0; i < shapes.length; i += batchSize) {
+  for (let i = 0; i < shapes.length; i += FIRESTORE_BATCH_WRITE_LIMIT) {
     const batch = writeBatch(firebaseDb);
-    const chunk = shapes.slice(i, i + batchSize);
+    const chunk = shapes.slice(i, i + FIRESTORE_BATCH_WRITE_LIMIT);
     for (const shape of chunk) {
       const id = shape.id || generateId();
       const objRef = doc(firebaseDb, "boards", boardId, "objects", id);
@@ -430,11 +431,14 @@ export async function updateObject(
 
 export async function deleteObjects(boardId: string, shapeIds: string[]): Promise<void> {
   if (shapeIds.length === 0) return;
-  const batch = writeBatch(firebaseDb);
-  for (const id of shapeIds) {
-    batch.delete(doc(firebaseDb, "boards", boardId, "objects", id));
+  for (let i = 0; i < shapeIds.length; i += FIRESTORE_BATCH_WRITE_LIMIT) {
+    const batch = writeBatch(firebaseDb);
+    const chunk = shapeIds.slice(i, i + FIRESTORE_BATCH_WRITE_LIMIT);
+    for (const id of chunk) {
+      batch.delete(doc(firebaseDb, "boards", boardId, "objects", id));
+    }
+    await batch.commit();
   }
-  await batch.commit();
 }
 
 export async function updateObjects(
@@ -443,17 +447,21 @@ export async function updateObjects(
   userId: string
 ): Promise<void> {
   if (updates.length === 0) return;
-  const batch = writeBatch(firebaseDb);
-  for (const { id, patch } of updates) {
-    const objRef = doc(firebaseDb, "boards", boardId, "objects", id);
-    batch.update(
-      objRef,
-      stripUndefined({
-        ...patch,
-        updatedAt: serverTimestamp(),
-        updatedBy: userId,
-      })
-    );
+  for (let i = 0; i < updates.length; i += FIRESTORE_BATCH_WRITE_LIMIT) {
+    const batch = writeBatch(firebaseDb);
+    const chunk = updates.slice(i, i + FIRESTORE_BATCH_WRITE_LIMIT);
+    for (const { id, patch } of chunk) {
+      const objRef = doc(firebaseDb, "boards", boardId, "objects", id);
+      batch.set(
+        objRef,
+        stripUndefined({
+          ...patch,
+          updatedAt: serverTimestamp(),
+          updatedBy: userId,
+        }),
+        { merge: true }
+      );
+    }
+    await batch.commit();
   }
-  await batch.commit();
 }

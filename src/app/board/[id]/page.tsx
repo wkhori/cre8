@@ -20,12 +20,23 @@ import {
 import { joinBoard, createCursorBroadcaster } from "@/lib/presence";
 import type { Shape } from "@/lib/types";
 import { isRenderOnly } from "@/lib/sync-mode";
+import { diffShapeWrites } from "@/lib/board-sync-diff";
 import { Loader2 } from "lucide-react";
 import BoardToolbar from "@/components/board/BoardToolbar";
 
 const CanvasStage = dynamic(() => import("@/components/canvas/CanvasStage"), { ssr: false });
 const DebugDashboard = dynamic(() => import("@/components/debug/DebugDashboard"), { ssr: false });
 const AICommandInput = dynamic(() => import("@/components/ai/AICommandInput"), { ssr: false });
+
+function shapeShallowEqual(a: Shape, b: Shape): boolean {
+  const aKeys = Object.keys(a) as (keyof Shape)[];
+  const bKeys = Object.keys(b) as (keyof Shape)[];
+  if (aKeys.length !== bKeys.length) return false;
+  for (const key of aKeys) {
+    if (a[key] !== b[key]) return false;
+  }
+  return true;
+}
 
 export default function BoardPage() {
   const router = useRouter();
@@ -40,60 +51,68 @@ export default function BoardPage() {
   const [showDebug, setShowDebug] = useState(false);
   const cursorBroadcasterRef = useRef<ReturnType<typeof createCursorBroadcaster> | null>(null);
   const liveDragBroadcasterRef = useRef<ReturnType<typeof createLiveDragBroadcaster> | null>(null);
+  const remoteDragBufferRef = useRef<Map<string, { x: number; y: number }>>(new Map());
+  const remoteDragRafRef = useRef<number>(0);
+  const liveDraggingIdsRef = useRef<Set<string>>(new Set());
+  const deferredLiveDragChangesRef = useRef<Map<string, Shape | null>>(new Map());
 
   // Sync guard: >0 means we're applying remote changes.
   // The zustand subscriber checks this synchronously and skips outbound writes.
   // This is the ONLY mechanism needed to prevent Firestore→store→Firestore loops.
   const isSyncingRef = useRef(0);
-
-  // Shape IDs currently being dragged/transformed by the local user.
-  // Inbound remote changes for these shapes are deferred until interaction ends.
-  const lockedIdsRef = useRef<Set<string>>(new Set());
-  const deferredChangesRef = useRef<Map<string, Shape | null>>(new Map());
-
-  const lockShapes = useCallback((ids: string[]) => {
-    for (const id of ids) lockedIdsRef.current.add(id);
-  }, []);
-
-  const unlockShapes = useCallback(() => {
-    const deferred = deferredChangesRef.current;
-    if (deferred.size > 0) {
-      isSyncingRef.current++;
-      try {
-        const store = useCanvasStore.getState();
-        let shapes = store.shapes;
-        const toRemove = new Set<string>();
-        const toModify = new Map<string, Shape>();
-
-        for (const [id, shape] of deferred) {
-          if (shape === null) toRemove.add(id);
-          else toModify.set(id, shape);
-        }
-
-        if (toRemove.size > 0 || toModify.size > 0) {
-          const existingIds = new Set(shapes.map((s) => s.id));
-          shapes = shapes.filter((s) => !toRemove.has(s.id)).map((s) => toModify.get(s.id) ?? s);
-          for (const [id, shape] of toModify) {
-            if (shape && !existingIds.has(id)) shapes.push(shape);
-          }
-          store.setShapes(shapes);
-        }
-
-        if (toRemove.size > 0) {
-          const selectedIds = store.selectedIds.filter((id) => !toRemove.has(id));
-          if (selectedIds.length !== store.selectedIds.length) {
-            store.setSelected(selectedIds);
-          }
-        }
-      } finally {
-        isSyncingRef.current--;
-      }
-      deferred.clear();
-    }
-    lockedIdsRef.current.clear();
-  }, []);
+  const writeQueueRef = useRef<Promise<void>>(Promise.resolve());
 
   // ── Initialize board + sync ────────────────────────────────────────
+
+  const flushDeferredLiveDragChanges = useCallback(() => {
+    const deferred = deferredLiveDragChangesRef.current;
+    if (deferred.size === 0) return;
+
+    isSyncingRef.current++;
+    try {
+      const store = useCanvasStore.getState();
+      const currentShapes = store.shapes;
+      const currentIds = new Set(currentShapes.map((shape) => shape.id));
+
+      const removedIds = new Set<string>();
+      const modifiedMap = new Map<string, Shape>();
+      const added: Shape[] = [];
+
+      for (const [id, shape] of deferred) {
+        if (shape === null) {
+          removedIds.add(id);
+          continue;
+        }
+
+        if (currentIds.has(id)) modifiedMap.set(id, shape);
+        else added.push(shape);
+      }
+
+      let nextShapes = currentShapes;
+      if (removedIds.size > 0 || modifiedMap.size > 0) {
+        nextShapes = currentShapes
+          .filter((shape) => !removedIds.has(shape.id))
+          .map((shape) => modifiedMap.get(shape.id) ?? shape);
+      }
+      if (added.length > 0) {
+        nextShapes = [...nextShapes, ...added];
+      }
+
+      if (nextShapes !== currentShapes) {
+        store.setShapes(nextShapes);
+      }
+
+      if (removedIds.size > 0) {
+        const selectedIds = store.selectedIds.filter((id) => !removedIds.has(id));
+        if (selectedIds.length !== store.selectedIds.length) {
+          store.setSelected(selectedIds);
+        }
+      }
+    } finally {
+      isSyncingRef.current--;
+      deferred.clear();
+    }
+  }, []);
 
   useEffect(() => {
     if (!user || !profile || !boardId) return;
@@ -125,7 +144,7 @@ export default function BoardPage() {
             const store = useCanvasStore.getState();
             const currentShapes = store.shapes;
             const currentIds = new Set(currentShapes.map((s) => s.id));
-            const locked = lockedIdsRef.current;
+            const currentById = new Map(currentShapes.map((s) => [s.id, s]));
 
             const modifiedMap = new Map<string, Shape>();
             const removedIds = new Set<string>();
@@ -133,20 +152,32 @@ export default function BoardPage() {
 
             for (const change of changes) {
               const id = change.shape.id;
-
-              // Defer changes for shapes being dragged/transformed locally
-              if (locked.has(id)) {
-                deferredChangesRef.current.set(id, change.type === "removed" ? null : change.shape);
+              if (liveDraggingIdsRef.current.has(id)) {
+                deferredLiveDragChangesRef.current.set(
+                  id,
+                  change.type === "removed" ? null : change.shape
+                );
                 continue;
               }
 
               switch (change.type) {
                 case "added":
-                  if (currentIds.has(id)) modifiedMap.set(id, change.shape);
-                  else added.push(change.shape);
+                  if (currentIds.has(id)) {
+                    const existing = currentById.get(id);
+                    if (existing && !shapeShallowEqual(existing, change.shape)) {
+                      modifiedMap.set(id, change.shape);
+                    }
+                  } else {
+                    added.push(change.shape);
+                  }
                   break;
                 case "modified":
-                  modifiedMap.set(id, change.shape);
+                  {
+                    const existing = currentById.get(id);
+                    if (!existing || !shapeShallowEqual(existing, change.shape)) {
+                      modifiedMap.set(id, change.shape);
+                    }
+                  }
                   break;
                 case "removed":
                   removedIds.add(id);
@@ -183,22 +214,40 @@ export default function BoardPage() {
       // Live drag from remote users
       unsubLiveDrags = subscribeLiveDrags(boardId, user.uid, (drags) => {
         const dragEntries = Object.entries(drags);
-        if (dragEntries.length === 0) return;
-
-        isSyncingRef.current++;
-        try {
-          const store = useCanvasStore.getState();
-          const locked = lockedIdsRef.current;
-          const updates: Array<{ id: string; patch: Partial<Shape> }> = [];
-          for (const [id, data] of dragEntries) {
-            if (!locked.has(id)) {
-              updates.push({ id, patch: { x: data.x, y: data.y } });
-            }
+        const buffer = remoteDragBufferRef.current;
+        buffer.clear();
+        if (dragEntries.length === 0) {
+          if (liveDraggingIdsRef.current.size > 0) {
+            liveDraggingIdsRef.current.clear();
+            flushDeferredLiveDragChanges();
           }
-          if (updates.length > 0) store.updateShapes(updates);
-        } finally {
-          isSyncingRef.current--;
+          return;
         }
+
+        liveDraggingIdsRef.current = new Set(dragEntries.map(([id]) => id));
+        for (const [id, data] of dragEntries) {
+          buffer.set(id, { x: data.x, y: data.y });
+        }
+
+        if (remoteDragRafRef.current) return;
+        remoteDragRafRef.current = requestAnimationFrame(() => {
+          remoteDragRafRef.current = 0;
+          isSyncingRef.current++;
+          try {
+            const store = useCanvasStore.getState();
+            const shapeById = new Map(store.shapes.map((shape) => [shape.id, shape]));
+            const updates: Array<{ id: string; patch: Partial<Shape> }> = [];
+            for (const [id, pos] of remoteDragBufferRef.current) {
+              const shape = shapeById.get(id);
+              if (shape && (shape.x !== pos.x || shape.y !== pos.y)) {
+                updates.push({ id, patch: { x: pos.x, y: pos.y } });
+              }
+            }
+            if (updates.length > 0) store.updateShapes(updates);
+          } finally {
+            isSyncingRef.current--;
+          }
+        });
       });
 
       liveDragBroadcasterRef.current = createLiveDragBroadcaster(boardId, user.uid);
@@ -217,6 +266,14 @@ export default function BoardPage() {
       cursorBroadcasterRef.current = null;
       liveDragBroadcasterRef.current?.clear();
       liveDragBroadcasterRef.current = null;
+      remoteDragBufferRef.current.clear();
+      if (remoteDragRafRef.current) {
+        cancelAnimationFrame(remoteDragRafRef.current);
+        remoteDragRafRef.current = 0;
+      }
+      liveDraggingIdsRef.current.clear();
+      deferredLiveDragChangesRef.current.clear();
+      writeQueueRef.current = Promise.resolve();
       isSyncingRef.current++;
       useCanvasStore.getState().setShapes([]);
       useCanvasStore.getState().setSelected([]);
@@ -234,7 +291,7 @@ export default function BoardPage() {
       window.removeEventListener("beforeunload", onBeforeSignOut);
       teardown();
     };
-  }, [user, profile, boardId, renderOnly, unlockShapes]);
+  }, [user, profile, boardId, renderOnly, flushDeferredLiveDragChanges]);
 
   // ── Broadcast cursor position ───────────────────────────────────────
 
@@ -258,6 +315,32 @@ export default function BoardPage() {
     if (!boardReady || !user || renderOnly) return;
 
     let prevShapes = useCanvasStore.getState().shapes;
+    let cancelled = false;
+
+    const queueWrite = (ids: string[], op: () => Promise<void>) => {
+      if (ids.length === 0) return;
+
+      writeQueueRef.current = writeQueueRef.current
+        .then(async () => {
+          if (cancelled) return;
+          let lastError: unknown = null;
+          for (let attempt = 0; attempt < 3; attempt++) {
+            try {
+              await op();
+              return;
+            } catch (error) {
+              lastError = error;
+              if (attempt < 2) {
+                await new Promise((resolve) => setTimeout(resolve, (attempt + 1) * 150));
+              }
+            }
+          }
+          throw lastError;
+        })
+        .catch((error) => {
+          console.error("Board sync write failed:", error);
+        });
+    };
 
     const unsub = useCanvasStore.subscribe((state) => {
       // isSyncingRef is checked synchronously — zustand subscribers fire
@@ -269,44 +352,31 @@ export default function BoardPage() {
 
       const curr = state.shapes;
       if (curr === prevShapes) return;
-
-      const prevMap = new Map(prevShapes.map((s) => [s.id, s]));
-      const currMap = new Map(curr.map((s) => [s.id, s]));
-
-      const added: Shape[] = [];
-      for (const shape of curr) {
-        if (!prevMap.has(shape.id)) added.push(shape);
-      }
-
-      const deleted: string[] = [];
-      for (const shape of prevShapes) {
-        if (!currMap.has(shape.id)) deleted.push(shape.id);
-      }
-
-      const modified: Array<{ id: string; patch: Partial<Shape> }> = [];
-      for (const shape of curr) {
-        const prev = prevMap.get(shape.id);
-        if (prev && prev !== shape) {
-          const patch: Record<string, unknown> = {};
-          for (const key of Object.keys(shape) as (keyof Shape)[]) {
-            if (shape[key] !== prev[key]) {
-              patch[key] = shape[key];
-            }
-          }
-          if (Object.keys(patch).length > 0) {
-            modified.push({ id: shape.id, patch: patch as Partial<Shape> });
-          }
-        }
-      }
+      const { added, deleted, modified } = diffShapeWrites(prevShapes, curr);
 
       prevShapes = curr;
 
-      if (added.length > 0) createObjects(boardId, added, user.uid);
-      if (deleted.length > 0) deleteObjects(boardId, deleted);
-      if (modified.length > 0) updateObjects(boardId, modified, user.uid);
+      if (added.length === 0 && deleted.length === 0 && modified.length === 0) {
+        return;
+      }
+
+      const idsToTrack = [
+        ...added.map((shape) => shape.id),
+        ...deleted,
+        ...modified.map((update) => update.id),
+      ];
+
+      queueWrite(idsToTrack, async () => {
+        if (added.length > 0) await createObjects(boardId, added, user.uid);
+        if (deleted.length > 0) await deleteObjects(boardId, deleted);
+        if (modified.length > 0) await updateObjects(boardId, modified, user.uid);
+      });
     });
 
-    return unsub;
+    return () => {
+      cancelled = true;
+      unsub();
+    };
   }, [boardReady, boardId, user, renderOnly]);
 
   const handleLiveDrag = useCallback((shapes: Array<{ id: string; x: number; y: number }>) => {
@@ -358,8 +428,6 @@ export default function BoardPage() {
           myUid={user.uid}
           onLiveDrag={handleLiveDrag}
           onLiveDragEnd={handleLiveDragEnd}
-          onLockShapes={lockShapes}
-          onUnlockShapes={unlockShapes}
         />
         {showDebug && <DebugDashboard />}
         {user && <AICommandInput boardId={boardId} />}

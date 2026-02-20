@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useCallback, useState } from "react";
+import { useRef, useCallback, useState, useEffect } from "react";
 import type Konva from "konva";
 import type { Shape } from "@/lib/types";
 import { useCanvasStore } from "@/store/canvas-store";
@@ -177,6 +177,22 @@ export function useDragSession(
     },
     [stageRef, updateShape, updateShapes, onLiveDragEnd, onUnlockShapes]
   );
+
+  useEffect(() => {
+    const dragPositions = dragPositionsRef.current;
+    return () => {
+      if (!dragSessionRef.current) return;
+      dragSessionRef.current = null;
+      dragPositions.clear();
+      if (dragRafRef.current) {
+        cancelAnimationFrame(dragRafRef.current);
+        dragRafRef.current = 0;
+      }
+      onLiveDragEnd?.();
+      onUnlockShapes?.();
+      useDebugStore.getState().setInteraction("idle");
+    };
+  }, [onLiveDragEnd, onUnlockShapes]);
 
   return {
     dragEpoch,

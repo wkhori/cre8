@@ -435,7 +435,7 @@ export default function CanvasStage({
             dash={[4, 4]}
           />
 
-          {rubberBand.selectionBounds &&
+          {/* {rubberBand.selectionBounds &&
             !textEditing.editingTextId &&
             interaction !== "dragging" &&
             !transformer.isTransforming &&
@@ -444,7 +444,7 @@ export default function CanvasStage({
                 bounds={rubberBand.selectionBounds}
                 viewportScale={viewport.viewportRef.current.scale}
               />
-            )}
+            )} */}
         </Layer>
         {boardId && myUid && <CursorsLayer boardId={boardId} myUid={myUid} />}
       </Stage>
