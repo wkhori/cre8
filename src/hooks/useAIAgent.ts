@@ -44,6 +44,7 @@ export function useAIAgent() {
     setLastResult(null);
 
     // Start cooldown
+    cooldownRef.current = true;
     setTimeout(() => {
       cooldownRef.current = false;
     }, COOLDOWN_MS);
