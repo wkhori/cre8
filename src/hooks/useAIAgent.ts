@@ -2,7 +2,7 @@
 
 import { useCallback, useRef, useState } from "react";
 import { useCanvasStore } from "@/store/canvas-store";
-import { useDebugStore } from "@/store/debug-store";
+import { useUIStore } from "@/store/ui-store";
 import { executeAIOperations } from "@/lib/ai-operations";
 import type { AIOperation } from "@/lib/ai-tools";
 
@@ -52,7 +52,7 @@ export function useAIAgent() {
     try {
       // Read current board state + viewport position
       const boardState = useCanvasStore.getState().shapes;
-      const { viewport } = useDebugStore.getState();
+      const { viewport } = useUIStore.getState();
 
       // Compute viewport center in world coordinates
       // screen-to-world: worldX = (screenX - panX) / scale

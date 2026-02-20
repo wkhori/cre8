@@ -6,6 +6,7 @@ export interface BaseShape {
   rotation: number;
   opacity: number;
   zIndex: number;
+  parentId?: string;
 }
 
 // ── Concrete shape types ───────────────────────────────────────────
@@ -36,6 +37,7 @@ export interface TextShape extends BaseShape {
   fill: string;
   width?: number;
   align?: "left" | "center" | "right";
+  fontStyle?: "normal" | "bold" | "italic" | "bold italic";
 }
 
 export interface LineShape extends BaseShape {
@@ -52,6 +54,7 @@ export interface StickyNoteShape extends BaseShape {
   text: string;
   color: string; // background hex color
   fontSize?: number;
+  fontStyle?: "normal" | "bold" | "italic" | "bold italic";
 }
 
 export interface FrameShape extends BaseShape {

@@ -4,14 +4,15 @@ import { useRef, useEffect, useCallback, useMemo, useState } from "react";
 import type Konva from "konva";
 import type { Shape } from "@/lib/types";
 import { useCanvasStore } from "@/store/canvas-store";
-import { useDebugStore } from "@/store/debug-store";
+import { useUIStore } from "@/store/ui-store";
+import { computeStickyFontSize } from "@/lib/sticky-text";
 
 export function useTextEditing(stageRef: React.RefObject<Konva.Stage | null>, shapes: Shape[]) {
   const [editingTextId, setEditingTextId] = useState<string | null>(null);
   const [editingTextValue, setEditingTextValue] = useState("");
   const editingShapeTypeRef = useRef<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const viewport = useDebugStore((s) => s.viewport);
+  const viewport = useUIStore((s) => s.viewport);
 
   const beginTextEditing = useCallback(
     (id: string) => {
@@ -160,6 +161,7 @@ export function useTextEditing(stageRef: React.RefObject<Konva.Stage | null>, sh
       const y = shape.y * viewport.scale + viewport.y;
       const width = (shape.width ?? 200) * viewport.scale;
       const fontSize = shape.fontSize * viewport.scale;
+      const fs = shape.fontStyle ?? "normal";
       return {
         position: "absolute" as const,
         left: x,
@@ -168,6 +170,8 @@ export function useTextEditing(stageRef: React.RefObject<Konva.Stage | null>, sh
         minHeight: fontSize + 4,
         fontSize,
         fontFamily: shape.fontFamily,
+        fontWeight: fs.includes("bold") ? "bold" : ("normal" as const),
+        fontStyle: fs.includes("italic") ? "italic" : ("normal" as const),
         color: shape.fill,
         border: "none",
         borderRadius: 0,
@@ -187,9 +191,18 @@ export function useTextEditing(stageRef: React.RefObject<Konva.Stage | null>, sh
       const padY = 12;
       const x = (shape.x + padX) * viewport.scale + viewport.x;
       const y = (shape.y + padY) * viewport.scale + viewport.y;
-      const width = (shape.w - padX * 2) * viewport.scale;
-      const height = (shape.h - padY * 2) * viewport.scale;
-      const fontSize = (shape.fontSize ?? 16) * viewport.scale;
+      const availW = shape.w - padX * 2;
+      const availH = shape.h - padY * 2;
+      const width = availW * viewport.scale;
+      const height = availH * viewport.scale;
+      const baseFontSize = computeStickyFontSize(
+        editingTextValue || shape.text,
+        availW,
+        availH,
+        shape.fontSize ?? 16
+      );
+      const fontSize = baseFontSize * viewport.scale;
+      const sfs = shape.fontStyle ?? "normal";
       return {
         position: "absolute" as const,
         left: x,
@@ -198,6 +211,8 @@ export function useTextEditing(stageRef: React.RefObject<Konva.Stage | null>, sh
         height,
         fontSize,
         fontFamily: "system-ui, sans-serif",
+        fontWeight: sfs.includes("bold") ? "bold" : ("normal" as const),
+        fontStyle: sfs.includes("italic") ? "italic" : ("normal" as const),
         color: "#18181b",
         border: "none",
         borderRadius: 0,

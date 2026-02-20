@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef } from "react";
 import { Layer, Group, Line, Text, Rect } from "react-konva";
-import { useDebugStore } from "@/store/debug-store";
+import { useUIStore } from "@/store/ui-store";
 import { subscribeCursors, type CursorPosition } from "@/lib/presence";
 import { shortName } from "@/lib/utils";
 
@@ -14,7 +14,7 @@ export interface CursorsLayerProps {
 /** Renders remote user cursors on a separate Konva Layer. */
 export default function CursorsLayer({ boardId, myUid }: CursorsLayerProps) {
   const [cursors, setCursors] = useState<CursorPosition[]>([]);
-  const viewportScale = useDebugStore((s) => s.viewport.scale);
+  const viewportScale = useUIStore((s) => s.viewport.scale);
 
   useEffect(() => {
     const unsubscribe = subscribeCursors(boardId, myUid, (remoteCursors) => {

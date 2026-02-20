@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { User } from "firebase/auth";
 import { useCanvasStore } from "@/store/canvas-store";
-import { useDebugStore } from "@/store/debug-store";
+import { useUIStore } from "@/store/ui-store";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -36,23 +36,16 @@ import {
   Bug,
   ChevronLeft,
   Pencil,
+  Bold,
+  Italic,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import ColorPicker from "@/components/canvas/ColorPicker";
 import { useTheme } from "next-themes";
 import dynamic from "next/dynamic";
+import { cn } from "@/lib/utils";
 
 const PresenceBar = dynamic(() => import("@/components/presence/PresenceBar"), { ssr: false });
-
-function getViewportCenter() {
-  const vp = useDebugStore.getState().viewport;
-  const w = typeof window !== "undefined" ? window.innerWidth : 800;
-  const h = typeof window !== "undefined" ? window.innerHeight : 600;
-  return {
-    x: (w / 2 - vp.x) / vp.scale,
-    y: (h / 2 - vp.y) / vp.scale,
-  };
-}
 
 function ToolbarDivider() {
   return <div className="mx-1 h-4 w-px bg-zinc-200 dark:bg-zinc-700" />;
@@ -143,6 +136,25 @@ function InlineBoardName({
   );
 }
 
+function toggleFontStyle(
+  current: string | undefined,
+  toggle: "bold" | "italic"
+): "normal" | "bold" | "italic" | "bold italic" {
+  const cur = current ?? "normal";
+  const hasBold = cur.includes("bold");
+  const hasItalic = cur.includes("italic");
+
+  let newBold = hasBold;
+  let newItalic = hasItalic;
+  if (toggle === "bold") newBold = !newBold;
+  if (toggle === "italic") newItalic = !newItalic;
+
+  if (newBold && newItalic) return "bold italic";
+  if (newBold) return "bold";
+  if (newItalic) return "italic";
+  return "normal";
+}
+
 export default function BoardToolbar({
   boardId,
   boardName,
@@ -162,55 +174,129 @@ export default function BoardToolbar({
   const shapes = useCanvasStore((s) => s.shapes);
   const historyIndex = useCanvasStore((s) => s.historyIndex);
   const historyLength = useCanvasStore((s) => s.history.length);
-  const activeTool = useDebugStore((s) => s.activeTool);
-  const setActiveTool = useDebugStore((s) => s.setActiveTool);
-
-  const handleAddRect = useCallback(() => {
-    const c = getViewportCenter();
-    useCanvasStore.getState().addRect(c.x, c.y);
-  }, []);
-
-  const handleAddCircle = useCallback(() => {
-    const c = getViewportCenter();
-    useCanvasStore.getState().addCircle(c.x, c.y);
-  }, []);
-
-  const handleAddText = useCallback(() => {
-    const c = getViewportCenter();
-    const id = useCanvasStore.getState().addText(c.x, c.y);
-    window.requestAnimationFrame(() => {
-      window.dispatchEvent(new CustomEvent("start-text-edit", { detail: { id } }));
-    });
-  }, []);
-
-  const handleAddStickyNote = useCallback(() => {
-    const c = getViewportCenter();
-    const id = useCanvasStore.getState().addStickyNote(c.x, c.y);
-    window.requestAnimationFrame(() => {
-      window.dispatchEvent(new CustomEvent("start-text-edit", { detail: { id } }));
-    });
-  }, []);
-
-  const handleAddFrame = useCallback(() => {
-    const c = getViewportCenter();
-    useCanvasStore.getState().addFrame(c.x, c.y);
-  }, []);
-
-  const handleResetView = useCallback(() => {
-    window.dispatchEvent(new CustomEvent("reset-canvas-view"));
-  }, []);
+  const activeTool = useUIStore((s) => s.activeTool);
+  const setActiveTool = useUIStore((s) => s.setActiveTool);
+  const connectorSourceSelected = useUIStore((s) => s.connectorSourceSelected);
 
   const hasSelection = selectedIds.length > 0;
   const canUndo = historyIndex >= 0;
   const canRedo = historyIndex < historyLength - 2;
 
-  const selectedConnectors = shapes.filter(
-    (s) => s.type === "connector" && selectedIds.includes(s.id)
-  );
+  // Selected shape analysis
+  const selectedShapes = shapes.filter((s) => selectedIds.includes(s.id));
+  const selectedConnectors = selectedShapes.filter((s) => s.type === "connector");
   const hasSelectedConnectors = selectedConnectors.length > 0;
   const allSelectedAreArrows =
     hasSelectedConnectors &&
     selectedConnectors.every((s) => s.type === "connector" && s.style === "arrow");
+  const allSelectedAreLines =
+    hasSelectedConnectors &&
+    selectedConnectors.every((s) => s.type === "connector" && s.style === "line");
+
+  // Text/sticky shape analysis for font controls
+  const selectedTexts = selectedShapes.filter((s) => s.type === "text" || s.type === "sticky");
+  const hasSelectedTexts = selectedTexts.length > 0;
+
+  // Current font state from first selected text
+  const currentFontStyle =
+    hasSelectedTexts && selectedTexts[0].type === "text"
+      ? selectedTexts[0].fontStyle
+      : hasSelectedTexts && selectedTexts[0].type === "sticky"
+        ? selectedTexts[0].fontStyle
+        : undefined;
+  const currentFontSize =
+    hasSelectedTexts && selectedTexts[0].type === "text"
+      ? selectedTexts[0].fontSize
+      : hasSelectedTexts && selectedTexts[0].type === "sticky"
+        ? (selectedTexts[0].fontSize ?? 16)
+        : undefined;
+  const isBold = (currentFontStyle ?? "normal").includes("bold");
+  const isItalic = (currentFontStyle ?? "normal").includes("italic");
+
+  const applyFontStyle = useCallback(
+    (toggle: "bold" | "italic") => {
+      const store = useCanvasStore.getState();
+      store.pushHistory();
+      const updates: Array<{ id: string; patch: Partial<import("@/lib/types").Shape> }> = [];
+      for (const s of selectedTexts) {
+        const fs = s.type === "text" || s.type === "sticky" ? s.fontStyle : undefined;
+        updates.push({
+          id: s.id,
+          patch: { fontStyle: toggleFontStyle(fs, toggle) } as Partial<import("@/lib/types").Shape>,
+        });
+      }
+      store.updateShapes(updates);
+    },
+    [selectedTexts]
+  );
+
+  const applyFontSize = useCallback(
+    (size: number) => {
+      const store = useCanvasStore.getState();
+      store.pushHistory();
+      const updates: Array<{ id: string; patch: Partial<import("@/lib/types").Shape> }> = [];
+      for (const s of selectedTexts) {
+        updates.push({
+          id: s.id,
+          patch: { fontSize: size } as Partial<import("@/lib/types").Shape>,
+        });
+      }
+      store.updateShapes(updates);
+    },
+    [selectedTexts]
+  );
+
+  const applyConnectorStyle = useCallback(
+    (style: "line" | "arrow") => {
+      const store = useCanvasStore.getState();
+      store.pushHistory();
+      const updates: Array<{ id: string; patch: Partial<import("@/lib/types").Shape> }> = [];
+      for (const c of selectedConnectors) {
+        updates.push({
+          id: c.id,
+          patch: { style } as Partial<import("@/lib/types").Shape>,
+        });
+      }
+      store.updateShapes(updates);
+    },
+    [selectedConnectors]
+  );
+
+  const applyConnectorStrokeWidth = useCallback(
+    (strokeWidth: number) => {
+      const store = useCanvasStore.getState();
+      store.pushHistory();
+      const updates: Array<{ id: string; patch: Partial<import("@/lib/types").Shape> }> = [];
+      for (const c of selectedConnectors) {
+        updates.push({
+          id: c.id,
+          patch: { strokeWidth } as Partial<import("@/lib/types").Shape>,
+        });
+      }
+      store.updateShapes(updates);
+    },
+    [selectedConnectors]
+  );
+
+  // Get current connector stroke width
+  const currentStrokeWidth =
+    hasSelectedConnectors && selectedConnectors[0].type === "connector"
+      ? selectedConnectors[0].strokeWidth
+      : 2;
+
+  // Font size presets based on shape type
+  const fontSizePresets =
+    hasSelectedTexts && selectedTexts[0].type === "sticky"
+      ? [
+          { label: "S", size: 12 },
+          { label: "M", size: 16 },
+          { label: "L", size: 24 },
+        ]
+      : [
+          { label: "S", size: 16 },
+          { label: "M", size: 24 },
+          { label: "L", size: 36 },
+        ];
 
   return (
     <header className="sticky top-0 z-40 flex h-11 shrink-0 items-center border-b border-zinc-200/80 bg-white/90 px-3 backdrop-blur-lg dark:border-zinc-800/80 dark:bg-zinc-950/90">
@@ -272,29 +358,48 @@ export default function BoardToolbar({
         >
           <Redo2 className="size-3.5" />
         </Button>
-
-        <ToolbarDivider />
-
-        <Button size="xs" variant="ghost" onClick={handleResetView} title="Reset view">
-          Reset
-        </Button>
       </div>
 
-      {/* Center: Shape creators */}
+      {/* Center: Shape creators + context controls */}
       <div className="absolute left-1/2 flex -translate-x-1/2 items-center gap-0.5 rounded-lg border border-zinc-200/80 bg-zinc-50/80 p-0.5 dark:border-zinc-800/80 dark:bg-zinc-900/80">
-        <Button size="icon-xs" variant="ghost" onClick={handleAddStickyNote} title="Sticky Note">
+        <Button
+          size="icon-xs"
+          variant={activeTool === "place-sticky" ? "default" : "ghost"}
+          onClick={() => setActiveTool(activeTool === "place-sticky" ? "pointer" : "place-sticky")}
+          title="Sticky Note (S)"
+        >
           <StickyNote className="size-3.5" />
         </Button>
-        <Button size="icon-xs" variant="ghost" onClick={handleAddRect} title="Rectangle">
+        <Button
+          size="icon-xs"
+          variant={activeTool === "place-rect" ? "default" : "ghost"}
+          onClick={() => setActiveTool(activeTool === "place-rect" ? "pointer" : "place-rect")}
+          title="Rectangle (R)"
+        >
           <Square className="size-3.5" />
         </Button>
-        <Button size="icon-xs" variant="ghost" onClick={handleAddCircle} title="Circle">
+        <Button
+          size="icon-xs"
+          variant={activeTool === "place-circle" ? "default" : "ghost"}
+          onClick={() => setActiveTool(activeTool === "place-circle" ? "pointer" : "place-circle")}
+          title="Circle (O)"
+        >
           <Circle className="size-3.5" />
         </Button>
-        <Button size="icon-xs" variant="ghost" onClick={handleAddText} title="Text">
+        <Button
+          size="icon-xs"
+          variant={activeTool === "place-text" ? "default" : "ghost"}
+          onClick={() => setActiveTool(activeTool === "place-text" ? "pointer" : "place-text")}
+          title="Text (T)"
+        >
           <Type className="size-3.5" />
         </Button>
-        <Button size="icon-xs" variant="ghost" onClick={handleAddFrame} title="Frame">
+        <Button
+          size="icon-xs"
+          variant={activeTool === "draw-frame" ? "default" : "ghost"}
+          onClick={() => setActiveTool(activeTool === "draw-frame" ? "pointer" : "draw-frame")}
+          title="Frame (F)"
+        >
           <Frame className="size-3.5" />
         </Button>
         <Button
@@ -306,29 +411,100 @@ export default function BoardToolbar({
           <MoveRight className="size-3.5" />
         </Button>
 
+        {/* Connector status text */}
+        {activeTool === "connector" && (
+          <span className="ml-1 text-[10px] text-blue-500">
+            {connectorSourceSelected ? "Click target..." : "Click source..."}
+          </span>
+        )}
+
         {hasSelection && (
           <>
             <ToolbarDivider />
             <ColorPicker />
-            {hasSelectedConnectors && (
-              <Button
-                size="icon-xs"
-                variant="ghost"
-                onClick={() => {
-                  const newStyle = allSelectedAreArrows ? "line" : "arrow";
-                  for (const c of selectedConnectors) {
-                    useCanvasStore.getState().updateShape(c.id, { style: newStyle });
-                  }
-                }}
-                title={allSelectedAreArrows ? "Switch to line" : "Switch to arrow"}
-              >
-                {allSelectedAreArrows ? (
-                  <Minus className="size-3.5" />
-                ) : (
-                  <ArrowRight className="size-3.5" />
-                )}
-              </Button>
+
+            {/* Font controls for text/sticky */}
+            {hasSelectedTexts && (
+              <>
+                <Button
+                  size="icon-xs"
+                  variant={isBold ? "default" : "ghost"}
+                  onClick={() => applyFontStyle("bold")}
+                  title="Bold"
+                >
+                  <Bold className="size-3.5" />
+                </Button>
+                <Button
+                  size="icon-xs"
+                  variant={isItalic ? "default" : "ghost"}
+                  onClick={() => applyFontStyle("italic")}
+                  title="Italic"
+                >
+                  <Italic className="size-3.5" />
+                </Button>
+                <div className="flex items-center gap-px">
+                  {fontSizePresets.map((p) => (
+                    <button
+                      key={p.label}
+                      onClick={() => applyFontSize(p.size)}
+                      className={cn(
+                        "flex h-6 w-5 items-center justify-center rounded text-[10px] font-medium transition-colors",
+                        currentFontSize === p.size
+                          ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
+                          : "text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                      )}
+                      title={`Font size ${p.size}`}
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+              </>
             )}
+
+            {/* Connector style controls */}
+            {hasSelectedConnectors && (
+              <>
+                <Button
+                  size="icon-xs"
+                  variant={allSelectedAreLines ? "default" : "ghost"}
+                  onClick={() => applyConnectorStyle("line")}
+                  title="Line (no arrow)"
+                >
+                  <Minus className="size-3.5" />
+                </Button>
+                <Button
+                  size="icon-xs"
+                  variant={allSelectedAreArrows ? "default" : "ghost"}
+                  onClick={() => applyConnectorStyle("arrow")}
+                  title="Arrow"
+                >
+                  <ArrowRight className="size-3.5" />
+                </Button>
+                {/* Stroke width presets */}
+                <div className="flex items-center gap-px">
+                  {[1, 2, 4].map((w) => (
+                    <button
+                      key={w}
+                      onClick={() => applyConnectorStrokeWidth(w)}
+                      className={cn(
+                        "flex h-6 w-5 items-center justify-center rounded transition-colors",
+                        currentStrokeWidth === w
+                          ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
+                          : "text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                      )}
+                      title={`Stroke width ${w}`}
+                    >
+                      <div
+                        className="rounded-full bg-current"
+                        style={{ width: 12, height: Math.max(w, 1) }}
+                      />
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+
             <Button
               size="icon-xs"
               variant="ghost"

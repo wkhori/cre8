@@ -10,11 +10,7 @@ import type {
   BaseShape,
 } from "@/lib/types";
 import { generateId } from "@/lib/id";
-import { VIVID_COLORS } from "@/lib/colors";
-
-function randomColor(): string {
-  return VIVID_COLORS[Math.floor(Math.random() * VIVID_COLORS.length)];
-}
+import { getShapeBounds } from "@/lib/shape-geometry";
 
 const MAX_HISTORY = 50;
 
@@ -51,6 +47,7 @@ interface CanvasStore {
   addText: (centerX: number, centerY: number, text?: string) => string;
   addStickyNote: (centerX: number, centerY: number, text?: string, color?: string) => string;
   addFrame: (centerX: number, centerY: number, title?: string) => string;
+  addFrameAtBounds: (x: number, y: number, w: number, h: number, title?: string) => string;
   addConnector: (
     from: { id: string } | { point: { x: number; y: number } },
     to: { id: string } | { point: { x: number; y: number } },
@@ -189,8 +186,8 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
   addRect: (centerX, centerY) => {
     const state = get();
     state.pushHistory();
-    const w = 80 + Math.random() * 80;
-    const h = 60 + Math.random() * 60;
+    const w = 120;
+    const h = 80;
     const shape: RectShape = {
       id: generateId(),
       type: "rect",
@@ -198,7 +195,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
       y: centerY - h / 2,
       w,
       h,
-      fill: randomColor(),
+      fill: "#3b82f6",
       cornerRadius: 4,
       ...baseProps(state.shapes),
     };
@@ -208,7 +205,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
   addCircle: (centerX, centerY) => {
     const state = get();
     state.pushHistory();
-    const radius = 30 + Math.random() * 30;
+    const radius = 45;
     const shape: CircleShape = {
       id: generateId(),
       type: "circle",
@@ -216,7 +213,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
       y: centerY,
       radiusX: radius,
       radiusY: radius,
-      fill: randomColor(),
+      fill: "#3b82f6",
       ...baseProps(state.shapes),
     };
     set({ shapes: [...state.shapes, shape], selectedIds: [shape.id] });
@@ -242,6 +239,40 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
     };
     set({ shapes: [...state.shapes, shape], selectedIds: [shape.id] });
     return shape.id;
+  },
+
+  addFrameAtBounds: (x, y, w, h, title = "Frame") => {
+    const state = get();
+    state.pushHistory();
+    const frameId = generateId();
+    const shape: FrameShape = {
+      id: frameId,
+      type: "frame",
+      x,
+      y,
+      w,
+      h,
+      title,
+      fill: "rgba(0,0,0,0.03)",
+      stroke: "#a1a1aa",
+      ...baseProps(state.shapes),
+      zIndex: 0,
+    };
+
+    // Auto-contain: assign parentId to shapes fully inside the frame bounds
+    const frameRight = x + w;
+    const frameBottom = y + h;
+    const updatedShapes = state.shapes.map((s) => {
+      if (s.type === "connector" || s.parentId) return s;
+      const b = getShapeBounds(s);
+      if (b.x >= x && b.y >= y && b.x + b.width <= frameRight && b.y + b.height <= frameBottom) {
+        return { ...s, parentId: frameId } as Shape;
+      }
+      return s;
+    });
+
+    set({ shapes: [...updatedShapes, shape], selectedIds: [frameId] });
+    return frameId;
   },
 
   addConnector: (from, to, style = "arrow") => {
@@ -292,7 +323,12 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
     );
     for (const c of orphanedConnectors) idSet.add(c.id);
     set({
-      shapes: state.shapes.filter((s) => !idSet.has(s.id)),
+      // Remove deleted shapes; clear parentId on children of deleted frames
+      shapes: state.shapes
+        .filter((s) => !idSet.has(s.id))
+        .map((s) =>
+          s.parentId && idSet.has(s.parentId) ? ({ ...s, parentId: undefined } as Shape) : s
+        ),
       selectedIds: state.selectedIds.filter((id) => !idSet.has(id)),
     });
   },

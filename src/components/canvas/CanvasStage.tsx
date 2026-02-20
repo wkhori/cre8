@@ -5,7 +5,7 @@ import { Stage, Layer, Transformer, Rect, Line, Circle } from "react-konva";
 import type Konva from "konva";
 import type { Shape, ConnectorShape } from "@/lib/types";
 import { useCanvasStore } from "@/store/canvas-store";
-import { useDebugStore } from "@/store/debug-store";
+import { useUIStore } from "@/store/ui-store";
 import { getShapeBounds, connectorPairKey } from "@/lib/shape-geometry";
 import ShapeRenderer from "./ShapeRenderer";
 import DotGrid from "./DotGrid";
@@ -18,6 +18,8 @@ import { useDragSession } from "./useDragSession";
 import { useRubberBandSelection } from "./useRubberBandSelection";
 import { useTransformer } from "./useTransformer";
 import { useConnectorEndpoints } from "./useConnectorEndpoints";
+import { usePlacement } from "./usePlacement";
+import GhostPreview from "./GhostPreview";
 
 interface CanvasStageProps {
   boardId?: string;
@@ -47,8 +49,8 @@ export default function CanvasStage({
   const setSelected = useCanvasStore((s) => s.setSelected);
   const toggleSelected = useCanvasStore((s) => s.toggleSelected);
 
-  const activeTool = useDebugStore((s) => s.activeTool);
-  const interaction = useDebugStore((s) => s.interaction);
+  const activeTool = useUIStore((s) => s.activeTool);
+  const interaction = useUIStore((s) => s.interaction);
 
   // ── Extracted hooks ──────────────────────────────────────────────
   const viewport = useViewport(stageRef, containerRef, transformerRef);
@@ -68,6 +70,8 @@ export default function CanvasStage({
   );
 
   const rubberBand = useRubberBandSelection(stageRef, layerRef);
+
+  const placement = usePlacement();
 
   // ── Space-held state for temporary hand mode ─────────────────────
   const [spaceHeld, setSpaceHeld] = useState(false);
@@ -211,31 +215,9 @@ export default function CanvasStage({
       return viewport.isPanning.current ? "grabbing" : "grab";
     }
     if (effectiveTool === "connector") return "crosshair";
+    if (effectiveTool.startsWith("place-") || effectiveTool === "draw-frame") return "crosshair";
     return "default";
   }, [effectiveTool, viewport.isPanning]);
-
-  // ── Sync debug store ─────────────────────────────────────────────
-  useEffect(() => {
-    useDebugStore.getState().setObjectCount(shapes.length);
-  }, [shapes.length]);
-
-  useEffect(() => {
-    useDebugStore
-      .getState()
-      .setSelectedId(
-        textEditing.editingTextId
-          ? `${textEditing.editingTextId} (editing)`
-          : selectedIds.length === 1
-            ? selectedIds[0]
-            : selectedIds.length > 1
-              ? `${selectedIds.length} shapes`
-              : null
-      );
-  }, [textEditing.editingTextId, selectedIds]);
-
-  useEffect(() => {
-    useDebugStore.getState().setKonvaNodeCount(shapes.length);
-  }, [shapes.length]);
 
   // ── Composed event handlers ──────────────────────────────────────
   const handleMouseDown = useCallback(
@@ -249,10 +231,13 @@ export default function CanvasStage({
       const worldX = (pos.x - vp.x) / vp.scale;
       const worldY = (pos.y - vp.y) / vp.scale;
 
+      // Placement tools: delegate to hook
+      if (placement.handlePlacementMouseDown(worldX, worldY)) return;
+
       // Connector tool: delegate to hook
       if (connector.handleCanvasClick(worldX, worldY)) return;
 
-      const isHand = spaceHeldRef.current || useDebugStore.getState().activeTool === "hand";
+      const isHand = spaceHeldRef.current || useUIStore.getState().activeTool === "hand";
 
       if (isHand) {
         viewport.startPan({ x: pos.x, y: pos.y });
@@ -260,7 +245,7 @@ export default function CanvasStage({
         rubberBand.startSelection(worldX, worldY, e.evt.shiftKey);
       }
     },
-    [connector, viewport, rubberBand]
+    [placement, connector, viewport, rubberBand]
   );
 
   const handleMouseMove = useCallback(() => {
@@ -279,6 +264,9 @@ export default function CanvasStage({
       worldY,
     });
 
+    // Placement tools (draw-frame drag)
+    placement.handlePlacementMouseMove(worldX, worldY);
+
     // Connector preview line
     connector.updatePreview(worldX, worldY);
 
@@ -287,14 +275,24 @@ export default function CanvasStage({
 
     // Panning
     viewport.updatePan({ x: pos.x, y: pos.y });
-  }, [viewport, connector, rubberBand]);
+  }, [viewport, connector, rubberBand, placement]);
 
   const handleMouseUp = useCallback(
     (e: Konva.KonvaEventObject<MouseEvent>) => {
+      const stage = stageRef.current;
+      if (stage) {
+        const pos = stage.getPointerPosition();
+        if (pos) {
+          const vp = viewport.viewportRef.current;
+          const worldX = (pos.x - vp.x) / vp.scale;
+          const worldY = (pos.y - vp.y) / vp.scale;
+          if (placement.handlePlacementMouseUp(worldX, worldY)) return;
+        }
+      }
       if (rubberBand.endSelection(e.evt.shiftKey)) return;
       viewport.endPan();
     },
-    [rubberBand, viewport]
+    [placement, rubberBand, viewport]
   );
 
   // ── Shape click => select (or connector creation) ────────────────
@@ -302,7 +300,7 @@ export default function CanvasStage({
     (id: string, e: Konva.KonvaEventObject<MouseEvent | TouchEvent>) => {
       e.cancelBubble = true;
 
-      if (spaceHeldRef.current || useDebugStore.getState().activeTool === "hand") return;
+      if (spaceHeldRef.current || useUIStore.getState().activeTool === "hand") return;
 
       if (connector.handleShapeClick(id)) return;
 
@@ -411,6 +409,16 @@ export default function CanvasStage({
                 }}
               />
             ))}
+
+          {/* Ghost preview for placement tools */}
+          {(activeTool.startsWith("place-") || activeTool === "draw-frame") && (
+            <GhostPreview
+              activeTool={activeTool}
+              drawingBounds={placement.drawingBounds}
+              stageRef={stageRef}
+              viewportRef={viewport.viewportRef}
+            />
+          )}
 
           <Transformer
             ref={transformerRef}

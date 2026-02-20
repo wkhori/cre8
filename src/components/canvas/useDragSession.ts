@@ -4,11 +4,15 @@ import { useRef, useCallback, useState, useEffect } from "react";
 import type Konva from "konva";
 import type { Shape } from "@/lib/types";
 import { useCanvasStore } from "@/store/canvas-store";
-import { useDebugStore } from "@/store/debug-store";
+import { useUIStore } from "@/store/ui-store";
+import { getShapeBounds } from "@/lib/shape-geometry";
 
 interface DragSession {
   ids: string[];
+  /** IDs that were added implicitly (frame children, not directly selected) */
+  implicitIds: Set<string>;
   basePositions: Map<string, { x: number; y: number }>;
+  siblingNodes: Map<string, Konva.Node>;
 }
 
 interface ViewportRef {
@@ -64,7 +68,7 @@ export function useDragSession(
 
   const handleDragStart = useCallback(
     (id: string) => {
-      useDebugStore.getState().setInteraction("dragging");
+      useUIStore.getState().setInteraction("dragging");
       useCanvasStore.getState().pushHistory();
 
       const store = useCanvasStore.getState();
@@ -76,14 +80,39 @@ export function useDragSession(
 
       const shapeMap = new Map(store.shapes.map((s) => [s.id, s]));
       const basePositions = new Map<string, { x: number; y: number }>();
+      const idSet = new Set(ids);
+
+      // Recursively collect all descendants of dragged frames
+      const collectChildren = (parentId: string) => {
+        for (const child of store.shapes) {
+          if (child.parentId === parentId && !idSet.has(child.id)) {
+            idSet.add(child.id);
+            if (child.type === "frame") collectChildren(child.id);
+          }
+        }
+      };
       for (const sid of ids) {
+        const s = shapeMap.get(sid);
+        if (s?.type === "frame") collectChildren(sid);
+      }
+
+      const allIds = Array.from(idSet);
+      for (const sid of allIds) {
         const s = shapeMap.get(sid);
         if (s) basePositions.set(sid, { x: s.x, y: s.y });
       }
 
+      // Implicit children: IDs added by collectChildren, not directly selected
+      const implicitIds = new Set<string>();
+      for (const sid of allIds) {
+        if (!ids.includes(sid)) implicitIds.add(sid);
+      }
+
       dragSessionRef.current = {
-        ids,
+        ids: allIds,
+        implicitIds,
         basePositions,
+        siblingNodes: new Map(),
       };
     },
     [setSelected, onLockShapes]
@@ -117,6 +146,21 @@ export function useDragSession(
       positions.clear();
       for (const [sid, next] of nextPositions) {
         positions.set(sid, next);
+        // Only move implicit children (frame descendants not directly selected).
+        // Selected shapes are moved by Konva's native drag — no findOne needed.
+        if (session.implicitIds.has(sid)) {
+          let sibling = session.siblingNodes.get(sid);
+          if (!sibling) {
+            const found = stage.findOne(`#${sid}`);
+            if (found) {
+              session.siblingNodes.set(sid, found);
+              sibling = found;
+            }
+          }
+          if (sibling) {
+            sibling.position(next);
+          }
+        }
       }
 
       // Schedule single RAF flush — only bump epoch when connectors need tracking
@@ -176,6 +220,61 @@ export function useDragSession(
         updateShapes(updates);
       }
 
+      // ── Re-parent shapes after drag ──────────────────────────────────
+      // After positions are committed, check if shapes moved into/out of frames
+      const freshShapes = useCanvasStore.getState().shapes;
+      const draggedIds = new Set(session.ids);
+      const parentUpdates: Array<{ id: string; patch: Partial<Shape> }> = [];
+
+      // Build frame list for containment checks
+      const frames = freshShapes.filter((s) => s.type === "frame");
+
+      for (const shape of freshShapes) {
+        if (shape.type === "connector") continue;
+
+        const wasDragged = draggedIds.has(shape.id);
+        const parentWasDragged = shape.parentId ? draggedIds.has(shape.parentId) : false;
+
+        // Only re-evaluate shapes that were part of this drag or whose parent was dragged
+        if (!wasDragged && !parentWasDragged) continue;
+
+        const bounds = getShapeBounds(shape);
+        let newParentId: string | undefined;
+
+        // Find the smallest frame that fully contains this shape
+        for (const frame of frames) {
+          if (frame.id === shape.id) continue;
+          // Prevent circular: don't parent a frame to one of its own children
+          if (shape.type === "frame" && frame.parentId === shape.id) continue;
+          const fx = frame.x,
+            fy = frame.y;
+          const fr = fx + frame.w,
+            fb = fy + frame.h;
+          const inside =
+            bounds.x >= fx &&
+            bounds.y >= fy &&
+            bounds.x + bounds.width <= fr &&
+            bounds.y + bounds.height <= fb;
+          if (inside) {
+            // Prefer smallest containing frame (most specific parent)
+            if (!newParentId) {
+              newParentId = frame.id;
+            } else {
+              const prev = frames.find((f) => f.id === newParentId);
+              if (prev && prev.type === "frame" && frame.w * frame.h < prev.w * prev.h) {
+                newParentId = frame.id;
+              }
+            }
+          }
+        }
+
+        if (shape.parentId !== newParentId) {
+          parentUpdates.push({ id: shape.id, patch: { parentId: newParentId } });
+        }
+      }
+
+      if (parentUpdates.length > 0) updateShapes(parentUpdates);
+
       // Clean up drag session
       dragSessionRef.current = null;
       dragPositionsRef.current.clear();
@@ -186,7 +285,7 @@ export function useDragSession(
       if (hasConnectorsRef.current) {
         setDragEpoch((e) => e + 1);
       }
-      useDebugStore.getState().setInteraction("idle");
+      useUIStore.getState().setInteraction("idle");
 
       onLiveDragEnd?.();
       onUnlockShapes?.();
@@ -206,7 +305,7 @@ export function useDragSession(
       }
       onLiveDragEnd?.();
       onUnlockShapes?.();
-      useDebugStore.getState().setInteraction("idle");
+      useUIStore.getState().setInteraction("idle");
     };
   }, [onLiveDragEnd, onUnlockShapes]);
 
