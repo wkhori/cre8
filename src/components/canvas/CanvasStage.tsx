@@ -6,7 +6,6 @@ import type Konva from "konva";
 import type { Shape, ConnectorShape } from "@/lib/types";
 import { useCanvasStore } from "@/store/canvas-store";
 import { useUIStore } from "@/store/ui-store";
-import { useDebugStore } from "@/store/debug-store";
 import { getShapeBounds, connectorPairKey } from "@/lib/shape-geometry";
 import ShapeRenderer from "./ShapeRenderer";
 import DotGrid from "./DotGrid";
@@ -219,25 +218,6 @@ export default function CanvasStage({
     if (effectiveTool.startsWith("place-") || effectiveTool === "draw-frame") return "crosshair";
     return "default";
   }, [effectiveTool, viewport.isPanning]);
-
-  // ── Sync debug store ─────────────────────────────────────────────
-  useEffect(() => {
-    useDebugStore.getState().setShapeCount(shapes.length);
-  }, [shapes.length]);
-
-  useEffect(() => {
-    useDebugStore
-      .getState()
-      .setSelectedId(
-        textEditing.editingTextId
-          ? `${textEditing.editingTextId} (editing)`
-          : selectedIds.length === 1
-            ? selectedIds[0]
-            : selectedIds.length > 1
-              ? `${selectedIds.length} shapes`
-              : null
-      );
-  }, [textEditing.editingTextId, selectedIds]);
 
   // ── Composed event handlers ──────────────────────────────────────
   const handleMouseDown = useCallback(

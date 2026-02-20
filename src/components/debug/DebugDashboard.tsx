@@ -1,20 +1,30 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useMemo } from "react";
 import { useUIStore } from "@/store/ui-store";
 import { useDebugStore } from "@/store/debug-store";
+import { useCanvasStore } from "@/store/canvas-store";
 
 export default function DebugDashboard() {
-  // Debug-only metrics
+  // Debug-only metrics (fps counter)
   const fps = useDebugStore((s) => s.fps);
   const frameMs = useDebugStore((s) => s.frameMs);
-  const pointer = useDebugStore((s) => s.pointer);
-  const shapeCount = useDebugStore((s) => s.shapeCount);
-  const selectedId = useDebugStore((s) => s.selectedId);
-  // App-critical state (from ui-store)
+
+  // App state (from ui-store)
+  const pointer = useUIStore((s) => s.pointer);
   const viewport = useUIStore((s) => s.viewport);
   const interaction = useUIStore((s) => s.interaction);
   const activeTool = useUIStore((s) => s.activeTool);
+
+  // Derived from canvas-store
+  const shapeCount = useCanvasStore((s) => s.shapes.length);
+  const selectedIds = useCanvasStore((s) => s.selectedIds);
+
+  const selectedId = useMemo(() => {
+    if (selectedIds.length === 1) return selectedIds[0];
+    if (selectedIds.length > 1) return `${selectedIds.length} shapes`;
+    return null;
+  }, [selectedIds]);
 
   // FPS counter using rAF
   const frameCountRef = useRef(0);

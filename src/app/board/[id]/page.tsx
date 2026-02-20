@@ -5,7 +5,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { useCanvasStore } from "@/store/canvas-store";
 import { useUIStore } from "@/store/ui-store";
-import { useDebugStore } from "@/store/debug-store";
 import { useAuth } from "@/components/auth/AuthProvider";
 import {
   subscribeBoardObjects,
@@ -340,7 +339,7 @@ export default function BoardPage() {
     let lastX = NaN;
     let lastY = NaN;
     const interval = setInterval(() => {
-      const pointer = useDebugStore.getState().pointer;
+      const pointer = useUIStore.getState().pointer;
       if (pointer.worldX === lastX && pointer.worldY === lastY) return;
       lastX = pointer.worldX;
       lastY = pointer.worldY;
