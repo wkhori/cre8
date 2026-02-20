@@ -27,6 +27,7 @@ import BoardToolbar from "@/components/board/BoardToolbar";
 const CanvasStage = dynamic(() => import("@/components/canvas/CanvasStage"), { ssr: false });
 const DebugDashboard = dynamic(() => import("@/components/debug/DebugDashboard"), { ssr: false });
 const AICommandInput = dynamic(() => import("@/components/ai/AICommandInput"), { ssr: false });
+const MapControls = dynamic(() => import("@/components/canvas/MapControls"), { ssr: false });
 const LIVE_DRAG_HOLD_MS = 180;
 
 function shapeShallowEqual(a: Shape, b: Shape): boolean {
@@ -45,6 +46,9 @@ export default function BoardPage() {
   const boardId = params.id as string;
 
   const { user, profile, loading: authLoading, actionLoading, signOut } = useAuth();
+
+  const activeTool = useDebugStore((s) => s.activeTool);
+  const isPlacing = activeTool.startsWith("place-") || activeTool === "draw-frame";
 
   const renderOnly = isRenderOnly();
   const [boardReady, setBoardReady] = useState(renderOnly);
@@ -464,8 +468,11 @@ export default function BoardPage() {
           onLiveDrag={handleLiveDrag}
           onLiveDragEnd={handleLiveDragEnd}
         />
+        <div className={isPlacing ? "pointer-events-none" : ""}>
+          <MapControls />
+          {user && <AICommandInput />}
+        </div>
         {showDebug && <DebugDashboard />}
-        {user && <AICommandInput />}
       </div>
     </div>
   );

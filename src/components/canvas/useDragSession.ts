@@ -5,6 +5,7 @@ import type Konva from "konva";
 import type { Shape } from "@/lib/types";
 import { useCanvasStore } from "@/store/canvas-store";
 import { useDebugStore } from "@/store/debug-store";
+import { getShapeBounds } from "@/lib/shape-geometry";
 
 interface DragSession {
   ids: string[];
@@ -76,13 +77,30 @@ export function useDragSession(
 
       const shapeMap = new Map(store.shapes.map((s) => [s.id, s]));
       const basePositions = new Map<string, { x: number; y: number }>();
+      const idSet = new Set(ids);
+
+      // Recursively collect all descendants of dragged frames
+      const collectChildren = (parentId: string) => {
+        for (const child of store.shapes) {
+          if (child.parentId === parentId && !idSet.has(child.id)) {
+            idSet.add(child.id);
+            if (child.type === "frame") collectChildren(child.id);
+          }
+        }
+      };
       for (const sid of ids) {
+        const s = shapeMap.get(sid);
+        if (s?.type === "frame") collectChildren(sid);
+      }
+
+      const allIds = Array.from(idSet);
+      for (const sid of allIds) {
         const s = shapeMap.get(sid);
         if (s) basePositions.set(sid, { x: s.x, y: s.y });
       }
 
       dragSessionRef.current = {
-        ids,
+        ids: allIds,
         basePositions,
       };
     },
@@ -117,6 +135,13 @@ export function useDragSession(
       positions.clear();
       for (const [sid, next] of nextPositions) {
         positions.set(sid, next);
+        // Physically move sibling/child Konva nodes so they track during drag
+        if (sid !== id) {
+          const sibling = stage.findOne(`#${sid}`);
+          if (sibling) {
+            sibling.position(next);
+          }
+        }
       }
 
       // Schedule single RAF flush — only bump epoch when connectors need tracking
@@ -175,6 +200,61 @@ export function useDragSession(
       } else if (updates.length > 1) {
         updateShapes(updates);
       }
+
+      // ── Re-parent shapes after drag ──────────────────────────────────
+      // After positions are committed, check if shapes moved into/out of frames
+      const freshShapes = useCanvasStore.getState().shapes;
+      const draggedIds = new Set(session.ids);
+      const parentUpdates: Array<{ id: string; patch: Partial<Shape> }> = [];
+
+      // Build frame list for containment checks
+      const frames = freshShapes.filter((s) => s.type === "frame");
+
+      for (const shape of freshShapes) {
+        if (shape.type === "connector") continue;
+
+        const wasDragged = draggedIds.has(shape.id);
+        const parentWasDragged = shape.parentId ? draggedIds.has(shape.parentId) : false;
+
+        // Only re-evaluate shapes that were part of this drag or whose parent was dragged
+        if (!wasDragged && !parentWasDragged) continue;
+
+        const bounds = getShapeBounds(shape);
+        let newParentId: string | undefined;
+
+        // Find the smallest frame that fully contains this shape
+        for (const frame of frames) {
+          if (frame.id === shape.id) continue;
+          // Prevent circular: don't parent a frame to one of its own children
+          if (shape.type === "frame" && frame.parentId === shape.id) continue;
+          const fx = frame.x,
+            fy = frame.y;
+          const fr = fx + frame.w,
+            fb = fy + frame.h;
+          const inside =
+            bounds.x >= fx &&
+            bounds.y >= fy &&
+            bounds.x + bounds.width <= fr &&
+            bounds.y + bounds.height <= fb;
+          if (inside) {
+            // Prefer smallest containing frame (most specific parent)
+            if (!newParentId) {
+              newParentId = frame.id;
+            } else {
+              const prev = frames.find((f) => f.id === newParentId);
+              if (prev && prev.type === "frame" && frame.w * frame.h < prev.w * prev.h) {
+                newParentId = frame.id;
+              }
+            }
+          }
+        }
+
+        if (shape.parentId !== newParentId) {
+          parentUpdates.push({ id: shape.id, patch: { parentId: newParentId } });
+        }
+      }
+
+      if (parentUpdates.length > 0) updateShapes(parentUpdates);
 
       // Clean up drag session
       dragSessionRef.current = null;

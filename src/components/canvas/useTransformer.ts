@@ -5,6 +5,7 @@ import type Konva from "konva";
 import type { Shape } from "@/lib/types";
 import { useCanvasStore } from "@/store/canvas-store";
 import { buildTransformPatch } from "@/lib/shape-transform";
+import { getShapeBounds } from "@/lib/shape-geometry";
 
 export function useTransformer(
   stageRef: React.RefObject<Konva.Stage | null>,
@@ -86,6 +87,33 @@ export function useTransformer(
       });
     }
     updateShapes(updates);
+
+    // Re-evaluate frame containment after resize: adopt new children + release excluded ones
+    const freshShapes = useCanvasStore.getState().shapes;
+    const childUpdates: Array<{ id: string; patch: Partial<Shape> }> = [];
+    for (const upd of updates) {
+      const frame = freshShapes.find((s) => s.id === upd.id);
+      if (!frame || frame.type !== "frame") continue;
+      const fx = frame.x,
+        fy = frame.y,
+        fr = fx + frame.w,
+        fb = fy + frame.h;
+      for (const child of freshShapes) {
+        if (child.type === "connector") continue;
+        if (child.id === frame.id) continue;
+        const cb = getShapeBounds(child);
+        const inside = cb.x >= fx && cb.y >= fy && cb.x + cb.width <= fr && cb.y + cb.height <= fb;
+        if (inside && child.parentId !== frame.id && !child.parentId) {
+          // Adopt: shape is now fully inside and has no parent
+          childUpdates.push({ id: child.id, patch: { parentId: frame.id } });
+        } else if (!inside && child.parentId === frame.id) {
+          // Release: shape was a child but no longer fits
+          childUpdates.push({ id: child.id, patch: { parentId: undefined } });
+        }
+      }
+    }
+    if (childUpdates.length > 0) updateShapes(childUpdates);
+
     setIsTransforming(false);
     if (transformLockActiveRef.current) {
       transformLockActiveRef.current = false;

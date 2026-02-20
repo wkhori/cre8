@@ -58,6 +58,28 @@ export function useCanvasKeyboard({
         return;
       }
 
+      // Shape placement shortcuts
+      if (e.key === "r" && !e.metaKey && !e.ctrlKey) {
+        useDebugStore.getState().setActiveTool("place-rect");
+        return;
+      }
+      if (e.key === "o" && !e.metaKey && !e.ctrlKey) {
+        useDebugStore.getState().setActiveTool("place-circle");
+        return;
+      }
+      if (e.key === "t" && !e.metaKey && !e.ctrlKey) {
+        useDebugStore.getState().setActiveTool("place-text");
+        return;
+      }
+      if (e.key === "s" && !e.metaKey && !e.ctrlKey) {
+        useDebugStore.getState().setActiveTool("place-sticky");
+        return;
+      }
+      if (e.key === "f" && !e.metaKey && !e.ctrlKey) {
+        useDebugStore.getState().setActiveTool("draw-frame");
+        return;
+      }
+
       const meta = e.metaKey || e.ctrlKey;
 
       if ((e.key === "Delete" || e.key === "Backspace") && !meta) {
@@ -138,9 +160,34 @@ export function useCanvasKeyboard({
         return;
       }
 
+      // Zoom shortcuts
+      if (meta && (e.key === "=" || e.key === "+")) {
+        e.preventDefault();
+        const s = useDebugStore.getState().viewport.scale;
+        window.dispatchEvent(new CustomEvent("zoom-to", { detail: { scale: s * 1.25 } }));
+        return;
+      }
+      if (meta && e.key === "-") {
+        e.preventDefault();
+        const s = useDebugStore.getState().viewport.scale;
+        window.dispatchEvent(new CustomEvent("zoom-to", { detail: { scale: s / 1.25 } }));
+        return;
+      }
+      if (meta && e.key === "0") {
+        e.preventDefault();
+        window.dispatchEvent(new CustomEvent("zoom-to", { detail: { scale: 1 } }));
+        return;
+      }
+      if (meta && e.key === "1") {
+        e.preventDefault();
+        window.dispatchEvent(new CustomEvent("fit-to-content"));
+        return;
+      }
+
       if (e.key === "Escape") {
-        // If in connector mode, switch back to pointer
-        if (useDebugStore.getState().activeTool === "connector") {
+        // If in any non-pointer tool, switch back to pointer
+        const tool = useDebugStore.getState().activeTool;
+        if (tool !== "pointer") {
           useDebugStore.getState().setActiveTool("pointer");
         }
         clearSelection();

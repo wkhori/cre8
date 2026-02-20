@@ -5,6 +5,7 @@ import { Rect, Ellipse, Text, Line, Group, Arrow } from "react-konva";
 import type Konva from "konva";
 import type { Shape } from "@/lib/types";
 import { getShapeBounds, computeConnectorPoints } from "@/lib/shape-geometry";
+import { computeStickyFontSize } from "@/lib/sticky-text";
 
 interface ShapeRendererProps {
   shape: Shape;
@@ -130,6 +131,7 @@ export default memo(function ShapeRenderer({
           text={shape.text}
           fontSize={shape.fontSize}
           fontFamily={shape.fontFamily}
+          fontStyle={shape.fontStyle ?? "normal"}
           fill={textFill}
           width={shape.width}
           align={shape.align ?? "left"}
@@ -151,7 +153,17 @@ export default memo(function ShapeRenderer({
         />
       );
 
-    case "sticky":
+    case "sticky": {
+      const padX = 12;
+      const padY = 12;
+      const availW = shape.w - padX * 2;
+      const availH = shape.h - padY * 2;
+      const stickyFontSize = computeStickyFontSize(
+        shape.text,
+        availW,
+        availH,
+        shape.fontSize ?? 16
+      );
       return wrapWithHoverRing(
         <Group key={shape.id} {...commonProps}>
           <Rect
@@ -162,20 +174,21 @@ export default memo(function ShapeRenderer({
             perfectDrawEnabled={false}
           />
           <Text
-            x={12}
-            y={12}
-            width={shape.w - 24}
-            height={shape.h - 24}
+            x={padX}
+            y={padY}
+            width={availW}
+            height={availH}
             text={shape.text}
-            fontSize={shape.fontSize ?? 16}
+            fontSize={stickyFontSize}
             fontFamily="system-ui, sans-serif"
+            fontStyle={shape.fontStyle ?? "normal"}
             fill="#18181b"
             wrap="word"
-            ellipsis
             perfectDrawEnabled={false}
           />
         </Group>
       );
+    }
 
     case "frame":
       return wrapWithHoverRing(

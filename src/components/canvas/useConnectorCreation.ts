@@ -17,16 +17,20 @@ export function useConnectorCreation() {
     connectorFromPointRef.current = null;
     setConnectorFromId(null);
     setConnectorPreview(null);
+    useDebugStore.getState().setConnectorSourceSelected(false);
   }, []);
 
   // Clear connector creation state when switching away from connector tool
   useEffect(() => {
     let prevTool = useDebugStore.getState().activeTool;
     return useDebugStore.subscribe((state) => {
-      if (prevTool === "connector" && state.activeTool !== "connector") {
+      const currTool = state.activeTool;
+      if (currTool === prevTool) return; // only react to activeTool changes
+      const wasCon = prevTool === "connector";
+      prevTool = currTool; // update BEFORE calling clearConnectorFrom to prevent re-entry
+      if (wasCon && currTool !== "connector") {
         clearConnectorFrom();
       }
-      prevTool = state.activeTool;
     });
   }, [clearConnectorFrom]);
 
@@ -50,6 +54,7 @@ export function useConnectorCreation() {
         connectorFromPointRef.current = { x: worldX, y: worldY };
         setConnectorFromId(null);
         setConnectorPreview(null);
+        useDebugStore.getState().setConnectorSourceSelected(true);
       } else {
         const from = buildConnectorFrom();
         if (from) {
@@ -78,6 +83,7 @@ export function useConnectorCreation() {
         connectorFromPointRef.current = null;
         setConnectorFromId(id);
         useCanvasStore.getState().setSelected([id]);
+        useDebugStore.getState().setConnectorSourceSelected(true);
       } else {
         const from = buildConnectorFrom();
         if (from && !("id" in from && from.id === id)) {
