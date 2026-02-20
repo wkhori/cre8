@@ -55,7 +55,7 @@ export default function AICommandInput() {
       <button
         onClick={() => setIsOpen(true)}
         className={cn(
-          "fixed bottom-4 right-4 z-50 flex items-center gap-2 rounded-full",
+          "flex items-center gap-2 rounded-full",
           "border border-zinc-200/80 bg-white/90 px-4 py-2.5 text-sm font-medium text-zinc-700",
           "shadow-lg backdrop-blur-sm transition-all hover:bg-zinc-50 hover:shadow-xl",
           "dark:border-zinc-700/80 dark:bg-zinc-900/90 dark:text-zinc-200 dark:hover:bg-zinc-800"
@@ -70,7 +70,7 @@ export default function AICommandInput() {
   return (
     <div
       className={cn(
-        "fixed bottom-4 right-4 z-50 w-80 rounded-lg border shadow-xl",
+        "w-80 rounded-lg border shadow-xl",
         "border-zinc-200/80 bg-white/95 backdrop-blur-sm",
         "dark:border-zinc-700/80 dark:bg-zinc-900/95"
       )}

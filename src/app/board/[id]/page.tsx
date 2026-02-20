@@ -333,7 +333,6 @@ export default function BoardPage() {
   ]);
 
   // ── Broadcast cursor position ───────────────────────────────────────
-
   useEffect(() => {
     if (!boardReady) return;
     let lastX = NaN;
@@ -468,7 +467,9 @@ export default function BoardPage() {
           onLiveDrag={handleLiveDrag}
           onLiveDragEnd={handleLiveDragEnd}
         />
-        <div className={isPlacing ? "pointer-events-none" : ""}>
+        <div
+          className={`absolute bottom-4 right-4 z-30 flex flex-col items-end gap-2${isPlacing ? " pointer-events-none" : ""}`}
+        >
           <MapControls />
           {user && <AICommandInput />}
         </div>

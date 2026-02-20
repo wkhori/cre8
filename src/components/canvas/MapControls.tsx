@@ -1,11 +1,12 @@
 "use client";
 
-import { useRef, useEffect, useCallback } from "react";
+import { useRef, useEffect, useCallback, useState } from "react";
 import { useCanvasStore } from "@/store/canvas-store";
 import { useUIStore } from "@/store/ui-store";
 import { getShapeBounds } from "@/lib/shape-geometry";
 import { Button } from "@/components/ui/button";
-import { Minus, Plus, Maximize2 } from "lucide-react";
+import { Minus, Plus, Maximize2, Map } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 const MAP_W = 180;
 const MAP_H = 110;
@@ -17,8 +18,16 @@ export default function MapControls() {
   const scale = useUIStore((s) => s.viewport.scale);
   const pct = Math.round(scale * 100);
 
+  const [expanded, setExpanded] = useState(false);
+  const expandedRef = useRef(false);
+  useEffect(() => {
+    expandedRef.current = expanded;
+  }, [expanded]);
+
   // ── Minimap draw ─────────────────────────────────────────────────
   const draw = useCallback(() => {
+    if (!expandedRef.current) return;
+
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
@@ -139,8 +148,15 @@ export default function MapControls() {
     ctx.fillRect(vx, vy, vw, vh);
   }, []);
 
+  // Force a redraw when expanding
+  useEffect(() => {
+    if (expanded) {
+      lastDrawRef.current = 0;
+      draw();
+    }
+  }, [expanded, draw]);
+
   // Redraw on store changes instead of every-frame RAF loop.
-  // Only subscribe to viewport slice of debug-store (not pointer, which fires 30fps).
   useEffect(() => {
     draw();
 
@@ -153,7 +169,6 @@ export default function MapControls() {
     };
 
     const unsubCanvas = useCanvasStore.subscribe(scheduleRedraw);
-    // Subscribe only to viewport changes, not every debug-store update
     let prevVp = useUIStore.getState().viewport;
     const unsubDebug = useUIStore.subscribe((state) => {
       if (state.viewport !== prevVp) {
@@ -224,24 +239,43 @@ export default function MapControls() {
     window.dispatchEvent(new CustomEvent("pan-to", { detail: { x: worldX, y: worldY } }));
   }, []);
 
-  // TODO: make  bottom-6 after finding better place for AI chat
   return (
-    <div className="absolute bottom-15 right-4 z-30 flex flex-col overflow-hidden rounded-lg border border-zinc-200/80 bg-white/90 shadow-sm backdrop-blur-md dark:border-zinc-700/80 dark:bg-zinc-900/90">
-      {/* Minimap */}
-      <canvas
-        ref={canvasRef}
-        width={MAP_W}
-        height={MAP_H}
-        className="block cursor-pointer"
-        style={{ width: MAP_W, height: MAP_H }}
-        onClick={handleMinimapClick}
-      />
+    <div
+      className="flex flex-col overflow-hidden rounded-lg border border-zinc-200/80 bg-white/90 shadow-sm backdrop-blur-md dark:border-zinc-700/80 dark:bg-zinc-900/90"
+      onMouseEnter={() => setExpanded(true)}
+      onMouseLeave={() => setExpanded(false)}
+    >
+      {/* Minimap — collapsible */}
+      <div
+        className={cn(
+          "overflow-hidden transition-all duration-200 ease-in-out",
+          expanded ? "max-h-30 opacity-100" : "max-h-0 opacity-0"
+        )}
+      >
+        <canvas
+          ref={canvasRef}
+          width={MAP_W}
+          height={MAP_H}
+          className="block cursor-pointer"
+          style={{ width: MAP_W, height: MAP_H }}
+          onClick={handleMinimapClick}
+        />
+        <div className="h-px bg-zinc-200/80 dark:bg-zinc-700/80" />
+      </div>
 
-      {/* Divider */}
-      <div className="h-px bg-zinc-200/80 dark:bg-zinc-700/80" />
+      {/* Zoom controls — always visible */}
+      <div className="flex items-center gap-0.5 px-1 py-0.5">
+        <Button
+          size="icon-xs"
+          variant="ghost"
+          onClick={() => setExpanded((v) => !v)}
+          title={expanded ? "Hide minimap" : "Show minimap"}
+        >
+          <Map className="size-3.5" />
+        </Button>
 
-      {/* Zoom controls */}
-      <div className="flex items-center justify-center gap-0.5 px-1 py-0.5">
+        <div className="mx-0.5 h-4 w-px bg-zinc-200 dark:bg-zinc-700" />
+
         <Button
           size="icon-xs"
           variant="ghost"
@@ -255,7 +289,7 @@ export default function MapControls() {
 
         <button
           onClick={() => window.dispatchEvent(new CustomEvent("zoom-to", { detail: { scale: 1 } }))}
-          className="min-w-12 rounded px-1.5 py-0.5 text-center text-[11px] font-medium tabular-nums text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
+          className="w-13 rounded px-1.5 py-0.5 text-center text-[11px] font-medium tabular-nums text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
           title="Reset to 100% (Cmd+0)"
         >
           {pct}%

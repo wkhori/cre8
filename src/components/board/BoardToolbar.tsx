@@ -178,10 +178,6 @@ export default function BoardToolbar({
   const setActiveTool = useUIStore((s) => s.setActiveTool);
   const connectorSourceSelected = useUIStore((s) => s.connectorSourceSelected);
 
-  const handleResetView = useCallback(() => {
-    window.dispatchEvent(new CustomEvent("reset-canvas-view"));
-  }, []);
-
   const hasSelection = selectedIds.length > 0;
   const canUndo = historyIndex >= 0;
   const canRedo = historyIndex < historyLength - 2;
@@ -361,12 +357,6 @@ export default function BoardToolbar({
           title="Redo (Cmd+Shift+Z)"
         >
           <Redo2 className="size-3.5" />
-        </Button>
-
-        <ToolbarDivider />
-
-        <Button size="xs" variant="ghost" onClick={handleResetView} title="Reset view">
-          Reset
         </Button>
       </div>
 
