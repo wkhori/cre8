@@ -8,7 +8,6 @@ import { useCanvasStore } from "@/store/canvas-store";
 import { useDebugStore } from "@/store/debug-store";
 import { getShapeBounds, connectorPairKey } from "@/lib/shape-geometry";
 import ShapeRenderer from "./ShapeRenderer";
-import DimensionLabel from "./DimensionLabel";
 import DotGrid from "./DotGrid";
 import CursorsLayer from "./CursorsLayer";
 import { useCanvasKeyboard } from "./useCanvasKeyboard";
@@ -49,12 +48,11 @@ export default function CanvasStage({
   const toggleSelected = useCanvasStore((s) => s.toggleSelected);
 
   const activeTool = useDebugStore((s) => s.activeTool);
-  const interaction = useDebugStore((s) => s.interaction);
 
   // ── Extracted hooks ──────────────────────────────────────────────
   const viewport = useViewport(stageRef, containerRef, transformerRef);
 
-  const textEditing = useTextEditing(stageRef, viewport.viewportRef, shapes);
+  const textEditing = useTextEditing(stageRef, shapes);
 
   const connector = useConnectorCreation();
 
@@ -68,7 +66,7 @@ export default function CanvasStage({
     onUnlockShapes
   );
 
-  const rubberBand = useRubberBandSelection(stageRef, layerRef, viewport.viewportRef);
+  const rubberBand = useRubberBandSelection(stageRef, layerRef);
 
   // ── Space-held state for temporary hand mode ─────────────────────
   const [spaceHeld, setSpaceHeld] = useState(false);

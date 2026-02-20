@@ -12,16 +12,23 @@ export function useConnectorCreation() {
   const [connectorPreview, setConnectorPreview] = useState<number[] | null>(null);
   const [hoveredShapeId, setHoveredShapeId] = useState<string | null>(null);
 
+  const clearConnectorFrom = useCallback(() => {
+    connectorFromIdRef.current = null;
+    connectorFromPointRef.current = null;
+    setConnectorFromId(null);
+    setConnectorPreview(null);
+  }, []);
+
   // Clear connector creation state when switching away from connector tool
-  const activeTool = useDebugStore((s) => s.activeTool);
   useEffect(() => {
-    if (activeTool !== "connector") {
-      connectorFromIdRef.current = null;
-      connectorFromPointRef.current = null;
-      setConnectorFromId(null);
-      setConnectorPreview(null);
-    }
-  }, [activeTool]);
+    let prevTool = useDebugStore.getState().activeTool;
+    return useDebugStore.subscribe((state) => {
+      if (prevTool === "connector" && state.activeTool !== "connector") {
+        clearConnectorFrom();
+      }
+      prevTool = state.activeTool;
+    });
+  }, [clearConnectorFrom]);
 
   const hasConnectorFrom = useCallback(
     () => connectorFromIdRef.current !== null || connectorFromPointRef.current !== null,
@@ -32,13 +39,6 @@ export function useConnectorCreation() {
     if (connectorFromIdRef.current) return { id: connectorFromIdRef.current };
     if (connectorFromPointRef.current) return { point: connectorFromPointRef.current };
     return null;
-  }, []);
-
-  const clearConnectorFrom = useCallback(() => {
-    connectorFromIdRef.current = null;
-    connectorFromPointRef.current = null;
-    setConnectorFromId(null);
-    setConnectorPreview(null);
   }, []);
 
   /** Handle a canvas (empty area) click during connector tool. Returns true if handled. */

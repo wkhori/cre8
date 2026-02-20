@@ -8,16 +8,9 @@ import { getSelectionHitIds } from "@/lib/selection";
 import { useCanvasStore } from "@/store/canvas-store";
 import { useDebugStore } from "@/store/debug-store";
 
-interface ViewportRef {
-  scale: number;
-  x: number;
-  y: number;
-}
-
 export function useRubberBandSelection(
   stageRef: React.RefObject<Konva.Stage | null>,
-  layerRef: React.RefObject<Konva.Layer | null>,
-  viewportRef: React.RefObject<ViewportRef>
+  layerRef: React.RefObject<Konva.Layer | null>
 ) {
   const selectionRectRef = useRef<Konva.Rect | null>(null);
   const isSelectingRef = useRef(false);

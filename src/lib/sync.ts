@@ -331,10 +331,7 @@ export interface LiveDragData {
 
 interface UserLiveDragPayload {
   __clearTs?: number;
-  [shapeId: string]:
-    | { x: number; y: number; ts: number }
-    | number
-    | undefined;
+  [shapeId: string]: { x: number; y: number; ts: number } | number | undefined;
 }
 
 /**
@@ -433,7 +430,12 @@ export function subscribeLiveDrags(
         if (!presentUids.has(uid)) lastClearTsByUid.delete(uid);
       }
 
-      const filtered = filterLiveDragData(flattened, myUid, Date.now(), lastSeenTsById) as LiveDragData;
+      const filtered = filterLiveDragData(
+        flattened,
+        myUid,
+        Date.now(),
+        lastSeenTsById
+      ) as LiveDragData;
       onUpdate(filtered);
     },
     () => {} // expected during sign-out

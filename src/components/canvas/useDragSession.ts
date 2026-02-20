@@ -17,6 +17,24 @@ interface ViewportRef {
   y: number;
 }
 
+export function computeDragPositions(
+  basePositions: Map<string, { x: number; y: number }>,
+  movedId: string,
+  movedX: number,
+  movedY: number
+): Map<string, { x: number; y: number }> | null {
+  const movedBase = basePositions.get(movedId);
+  if (!movedBase) return null;
+
+  const dx = movedX - movedBase.x;
+  const dy = movedY - movedBase.y;
+  const positions = new Map<string, { x: number; y: number }>();
+  for (const [sid, base] of basePositions) {
+    positions.set(sid, { x: base.x + dx, y: base.y + dy });
+  }
+  return positions;
+}
+
 export function useDragSession(
   stageRef: React.RefObject<Konva.Stage | null>,
   viewportRef: React.RefObject<ViewportRef>,
@@ -91,16 +109,14 @@ export function useDragSession(
       }
 
       // Compute all positions from anchor delta (no stage.findOne calls)
-      const draggedBase = session.basePositions.get(id);
-      if (!draggedBase) return;
-      const dx = node.x() - draggedBase.x;
-      const dy = node.y() - draggedBase.y;
+      const nextPositions = computeDragPositions(session.basePositions, id, node.x(), node.y());
+      if (!nextPositions) return;
 
       // Reuse existing Map to reduce GC pressure
       const positions = dragPositionsRef.current;
       positions.clear();
-      for (const [sid, base] of session.basePositions) {
-        positions.set(sid, { x: base.x + dx, y: base.y + dy });
+      for (const [sid, next] of nextPositions) {
+        positions.set(sid, next);
       }
 
       // Schedule single RAF flush — only bump epoch when connectors need tracking
