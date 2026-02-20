@@ -27,6 +27,18 @@ import BoardToolbar from "@/components/board/BoardToolbar";
 const CanvasStage = dynamic(() => import("@/components/canvas/CanvasStage"), { ssr: false });
 const DebugDashboard = dynamic(() => import("@/components/debug/DebugDashboard"), { ssr: false });
 const AICommandInput = dynamic(() => import("@/components/ai/AICommandInput"), { ssr: false });
+const LIVE_DRAG_HOLD_MS = 180;
+const SYNC_DEBUG_STORAGE_KEY = "cre8:sync-debug";
+const SYNC_DEBUG_QUERY_KEY = "syncDebug";
+
+function takeSampleIds(ids: Iterable<string>, max = 6): string[] {
+  const sample: string[] = [];
+  for (const id of ids) {
+    sample.push(id);
+    if (sample.length >= max) break;
+  }
+  return sample;
+}
 
 function shapeShallowEqual(a: Shape, b: Shape): boolean {
   const aKeys = Object.keys(a) as (keyof Shape)[];
@@ -53,8 +65,13 @@ export default function BoardPage() {
   const liveDragBroadcasterRef = useRef<ReturnType<typeof createLiveDragBroadcaster> | null>(null);
   const remoteDragBufferRef = useRef<Map<string, { x: number; y: number }>>(new Map());
   const remoteDragRafRef = useRef<number>(0);
-  const liveDraggingIdsRef = useRef<Set<string>>(new Set());
+  const liveDraggingUntilRef = useRef<Map<string, number>>(new Map());
+  const liveDragSweepTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const deferredLiveDragChangesRef = useRef<Map<string, Shape | null>>(new Map());
+  const syncDebugEnabledRef = useRef(false);
+  const lastLiveDragLogAtRef = useRef(0);
+  const lastFirestoreLogAtRef = useRef(0);
+  const lastWriteLogAtRef = useRef(0);
 
   // Sync guard: >0 means we're applying remote changes.
   // The zustand subscriber checks this synchronously and skips outbound writes.
@@ -62,11 +79,66 @@ export default function BoardPage() {
   const isSyncingRef = useRef(0);
   const writeQueueRef = useRef<Promise<void>>(Promise.resolve());
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const searchParams = new URLSearchParams(window.location.search);
+    const queryValue = searchParams.get(SYNC_DEBUG_QUERY_KEY);
+    if (queryValue === "1") {
+      window.localStorage.setItem(SYNC_DEBUG_STORAGE_KEY, "1");
+    } else if (queryValue === "0") {
+      window.localStorage.removeItem(SYNC_DEBUG_STORAGE_KEY);
+    }
+    const enabled = window.localStorage.getItem(SYNC_DEBUG_STORAGE_KEY) === "1";
+    syncDebugEnabledRef.current = enabled;
+    if (enabled) {
+      console.info(
+        `[sync-debug][${boardId}] receiver diagnostics enabled. Disable with localStorage.removeItem("${SYNC_DEBUG_STORAGE_KEY}") and reload.`
+      );
+    }
+  }, [boardId]);
+
+  const syncDebugLog = useCallback(
+    (event: string, payload: Record<string, unknown>) => {
+      if (!syncDebugEnabledRef.current) return;
+      console.log(`[sync-debug][${boardId}] ${event}`, payload);
+    },
+    [boardId]
+  );
+
+  const sampledSyncDebugLog = useCallback(
+    (
+      event: string,
+      payload: Record<string, unknown>,
+      gateRef: { current: number },
+      minGapMs: number
+    ) => {
+      if (!syncDebugEnabledRef.current) return;
+      const now = performance.now();
+      if (now - gateRef.current < minGapMs) return;
+      gateRef.current = now;
+      syncDebugLog(event, payload);
+    },
+    [syncDebugLog]
+  );
+
   // ── Initialize board + sync ────────────────────────────────────────
+
+  const sweepLiveDragging = useCallback((now = Date.now()) => {
+    const liveDragging = liveDraggingUntilRef.current;
+    for (const [id, until] of liveDragging) {
+      if (until <= now) liveDragging.delete(id);
+    }
+    return liveDragging.size;
+  }, []);
 
   const flushDeferredLiveDragChanges = useCallback(() => {
     const deferred = deferredLiveDragChangesRef.current;
     if (deferred.size === 0) return;
+    syncDebugLog("deferred-flush:start", {
+      deferredCount: deferred.size,
+      deferredIds: takeSampleIds(deferred.keys()),
+      liveDraggingCount: liveDraggingUntilRef.current.size,
+    });
 
     isSyncingRef.current++;
     try {
@@ -108,11 +180,28 @@ export default function BoardPage() {
           store.setSelected(selectedIds);
         }
       }
+      syncDebugLog("deferred-flush:applied", {
+        removed: removedIds.size,
+        modified: modifiedMap.size,
+        added: added.length,
+      });
     } finally {
       isSyncingRef.current--;
       deferred.clear();
     }
-  }, []);
+  }, [syncDebugLog]);
+
+  const scheduleDeferredFlush = useCallback(() => {
+    if (liveDragSweepTimerRef.current) {
+      clearTimeout(liveDragSweepTimerRef.current);
+    }
+    liveDragSweepTimerRef.current = setTimeout(() => {
+      liveDragSweepTimerRef.current = null;
+      if (sweepLiveDragging() === 0) {
+        flushDeferredLiveDragChanges();
+      }
+    }, LIVE_DRAG_HOLD_MS + 20);
+  }, [sweepLiveDragging, flushDeferredLiveDragChanges]);
 
   useEffect(() => {
     if (!user || !profile || !boardId) return;
@@ -145,18 +234,40 @@ export default function BoardPage() {
             const currentShapes = store.shapes;
             const currentIds = new Set(currentShapes.map((s) => s.id));
             const currentById = new Map(currentShapes.map((s) => [s.id, s]));
+            sweepLiveDragging();
 
             const modifiedMap = new Map<string, Shape>();
             const removedIds = new Set<string>();
             const added: Shape[] = [];
+            let deferredCount = 0;
+            let bufferedPosConflictCount = 0;
+            const bufferedPosConflictIds: string[] = [];
+            let addedCount = 0;
+            let modifiedCount = 0;
+            let removedCount = 0;
 
             for (const change of changes) {
               const id = change.shape.id;
-              if (liveDraggingIdsRef.current.has(id)) {
+              if (change.type === "added") addedCount++;
+              if (change.type === "modified") modifiedCount++;
+              if (change.type === "removed") removedCount++;
+
+              const bufferedPos = remoteDragBufferRef.current.get(id);
+              if (
+                bufferedPos &&
+                change.type !== "removed" &&
+                (change.shape.x !== bufferedPos.x || change.shape.y !== bufferedPos.y)
+              ) {
+                bufferedPosConflictCount++;
+                if (bufferedPosConflictIds.length < 6) bufferedPosConflictIds.push(id);
+              }
+
+              if (liveDraggingUntilRef.current.has(id)) {
                 deferredLiveDragChangesRef.current.set(
                   id,
                   change.type === "removed" ? null : change.shape
                 );
+                deferredCount++;
                 continue;
               }
 
@@ -205,6 +316,30 @@ export default function BoardPage() {
                 store.setSelected(selectedIds);
               }
             }
+
+            sampledSyncDebugLog(
+              "firestore-onChanges",
+              {
+                incoming: {
+                  total: changes.length,
+                  added: addedCount,
+                  modified: modifiedCount,
+                  removed: removedCount,
+                },
+                applied: {
+                  added: added.length,
+                  modified: modifiedMap.size,
+                  removed: removedIds.size,
+                },
+                deferredCount,
+                deferredIds: takeSampleIds(deferredLiveDragChangesRef.current.keys()),
+                liveDraggingCount: liveDraggingUntilRef.current.size,
+                bufferedPosConflictCount,
+                bufferedPosConflictIds,
+              },
+              lastFirestoreLogAtRef,
+              120
+            );
           } finally {
             isSyncingRef.current--;
           }
@@ -213,21 +348,51 @@ export default function BoardPage() {
 
       // Live drag from remote users
       unsubLiveDrags = subscribeLiveDrags(boardId, user.uid, (drags) => {
+        const now = Date.now();
+        sweepLiveDragging(now);
         const dragEntries = Object.entries(drags);
         const buffer = remoteDragBufferRef.current;
         buffer.clear();
         if (dragEntries.length === 0) {
-          if (liveDraggingIdsRef.current.size > 0) {
-            liveDraggingIdsRef.current.clear();
-            flushDeferredLiveDragChanges();
-          }
+          sampledSyncDebugLog(
+            "live-drag:update-empty",
+            {
+              liveDraggingCount: liveDraggingUntilRef.current.size,
+              deferredCount: deferredLiveDragChangesRef.current.size,
+            },
+            lastLiveDragLogAtRef,
+            200
+          );
+          scheduleDeferredFlush();
           return;
         }
 
-        liveDraggingIdsRef.current = new Set(dragEntries.map(([id]) => id));
+        const liveDragging = liveDraggingUntilRef.current;
+        let minTs = Number.POSITIVE_INFINITY;
+        let maxTs = Number.NEGATIVE_INFINITY;
+        const sample: Array<{ id: string; x: number; y: number; ts: number; uid: string }> = [];
         for (const [id, data] of dragEntries) {
+          liveDragging.set(id, now + LIVE_DRAG_HOLD_MS);
           buffer.set(id, { x: data.x, y: data.y });
+          if (data.ts < minTs) minTs = data.ts;
+          if (data.ts > maxTs) maxTs = data.ts;
+          if (sample.length < 4) {
+            sample.push({ id, x: data.x, y: data.y, ts: data.ts, uid: data.uid });
+          }
         }
+        sampledSyncDebugLog(
+          "live-drag:update",
+          {
+            entries: dragEntries.length,
+            minTs,
+            maxTs,
+            liveDraggingCount: liveDragging.size,
+            sample,
+          },
+          lastLiveDragLogAtRef,
+          80
+        );
+        scheduleDeferredFlush();
 
         if (remoteDragRafRef.current) return;
         remoteDragRafRef.current = requestAnimationFrame(() => {
@@ -237,13 +402,38 @@ export default function BoardPage() {
             const store = useCanvasStore.getState();
             const shapeById = new Map(store.shapes.map((shape) => [shape.id, shape]));
             const updates: Array<{ id: string; patch: Partial<Shape> }> = [];
+            const updateSample: Array<{
+              id: string;
+              fromX: number;
+              fromY: number;
+              toX: number;
+              toY: number;
+            }> = [];
             for (const [id, pos] of remoteDragBufferRef.current) {
               const shape = shapeById.get(id);
               if (shape && (shape.x !== pos.x || shape.y !== pos.y)) {
                 updates.push({ id, patch: { x: pos.x, y: pos.y } });
+                if (updateSample.length < 4) {
+                  updateSample.push({
+                    id,
+                    fromX: shape.x,
+                    fromY: shape.y,
+                    toX: pos.x,
+                    toY: pos.y,
+                  });
+                }
               }
             }
             if (updates.length > 0) store.updateShapes(updates);
+            sampledSyncDebugLog(
+              "live-drag:raf-apply",
+              {
+                updates: updates.length,
+                updateSample,
+              },
+              lastLiveDragLogAtRef,
+              80
+            );
           } finally {
             isSyncingRef.current--;
           }
@@ -271,7 +461,11 @@ export default function BoardPage() {
         cancelAnimationFrame(remoteDragRafRef.current);
         remoteDragRafRef.current = 0;
       }
-      liveDraggingIdsRef.current.clear();
+      if (liveDragSweepTimerRef.current) {
+        clearTimeout(liveDragSweepTimerRef.current);
+        liveDragSweepTimerRef.current = null;
+      }
+      liveDraggingUntilRef.current.clear();
       deferredLiveDragChangesRef.current.clear();
       writeQueueRef.current = Promise.resolve();
       isSyncingRef.current++;
@@ -291,7 +485,16 @@ export default function BoardPage() {
       window.removeEventListener("beforeunload", onBeforeSignOut);
       teardown();
     };
-  }, [user, profile, boardId, renderOnly, flushDeferredLiveDragChanges]);
+  }, [
+    user,
+    profile,
+    boardId,
+    renderOnly,
+    flushDeferredLiveDragChanges,
+    scheduleDeferredFlush,
+    sweepLiveDragging,
+    sampledSyncDebugLog,
+  ]);
 
   // ── Broadcast cursor position ───────────────────────────────────────
 
@@ -360,6 +563,24 @@ export default function BoardPage() {
         return;
       }
 
+      sampledSyncDebugLog(
+        "outbound-write:queue",
+        {
+          added: added.length,
+          deleted: deleted.length,
+          modified: modified.length,
+          ids: takeSampleIds(
+            [
+              ...added.map((shape) => shape.id),
+              ...deleted,
+              ...modified.map((update) => update.id),
+            ].values()
+          ),
+        },
+        lastWriteLogAtRef,
+        120
+      );
+
       const idsToTrack = [
         ...added.map((shape) => shape.id),
         ...deleted,
@@ -377,7 +598,7 @@ export default function BoardPage() {
       cancelled = true;
       unsub();
     };
-  }, [boardReady, boardId, user, renderOnly]);
+  }, [boardReady, boardId, user, renderOnly, sampledSyncDebugLog]);
 
   const handleLiveDrag = useCallback((shapes: Array<{ id: string; x: number; y: number }>) => {
     liveDragBroadcasterRef.current?.broadcast(shapes);

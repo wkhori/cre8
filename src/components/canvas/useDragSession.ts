@@ -7,9 +7,6 @@ import { useCanvasStore } from "@/store/canvas-store";
 import { useDebugStore } from "@/store/debug-store";
 
 interface DragSession {
-  anchorId: string;
-  anchorStartX: number;
-  anchorStartY: number;
   ids: string[];
   basePositions: Map<string, { x: number; y: number }>;
 }
@@ -66,11 +63,7 @@ export function useDragSession(
         if (s) basePositions.set(sid, { x: s.x, y: s.y });
       }
 
-      const anchor = shapeMap.get(id);
       dragSessionRef.current = {
-        anchorId: id,
-        anchorStartX: anchor?.x ?? 0,
-        anchorStartY: anchor?.y ?? 0,
         ids,
         basePositions,
       };
@@ -98,18 +91,16 @@ export function useDragSession(
       }
 
       // Compute all positions from anchor delta (no stage.findOne calls)
-      const dx = node.x() - session.anchorStartX;
-      const dy = node.y() - session.anchorStartY;
+      const draggedBase = session.basePositions.get(id);
+      if (!draggedBase) return;
+      const dx = node.x() - draggedBase.x;
+      const dy = node.y() - draggedBase.y;
 
       // Reuse existing Map to reduce GC pressure
       const positions = dragPositionsRef.current;
       positions.clear();
       for (const [sid, base] of session.basePositions) {
-        if (sid === id) {
-          positions.set(sid, { x: node.x(), y: node.y() });
-        } else {
-          positions.set(sid, { x: base.x + dx, y: base.y + dy });
-        }
+        positions.set(sid, { x: base.x + dx, y: base.y + dy });
       }
 
       // Schedule single RAF flush — only bump epoch when connectors need tracking
