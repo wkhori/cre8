@@ -144,9 +144,9 @@ export default function CanvasStage({
       base = base.map((s) => {
         if (s.id !== ep.connectorId || s.type !== "connector") return s;
         if (ep.end === "from") {
-          return { ...s, fromId: null, fromPoint: { x: ep.x, y: ep.y } } as Shape;
+          return { ...s, fromId: null, fromPoint: { x: ep.x - s.x, y: ep.y - s.y } } as Shape;
         }
-        return { ...s, toId: null, toPoint: { x: ep.x, y: ep.y } } as Shape;
+        return { ...s, toId: null, toPoint: { x: ep.x - s.x, y: ep.y - s.y } } as Shape;
       });
     }
 
@@ -163,6 +163,13 @@ export default function CanvasStage({
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shapes, connectorIds.size, drag.dragEpoch, connectorEP.endpointDrag]);
+
+  // Connector point resolution must use drag-aware positions while dragging.
+  // Reuse the base map when no drag/endpoint override is active.
+  const connectorShapesById = useMemo(() => {
+    if (connectorAllShapes === shapes) return shapesById;
+    return new Map(connectorAllShapes.map((shape) => [shape.id, shape]));
+  }, [connectorAllShapes, shapes, shapesById]);
 
   // Viewport culling: only render shapes visible on screen
   const visibleShapes = useMemo(() => {
@@ -339,7 +346,7 @@ export default function CanvasStage({
               isSelected={selectedIdSet.has(shape.id)}
               isDark={isDark}
               allShapes={shape.type === "connector" ? connectorAllShapes : undefined}
-              shapesById={shape.type === "connector" ? shapesById : undefined}
+              shapesById={shape.type === "connector" ? connectorShapesById : undefined}
               siblingMap={shape.type === "connector" ? siblingMap : undefined}
               isConnectorHover={activeTool === "connector" && connector.hoveredShapeId === shape.id}
               onSelect={handleShapeClick}

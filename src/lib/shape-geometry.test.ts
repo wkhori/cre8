@@ -11,6 +11,8 @@ import type {
 import {
   getShapeBounds,
   edgeIntersection,
+  shapeEdgeIntersection,
+  shapeContainsPoint,
   computeConnectorPoints,
   connectorPairKey,
 } from "@/lib/shape-geometry";
@@ -173,6 +175,49 @@ describe("edgeIntersection", () => {
   });
 });
 
+describe("shapeEdgeIntersection", () => {
+  const baseProps = { rotation: 0, opacity: 1, zIndex: 0 };
+
+  it("intersects circles at the ellipse edge (not the bounding box corner)", () => {
+    const circle: CircleShape = {
+      id: "c-edge",
+      type: "circle",
+      x: 100,
+      y: 100,
+      radiusX: 50,
+      radiusY: 50,
+      fill: "#000",
+      ...baseProps,
+    };
+
+    const pt = shapeEdgeIntersection(circle, 200, 200);
+    expect(pt.x).toBeCloseTo(135.355, 2);
+    expect(pt.y).toBeCloseTo(135.355, 2);
+    expect(pt.x).not.toBeCloseTo(150, 2);
+    expect(pt.y).not.toBeCloseTo(150, 2);
+  });
+});
+
+describe("shapeContainsPoint", () => {
+  const baseProps = { rotation: 0, opacity: 1, zIndex: 0 };
+
+  it("uses ellipse hit testing for circles", () => {
+    const circle: CircleShape = {
+      id: "c-hit",
+      type: "circle",
+      x: 100,
+      y: 100,
+      radiusX: 40,
+      radiusY: 20,
+      fill: "#000",
+      ...baseProps,
+    };
+
+    expect(shapeContainsPoint(circle, 130, 100)).toBe(true);
+    expect(shapeContainsPoint(circle, 140, 120)).toBe(false);
+  });
+});
+
 describe("computeConnectorPoints", () => {
   const baseProps = { rotation: 0, opacity: 1, zIndex: 0 };
 
@@ -243,6 +288,35 @@ describe("computeConnectorPoints", () => {
     expect(pts[3]).toBe(500);
   });
 
+  it("uses ellipse-edge anchoring for circle endpoints", () => {
+    const circle: CircleShape = {
+      id: "circle-a",
+      type: "circle",
+      x: 100,
+      y: 100,
+      radiusX: 50,
+      radiusY: 50,
+      fill: "#000",
+      ...baseProps,
+    };
+    const conn: ConnectorShape = {
+      id: "c2b",
+      type: "connector",
+      x: 0,
+      y: 0,
+      fromId: "circle-a",
+      toPoint: { x: 200, y: 200 },
+      style: "arrow",
+      stroke: "#000",
+      strokeWidth: 2,
+      ...baseProps,
+    };
+
+    const pts = computeConnectorPoints(conn, [circle, conn]);
+    expect(pts[0]).toBeCloseTo(135.355, 2);
+    expect(pts[1]).toBeCloseTo(135.355, 2);
+  });
+
   it("computes point-to-point connector", () => {
     const conn: ConnectorShape = {
       id: "c3",
@@ -258,6 +332,23 @@ describe("computeConnectorPoints", () => {
     };
     const pts = computeConnectorPoints(conn, [conn]);
     expect(pts).toEqual([10, 20, 200, 300]);
+  });
+
+  it("applies connector x/y translation to free-point connector endpoints", () => {
+    const conn: ConnectorShape = {
+      id: "c3b",
+      type: "connector",
+      x: 30,
+      y: 40,
+      fromPoint: { x: 10, y: 20 },
+      toPoint: { x: 200, y: 300 },
+      style: "line",
+      stroke: "#000",
+      strokeWidth: 2,
+      ...baseProps,
+    };
+    const pts = computeConnectorPoints(conn, [conn]);
+    expect(pts).toEqual([40, 60, 230, 340]);
   });
 
   it("returns fallback for missing endpoints", () => {

@@ -146,17 +146,26 @@ export function useDragSession(
       if (!session) return;
 
       const node = e.target;
-      const stage = stageRef.current;
-
-      // Commit final positions: read actual Konva node positions (one-time)
+      const nextPositions = computeDragPositions(session.basePositions, id, node.x(), node.y());
       const updates: Array<{ id: string; patch: Partial<Shape> }> = [];
-      if (session.ids.length <= 1) {
-        updates.push({ id, patch: { x: node.x(), y: node.y() } });
-      } else if (stage) {
+      if (nextPositions) {
+        const shapeById = new Map(
+          useCanvasStore.getState().shapes.map((shape) => [shape.id, shape])
+        );
         for (const sid of session.ids) {
-          const sNode = stage.findOne(`#${sid}`);
-          if (sNode) {
-            updates.push({ id: sid, patch: { x: sNode.x(), y: sNode.y() } });
+          const shape = shapeById.get(sid);
+          const nextPos = nextPositions.get(sid);
+          if (!shape || !nextPos) continue;
+
+          if (shape.type === "connector") {
+            // Connector points are derived from attached endpoints. Only persist translation
+            // for connectors with at least one free endpoint (fromPoint/toPoint).
+            const hasFreeEndpoint = !shape.fromId || !shape.toId;
+            if (!hasFreeEndpoint) continue;
+          }
+
+          if (shape.x !== nextPos.x || shape.y !== nextPos.y) {
+            updates.push({ id: sid, patch: { x: nextPos.x, y: nextPos.y } });
           }
         }
       }
@@ -182,7 +191,7 @@ export function useDragSession(
       onLiveDragEnd?.();
       onUnlockShapes?.();
     },
-    [stageRef, updateShape, updateShapes, onLiveDragEnd, onUnlockShapes]
+    [updateShape, updateShapes, onLiveDragEnd, onUnlockShapes]
   );
 
   useEffect(() => {

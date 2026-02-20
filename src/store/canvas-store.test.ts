@@ -300,6 +300,90 @@ describe("canvas-store", () => {
     expect(remaining[0].id).toBe(circle.id);
   });
 
+  it("duplicateShapes includes internal connector and remaps refs", () => {
+    const store = useCanvasStore.getState();
+    store.addRect(100, 100);
+    store.addCircle(300, 300);
+    const [rect, circle] = useCanvasStore.getState().shapes;
+    const connId = store.addConnector({ id: rect.id }, { id: circle.id }, "arrow");
+
+    // Duplicate only endpoint shapes; connector should be pulled in automatically.
+    store.duplicateShapes([rect.id, circle.id]);
+
+    const shapes = useCanvasStore.getState().shapes;
+    const duplicatedRect = shapes.find(
+      (s) => s.type === "rect" && s.id !== rect.id && s.x === rect.x + 20 && s.y === rect.y + 20
+    );
+    const duplicatedCircle = shapes.find(
+      (s) =>
+        s.type === "circle" && s.id !== circle.id && s.x === circle.x + 20 && s.y === circle.y + 20
+    );
+    const duplicatedConn = shapes.find((s) => s.type === "connector" && s.id !== connId);
+
+    expect(duplicatedRect).toBeDefined();
+    expect(duplicatedCircle).toBeDefined();
+    expect(duplicatedConn).toBeDefined();
+    if (!duplicatedRect || !duplicatedCircle || !duplicatedConn) throw new Error("unreachable");
+    if (duplicatedConn.type !== "connector") throw new Error("unreachable");
+
+    expect(duplicatedConn.fromId).toBe(duplicatedRect.id);
+    expect(duplicatedConn.toId).toBe(duplicatedCircle.id);
+  });
+
+  it("copy/paste includes internal connector and remaps refs", () => {
+    const store = useCanvasStore.getState();
+    store.addRect(100, 100);
+    store.addCircle(300, 300);
+    const [rect, circle] = useCanvasStore.getState().shapes;
+    const connId = store.addConnector({ id: rect.id }, { id: circle.id }, "arrow");
+
+    // Copy only endpoint shapes; connector should be pulled in automatically.
+    store.setSelected([rect.id, circle.id]);
+    store.copySelected();
+    store.paste(30, 40);
+
+    const shapes = useCanvasStore.getState().shapes;
+    const pastedRect = shapes.find(
+      (s) => s.type === "rect" && s.id !== rect.id && s.x === rect.x + 30 && s.y === rect.y + 40
+    );
+    const pastedCircle = shapes.find(
+      (s) =>
+        s.type === "circle" && s.id !== circle.id && s.x === circle.x + 30 && s.y === circle.y + 40
+    );
+    const pastedConn = shapes.find((s) => s.type === "connector" && s.id !== connId);
+
+    expect(pastedRect).toBeDefined();
+    expect(pastedCircle).toBeDefined();
+    expect(pastedConn).toBeDefined();
+    if (!pastedRect || !pastedCircle || !pastedConn) throw new Error("unreachable");
+    if (pastedConn.type !== "connector") throw new Error("unreachable");
+
+    expect(pastedConn.fromId).toBe(pastedRect.id);
+    expect(pastedConn.toId).toBe(pastedCircle.id);
+  });
+
+  it("paste translates free-point connectors via x/y while preserving local endpoints", () => {
+    const store = useCanvasStore.getState();
+    const connId = store.addConnector(
+      { point: { x: 10, y: 20 } },
+      { point: { x: 200, y: 300 } },
+      "line"
+    );
+    store.setSelected([connId]);
+    store.copySelected();
+    store.paste(15, 25);
+
+    const pastedConn = useCanvasStore
+      .getState()
+      .shapes.find((s) => s.type === "connector" && s.id !== connId);
+    expect(pastedConn).toBeDefined();
+    if (!pastedConn || pastedConn.type !== "connector") throw new Error("unreachable");
+    expect(pastedConn.x).toBe(15);
+    expect(pastedConn.y).toBe(25);
+    expect(pastedConn.fromPoint).toEqual({ x: 10, y: 20 });
+    expect(pastedConn.toPoint).toEqual({ x: 200, y: 300 });
+  });
+
   // ── Update sticky/frame fields ──────────────────────────────────
   it("updateShape modifies sticky text", () => {
     const store = useCanvasStore.getState();
