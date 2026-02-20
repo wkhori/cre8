@@ -13,8 +13,6 @@ interface ShapeRendererProps {
   allShapes?: Shape[];
   shapesById?: Map<string, Shape>;
   siblingMap?: Map<string, import("@/lib/types").ConnectorShape[]>;
-  /** Monotonically increasing counter that forces connector re-render during drag */
-  epoch?: number;
   isConnectorHover?: boolean;
   onSelect: (id: string, e: Konva.KonvaEventObject<MouseEvent | TouchEvent>) => void;
   onDragStart: (id: string) => void;

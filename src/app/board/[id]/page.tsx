@@ -137,8 +137,7 @@ export default function BoardPage() {
   }, [sweepLiveDragging, flushDeferredLiveDragChanges]);
 
   useEffect(() => {
-    if (!user || !profile || !boardId) return;
-    if (renderOnly) return;
+    if (!user || !profile || !boardId || renderOnly) return;
 
     let unsubObjects: (() => void) | null = null;
     let unsubLiveDrags: (() => void) | null = null;

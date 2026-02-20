@@ -341,7 +341,6 @@ export default function CanvasStage({
               allShapes={shape.type === "connector" ? connectorAllShapes : undefined}
               shapesById={shape.type === "connector" ? shapesById : undefined}
               siblingMap={shape.type === "connector" ? siblingMap : undefined}
-              epoch={shape.type === "connector" ? drag.dragEpoch : undefined}
               isConnectorHover={activeTool === "connector" && connector.hoveredShapeId === shape.id}
               onSelect={handleShapeClick}
               onDragStart={drag.handleDragStart}
