@@ -48,6 +48,7 @@ export default function CanvasStage({
   const toggleSelected = useCanvasStore((s) => s.toggleSelected);
 
   const activeTool = useDebugStore((s) => s.activeTool);
+  const interaction = useDebugStore((s) => s.interaction);
 
   // ── Extracted hooks ──────────────────────────────────────────────
   const viewport = useViewport(stageRef, containerRef, transformerRef);
@@ -339,27 +340,31 @@ export default function CanvasStage({
           />
         </Layer>
         <Layer ref={layerRef}>
-          {visibleShapes.map((shape) => (
-            <ShapeRenderer
-              key={shape.id}
-              shape={shape}
-              isSelected={selectedIdSet.has(shape.id)}
-              isDark={isDark}
-              allShapes={shape.type === "connector" ? connectorAllShapes : undefined}
-              shapesById={shape.type === "connector" ? connectorShapesById : undefined}
-              siblingMap={shape.type === "connector" ? siblingMap : undefined}
-              isConnectorHover={activeTool === "connector" && connector.hoveredShapeId === shape.id}
-              onSelect={handleShapeClick}
-              onDragStart={drag.handleDragStart}
-              onDragMove={drag.handleDragMove}
-              onDragEnd={drag.handleDragEnd}
-              onDblClick={textEditing.handleShapeDblClick}
-              onMouseEnter={activeTool === "connector" ? connector.setHoveredShapeId : undefined}
-              onMouseLeave={
-                activeTool === "connector" ? () => connector.setHoveredShapeId(null) : undefined
-              }
-            />
-          ))}
+          {visibleShapes.map((shape) => {
+            const renderShape =
+              shape.type === "connector" ? (connectorShapesById.get(shape.id) ?? shape) : shape;
+            return (
+              <ShapeRenderer
+                key={shape.id}
+                shape={renderShape}
+                isSelected={selectedIdSet.has(shape.id)}
+                isDark={isDark}
+                allShapes={shape.type === "connector" ? connectorAllShapes : undefined}
+                shapesById={shape.type === "connector" ? connectorShapesById : undefined}
+                siblingMap={shape.type === "connector" ? siblingMap : undefined}
+                isConnectorHover={activeTool === "connector" && connector.hoveredShapeId === shape.id}
+                onSelect={handleShapeClick}
+                onDragStart={drag.handleDragStart}
+                onDragMove={drag.handleDragMove}
+                onDragEnd={drag.handleDragEnd}
+                onDblClick={textEditing.handleShapeDblClick}
+                onMouseEnter={activeTool === "connector" ? connector.setHoveredShapeId : undefined}
+                onMouseLeave={
+                  activeTool === "connector" ? () => connector.setHoveredShapeId(null) : undefined
+                }
+              />
+            );
+          })}
 
           {/* Connector preview line while creating */}
           {connector.connectorPreview && (
@@ -373,40 +378,42 @@ export default function CanvasStage({
             />
           )}
 
-          {/* Draggable endpoint handles for selected connectors */}
-          {connectorEP.selectedConnectorEndpoints.map((ep) => (
-            <Circle
-              key={`${ep.connectorId}-${ep.end}`}
-              x={ep.x}
-              y={ep.y}
-              radius={6 / viewport.viewportRef.current.scale}
-              fill="#fff"
-              stroke="#3b82f6"
-              strokeWidth={2 / viewport.viewportRef.current.scale}
-              draggable
-              perfectDrawEnabled={false}
-              onDragMove={(e) => {
-                connectorEP.setEndpointDrag({
-                  connectorId: ep.connectorId,
-                  end: ep.end,
-                  x: e.target.x(),
-                  y: e.target.y(),
-                });
-              }}
-              onDragEnd={(e) => {
-                connectorEP.setEndpointDrag(null);
-                connectorEP.handleEndpointDragEnd(ep.connectorId, ep.end, e);
-              }}
-              onMouseEnter={(e) => {
-                const container = e.target.getStage()?.container();
-                if (container) container.style.cursor = "grab";
-              }}
-              onMouseLeave={(e) => {
-                const container = e.target.getStage()?.container();
-                if (container) container.style.cursor = cursorStyle;
-              }}
-            />
-          ))}
+          {/* Draggable endpoint handles for selected connectors.
+              Hide during shape dragging to avoid transient handle jitter. */}
+          {interaction !== "dragging" &&
+            connectorEP.selectedConnectorEndpoints.map((ep) => (
+              <Circle
+                key={`${ep.connectorId}-${ep.end}`}
+                x={ep.x}
+                y={ep.y}
+                radius={6 / viewport.viewportRef.current.scale}
+                fill="#fff"
+                stroke="#3b82f6"
+                strokeWidth={2 / viewport.viewportRef.current.scale}
+                draggable
+                perfectDrawEnabled={false}
+                onDragMove={(e) => {
+                  connectorEP.setEndpointDrag({
+                    connectorId: ep.connectorId,
+                    end: ep.end,
+                    x: e.target.x(),
+                    y: e.target.y(),
+                  });
+                }}
+                onDragEnd={(e) => {
+                  connectorEP.setEndpointDrag(null);
+                  connectorEP.handleEndpointDragEnd(ep.connectorId, ep.end, e);
+                }}
+                onMouseEnter={(e) => {
+                  const container = e.target.getStage()?.container();
+                  if (container) container.style.cursor = "grab";
+                }}
+                onMouseLeave={(e) => {
+                  const container = e.target.getStage()?.container();
+                  if (container) container.style.cursor = cursorStyle;
+                }}
+              />
+            ))}
 
           <Transformer
             ref={transformerRef}
