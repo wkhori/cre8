@@ -9,6 +9,8 @@ import { getShapeBounds } from "@/lib/shape-geometry";
 
 interface DragSession {
   ids: string[];
+  /** IDs that were added implicitly (frame children, not directly selected) */
+  implicitIds: Set<string>;
   basePositions: Map<string, { x: number; y: number }>;
   siblingNodes: Map<string, Konva.Node>;
 }
@@ -100,23 +102,20 @@ export function useDragSession(
         if (s) basePositions.set(sid, { x: s.x, y: s.y });
       }
 
-      // Cache Konva node refs for siblings so handleDragMove avoids stage.findOne
-      const siblingNodes = new Map<string, Konva.Node>();
-      const stage = stageRef.current;
-      if (stage) {
-        for (const sid of allIds) {
-          const node = stage.findOne(`#${sid}`);
-          if (node) siblingNodes.set(sid, node);
-        }
+      // Implicit children: IDs added by collectChildren, not directly selected
+      const implicitIds = new Set<string>();
+      for (const sid of allIds) {
+        if (!ids.includes(sid)) implicitIds.add(sid);
       }
 
       dragSessionRef.current = {
         ids: allIds,
+        implicitIds,
         basePositions,
-        siblingNodes,
+        siblingNodes: new Map(),
       };
     },
-    [setSelected, onLockShapes, stageRef]
+    [setSelected, onLockShapes]
   );
 
   const handleDragMove = useCallback(
@@ -147,10 +146,17 @@ export function useDragSession(
       positions.clear();
       for (const [sid, next] of nextPositions) {
         positions.set(sid, next);
-        // Physically move sibling/child Konva nodes so they track during drag
-        // Uses cached node refs from dragStart — no stage.findOne per frame
-        if (sid !== id) {
-          const sibling = session.siblingNodes.get(sid);
+        // Only move implicit children (frame descendants not directly selected).
+        // Selected shapes are moved by Konva's native drag — no findOne needed.
+        if (session.implicitIds.has(sid)) {
+          let sibling = session.siblingNodes.get(sid);
+          if (!sibling) {
+            const found = stage.findOne(`#${sid}`);
+            if (found) {
+              session.siblingNodes.set(sid, found);
+              sibling = found;
+            }
+          }
           if (sibling) {
             sibling.position(next);
           }

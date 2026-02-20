@@ -8,7 +8,7 @@ import { getShapeBounds } from "@/lib/shape-geometry";
 import { useCanvasStore } from "@/store/canvas-store";
 
 export const MIN_SCALE = 0.1;
-export const MAX_SCALE = 10;
+export const MAX_SCALE = 5;
 
 export interface ViewportState {
   scale: number;
