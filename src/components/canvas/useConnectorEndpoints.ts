@@ -17,6 +17,24 @@ export function useConnectorEndpoints(
     x: number;
     y: number;
   } | null>(null);
+  const [hoveredAttachShapeId, setHoveredAttachShapeId] = useState<string | null>(null);
+
+  const attachableShapes = useMemo(
+    () =>
+      [...shapes].filter((shape) => shape.type !== "connector").sort((a, b) => b.zIndex - a.zIndex),
+    [shapes]
+  );
+
+  const findAttachableShapeAt = useCallback(
+    (x: number, y: number, connectorId: string): Shape | null => {
+      for (const shape of attachableShapes) {
+        if (shape.id === connectorId) continue;
+        if (shapeContainsPoint(shape, x, y)) return shape;
+      }
+      return null;
+    },
+    [attachableShapes]
+  );
 
   // Compute draggable endpoint positions for selected connectors
   const selectedConnectorEndpoints = useMemo(() => {
@@ -77,6 +95,18 @@ export function useConnectorEndpoints(
     return result;
   }, [selectedIds, shapesById]);
 
+  const handleEndpointDragMove = useCallback(
+    (connectorId: string, end: "from" | "to", e: Konva.KonvaEventObject<DragEvent>) => {
+      const node = e.target;
+      const x = node.x();
+      const y = node.y();
+      setEndpointDrag({ connectorId, end, x, y });
+      const hitShape = findAttachableShapeAt(x, y, connectorId);
+      setHoveredAttachShapeId(hitShape?.id ?? null);
+    },
+    [findAttachableShapeAt]
+  );
+
   const handleEndpointDragEnd = useCallback(
     (connectorId: string, end: "from" | "to", e: Konva.KonvaEventObject<DragEvent>) => {
       const node = e.target;
@@ -88,11 +118,7 @@ export function useConnectorEndpoints(
       const connectorX = connector?.x ?? 0;
       const connectorY = connector?.y ?? 0;
 
-      // Hit-test: find the shape under the drop point (excluding connectors)
-      const hitShape = shapes.find((s) => {
-        if (s.type === "connector" || s.id === connectorId) return false;
-        return shapeContainsPoint(s, dropX, dropY);
-      });
+      const hitShape = findAttachableShapeAt(dropX, dropY, connectorId);
 
       const store = useCanvasStore.getState();
       store.pushHistory();
@@ -119,14 +145,19 @@ export function useConnectorEndpoints(
           } as Partial<Shape>);
         }
       }
+
+      setEndpointDrag(null);
+      setHoveredAttachShapeId(null);
     },
-    [shapes]
+    [shapes, findAttachableShapeAt]
   );
 
   return {
     endpointDrag,
     setEndpointDrag,
+    hoveredAttachShapeId,
     selectedConnectorEndpoints,
+    handleEndpointDragMove,
     handleEndpointDragEnd,
   };
 }

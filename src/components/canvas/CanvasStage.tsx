@@ -133,6 +133,9 @@ export default function CanvasStage({
 
   // Connector endpoints hook (needs shapesById)
   const connectorEP = useConnectorEndpoints(shapesById, selectedIds, shapes);
+  const hoverHighlightShapeId =
+    connectorEP.hoveredAttachShapeId ??
+    (activeTool === "connector" ? connector.hoveredShapeId : null);
 
   // Drag-aware shapes for connectors — applies local drag + endpoint drag
   // This is the ONLY memo that rebuilds during drag/endpoint drag
@@ -352,7 +355,7 @@ export default function CanvasStage({
                 allShapes={shape.type === "connector" ? connectorAllShapes : undefined}
                 shapesById={shape.type === "connector" ? connectorShapesById : undefined}
                 siblingMap={shape.type === "connector" ? siblingMap : undefined}
-                isConnectorHover={activeTool === "connector" && connector.hoveredShapeId === shape.id}
+                isConnectorHover={hoverHighlightShapeId === shape.id}
                 onSelect={handleShapeClick}
                 onDragStart={drag.handleDragStart}
                 onDragMove={drag.handleDragMove}
@@ -393,15 +396,9 @@ export default function CanvasStage({
                 draggable
                 perfectDrawEnabled={false}
                 onDragMove={(e) => {
-                  connectorEP.setEndpointDrag({
-                    connectorId: ep.connectorId,
-                    end: ep.end,
-                    x: e.target.x(),
-                    y: e.target.y(),
-                  });
+                  connectorEP.handleEndpointDragMove(ep.connectorId, ep.end, e);
                 }}
                 onDragEnd={(e) => {
-                  connectorEP.setEndpointDrag(null);
                   connectorEP.handleEndpointDragEnd(ep.connectorId, ep.end, e);
                 }}
                 onMouseEnter={(e) => {
