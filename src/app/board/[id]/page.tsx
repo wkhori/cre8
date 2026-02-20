@@ -651,7 +651,7 @@ export default function BoardPage() {
           onLiveDragEnd={handleLiveDragEnd}
         />
         {showDebug && <DebugDashboard />}
-        {user && <AICommandInput boardId={boardId} />}
+        {user && <AICommandInput />}
       </div>
     </div>
   );

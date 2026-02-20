@@ -22,7 +22,7 @@ interface CommandHistoryEntry {
 const COOLDOWN_MS = 2000;
 const MAX_HISTORY = 10;
 
-export function useAIAgent(boardId: string) {
+export function useAIAgent() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastResult, setLastResult] = useState<AICommandResult | null>(null);
@@ -106,7 +106,7 @@ export function useAIAgent(boardId: string) {
         setLoading(false);
       }
     },
-    [boardId]
+    []
   );
 
   const clearError = useCallback(() => setError(null), []);
