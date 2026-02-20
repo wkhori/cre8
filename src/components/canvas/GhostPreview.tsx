@@ -3,7 +3,7 @@
 import { useRef, useEffect } from "react";
 import { Rect, Ellipse, Text, Group } from "react-konva";
 import type Konva from "konva";
-import type { ActiveTool } from "@/store/debug-store";
+import type { ActiveTool } from "@/store/ui-store";
 
 interface GhostPreviewProps {
   activeTool: ActiveTool;

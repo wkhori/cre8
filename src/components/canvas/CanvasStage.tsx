@@ -5,6 +5,7 @@ import { Stage, Layer, Transformer, Rect, Line, Circle } from "react-konva";
 import type Konva from "konva";
 import type { Shape, ConnectorShape } from "@/lib/types";
 import { useCanvasStore } from "@/store/canvas-store";
+import { useUIStore } from "@/store/ui-store";
 import { useDebugStore } from "@/store/debug-store";
 import { getShapeBounds, connectorPairKey } from "@/lib/shape-geometry";
 import ShapeRenderer from "./ShapeRenderer";
@@ -49,8 +50,8 @@ export default function CanvasStage({
   const setSelected = useCanvasStore((s) => s.setSelected);
   const toggleSelected = useCanvasStore((s) => s.toggleSelected);
 
-  const activeTool = useDebugStore((s) => s.activeTool);
-  const interaction = useDebugStore((s) => s.interaction);
+  const activeTool = useUIStore((s) => s.activeTool);
+  const interaction = useUIStore((s) => s.interaction);
 
   // ── Extracted hooks ──────────────────────────────────────────────
   const viewport = useViewport(stageRef, containerRef, transformerRef);
@@ -221,7 +222,7 @@ export default function CanvasStage({
 
   // ── Sync debug store ─────────────────────────────────────────────
   useEffect(() => {
-    useDebugStore.getState().setObjectCount(shapes.length);
+    useDebugStore.getState().setShapeCount(shapes.length);
   }, [shapes.length]);
 
   useEffect(() => {
@@ -237,10 +238,6 @@ export default function CanvasStage({
               : null
       );
   }, [textEditing.editingTextId, selectedIds]);
-
-  useEffect(() => {
-    useDebugStore.getState().setKonvaNodeCount(shapes.length);
-  }, [shapes.length]);
 
   // ── Composed event handlers ──────────────────────────────────────
   const handleMouseDown = useCallback(
@@ -260,7 +257,7 @@ export default function CanvasStage({
       // Connector tool: delegate to hook
       if (connector.handleCanvasClick(worldX, worldY)) return;
 
-      const isHand = spaceHeldRef.current || useDebugStore.getState().activeTool === "hand";
+      const isHand = spaceHeldRef.current || useUIStore.getState().activeTool === "hand";
 
       if (isHand) {
         viewport.startPan({ x: pos.x, y: pos.y });
@@ -323,7 +320,7 @@ export default function CanvasStage({
     (id: string, e: Konva.KonvaEventObject<MouseEvent | TouchEvent>) => {
       e.cancelBubble = true;
 
-      if (spaceHeldRef.current || useDebugStore.getState().activeTool === "hand") return;
+      if (spaceHeldRef.current || useUIStore.getState().activeTool === "hand") return;
 
       if (connector.handleShapeClick(id)) return;
 

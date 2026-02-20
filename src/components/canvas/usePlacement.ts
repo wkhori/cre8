@@ -2,7 +2,7 @@
 
 import { useRef, useCallback, useState } from "react";
 import { useCanvasStore } from "@/store/canvas-store";
-import { useDebugStore } from "@/store/debug-store";
+import { useUIStore } from "@/store/ui-store";
 
 interface DrawingBounds {
   x: number;
@@ -16,22 +16,22 @@ export function usePlacement() {
   const [drawingBounds, setDrawingBounds] = useState<DrawingBounds | null>(null);
 
   const handlePlacementMouseDown = useCallback((worldX: number, worldY: number): boolean => {
-    const tool = useDebugStore.getState().activeTool;
+    const tool = useUIStore.getState().activeTool;
 
     // Click-to-place tools: create shape immediately
     if (tool === "place-rect") {
       useCanvasStore.getState().addRect(worldX, worldY);
-      useDebugStore.getState().setActiveTool("pointer");
+      useUIStore.getState().setActiveTool("pointer");
       return true;
     }
     if (tool === "place-circle") {
       useCanvasStore.getState().addCircle(worldX, worldY);
-      useDebugStore.getState().setActiveTool("pointer");
+      useUIStore.getState().setActiveTool("pointer");
       return true;
     }
     if (tool === "place-text") {
       const id = useCanvasStore.getState().addText(worldX, worldY);
-      useDebugStore.getState().setActiveTool("pointer");
+      useUIStore.getState().setActiveTool("pointer");
       window.requestAnimationFrame(() => {
         window.dispatchEvent(new CustomEvent("start-text-edit", { detail: { id } }));
       });
@@ -39,7 +39,7 @@ export function usePlacement() {
     }
     if (tool === "place-sticky") {
       const id = useCanvasStore.getState().addStickyNote(worldX, worldY);
-      useDebugStore.getState().setActiveTool("pointer");
+      useUIStore.getState().setActiveTool("pointer");
       window.requestAnimationFrame(() => {
         window.dispatchEvent(new CustomEvent("start-text-edit", { detail: { id } }));
       });
@@ -57,7 +57,7 @@ export function usePlacement() {
   }, []);
 
   const handlePlacementMouseMove = useCallback((worldX: number, worldY: number): boolean => {
-    const tool = useDebugStore.getState().activeTool;
+    const tool = useUIStore.getState().activeTool;
     if (tool !== "draw-frame" || !drawOriginRef.current) return false;
 
     const origin = drawOriginRef.current;
@@ -71,7 +71,7 @@ export function usePlacement() {
   }, []);
 
   const handlePlacementMouseUp = useCallback((worldX: number, worldY: number): boolean => {
-    const tool = useDebugStore.getState().activeTool;
+    const tool = useUIStore.getState().activeTool;
     if (tool !== "draw-frame" || !drawOriginRef.current) return false;
 
     const origin = drawOriginRef.current;
@@ -89,11 +89,11 @@ export function usePlacement() {
       // Too small — create default-sized frame at click point
       useCanvasStore.getState().addFrameAtBounds(origin.x - 200, origin.y - 150, 400, 300);
     }
-    useDebugStore.getState().setActiveTool("pointer");
+    useUIStore.getState().setActiveTool("pointer");
     return true;
   }, []);
 
-  const activeTool = useDebugStore((s) => s.activeTool);
+  const activeTool = useUIStore((s) => s.activeTool);
   const isPlacementActive = activeTool.startsWith("place-") || activeTool === "draw-frame";
 
   return {

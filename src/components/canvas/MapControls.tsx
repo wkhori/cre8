@@ -2,7 +2,7 @@
 
 import { useRef, useEffect, useCallback } from "react";
 import { useCanvasStore } from "@/store/canvas-store";
-import { useDebugStore } from "@/store/debug-store";
+import { useUIStore } from "@/store/ui-store";
 import { getShapeBounds } from "@/lib/shape-geometry";
 import { Button } from "@/components/ui/button";
 import { Minus, Plus, Maximize2 } from "lucide-react";
@@ -14,7 +14,7 @@ export default function MapControls() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rafRef = useRef<number>(0);
   const lastDrawRef = useRef(0);
-  const scale = useDebugStore((s) => s.viewport.scale);
+  const scale = useUIStore((s) => s.viewport.scale);
   const pct = Math.round(scale * 100);
 
   // ── Minimap draw ─────────────────────────────────────────────────
@@ -29,7 +29,7 @@ export default function MapControls() {
     lastDrawRef.current = now;
 
     const shapes = useCanvasStore.getState().shapes;
-    const vp = useDebugStore.getState().viewport;
+    const vp = useUIStore.getState().viewport;
     const isDark = document.documentElement.classList.contains("dark");
     const dpr = window.devicePixelRatio || 1;
 
@@ -139,17 +139,36 @@ export default function MapControls() {
     ctx.fillRect(vx, vy, vw, vh);
   }, []);
 
+  // Redraw on store changes instead of every-frame RAF loop.
+  // Only subscribe to viewport slice of debug-store (not pointer, which fires 30fps).
   useEffect(() => {
-    let running = true;
-    const loop = () => {
-      if (!running) return;
-      draw();
-      rafRef.current = requestAnimationFrame(loop);
+    draw();
+
+    const scheduleRedraw = () => {
+      if (rafRef.current) return;
+      rafRef.current = requestAnimationFrame(() => {
+        rafRef.current = 0;
+        draw();
+      });
     };
-    loop();
+
+    const unsubCanvas = useCanvasStore.subscribe(scheduleRedraw);
+    // Subscribe only to viewport changes, not every debug-store update
+    let prevVp = useUIStore.getState().viewport;
+    const unsubDebug = useUIStore.subscribe((state) => {
+      if (state.viewport !== prevVp) {
+        prevVp = state.viewport;
+        scheduleRedraw();
+      }
+    });
+
     return () => {
-      running = false;
-      cancelAnimationFrame(rafRef.current);
+      unsubCanvas();
+      unsubDebug();
+      if (rafRef.current) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = 0;
+      }
     };
   }, [draw]);
 
@@ -162,7 +181,7 @@ export default function MapControls() {
     const clickY = e.clientY - rect.top;
 
     const shapes = useCanvasStore.getState().shapes;
-    const vp = useDebugStore.getState().viewport;
+    const vp = useUIStore.getState().viewport;
     if (shapes.length === 0) return;
 
     let minX = Infinity,
@@ -236,7 +255,7 @@ export default function MapControls() {
 
         <button
           onClick={() => window.dispatchEvent(new CustomEvent("zoom-to", { detail: { scale: 1 } }))}
-          className="min-w-[3rem] rounded px-1.5 py-0.5 text-center text-[11px] font-medium tabular-nums text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
+          className="min-w-12 rounded px-1.5 py-0.5 text-center text-[11px] font-medium tabular-nums text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
           title="Reset to 100% (Cmd+0)"
         >
           {pct}%

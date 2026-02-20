@@ -4,12 +4,13 @@ import { useRef, useCallback, useState, useEffect } from "react";
 import type Konva from "konva";
 import type { Shape } from "@/lib/types";
 import { useCanvasStore } from "@/store/canvas-store";
-import { useDebugStore } from "@/store/debug-store";
+import { useUIStore } from "@/store/ui-store";
 import { getShapeBounds } from "@/lib/shape-geometry";
 
 interface DragSession {
   ids: string[];
   basePositions: Map<string, { x: number; y: number }>;
+  siblingNodes: Map<string, Konva.Node>;
 }
 
 interface ViewportRef {
@@ -65,7 +66,7 @@ export function useDragSession(
 
   const handleDragStart = useCallback(
     (id: string) => {
-      useDebugStore.getState().setInteraction("dragging");
+      useUIStore.getState().setInteraction("dragging");
       useCanvasStore.getState().pushHistory();
 
       const store = useCanvasStore.getState();
@@ -99,12 +100,23 @@ export function useDragSession(
         if (s) basePositions.set(sid, { x: s.x, y: s.y });
       }
 
+      // Cache Konva node refs for siblings so handleDragMove avoids stage.findOne
+      const siblingNodes = new Map<string, Konva.Node>();
+      const stage = stageRef.current;
+      if (stage) {
+        for (const sid of allIds) {
+          const node = stage.findOne(`#${sid}`);
+          if (node) siblingNodes.set(sid, node);
+        }
+      }
+
       dragSessionRef.current = {
         ids: allIds,
         basePositions,
+        siblingNodes,
       };
     },
-    [setSelected, onLockShapes]
+    [setSelected, onLockShapes, stageRef]
   );
 
   const handleDragMove = useCallback(
@@ -136,8 +148,9 @@ export function useDragSession(
       for (const [sid, next] of nextPositions) {
         positions.set(sid, next);
         // Physically move sibling/child Konva nodes so they track during drag
+        // Uses cached node refs from dragStart — no stage.findOne per frame
         if (sid !== id) {
-          const sibling = stage.findOne(`#${sid}`);
+          const sibling = session.siblingNodes.get(sid);
           if (sibling) {
             sibling.position(next);
           }
@@ -266,7 +279,7 @@ export function useDragSession(
       if (hasConnectorsRef.current) {
         setDragEpoch((e) => e + 1);
       }
-      useDebugStore.getState().setInteraction("idle");
+      useUIStore.getState().setInteraction("idle");
 
       onLiveDragEnd?.();
       onUnlockShapes?.();
@@ -286,7 +299,7 @@ export function useDragSession(
       }
       onLiveDragEnd?.();
       onUnlockShapes?.();
-      useDebugStore.getState().setInteraction("idle");
+      useUIStore.getState().setInteraction("idle");
     };
   }, [onLiveDragEnd, onUnlockShapes]);
 

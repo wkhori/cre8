@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import type { Shape, FrameShape, RectShape, CircleShape } from "@/lib/types";
 import { useCanvasStore } from "@/store/canvas-store";
-import { useDebugStore } from "@/store/debug-store";
+import { useUIStore } from "@/store/ui-store";
 import { computeStickyFontSize } from "@/lib/sticky-text";
 
 function resetStores() {
@@ -12,7 +12,7 @@ function resetStores() {
     history: [],
     historyIndex: -1,
   });
-  useDebugStore.setState({
+  useUIStore.setState({
     activeTool: "pointer",
     connectorSourceSelected: false,
     interaction: "idle",
@@ -228,7 +228,7 @@ describe("connector source selected flag", () => {
     let callCount = 0;
     const maxCalls = 100;
 
-    const unsub = useDebugStore.subscribe((state) => {
+    const unsub = useUIStore.subscribe((state) => {
       callCount++;
       if (callCount > maxCalls) {
         throw new Error("Infinite loop detected!");
@@ -239,20 +239,20 @@ describe("connector source selected flag", () => {
     });
 
     // This should NOT cause infinite recursion
-    useDebugStore.getState().setConnectorSourceSelected(true);
-    useDebugStore.getState().setConnectorSourceSelected(false);
-    useDebugStore.getState().setActiveTool("connector");
-    useDebugStore.getState().setActiveTool("pointer");
+    useUIStore.getState().setConnectorSourceSelected(true);
+    useUIStore.getState().setConnectorSourceSelected(false);
+    useUIStore.getState().setActiveTool("connector");
+    useUIStore.getState().setActiveTool("pointer");
 
     expect(callCount).toBeLessThan(maxCalls);
     unsub();
   });
 
   it("activeTool changes propagate through subscriber without recursion", () => {
-    let prevTool = useDebugStore.getState().activeTool;
+    let prevTool = useUIStore.getState().activeTool;
     let toolSwitchCount = 0;
 
-    const unsub = useDebugStore.subscribe((state) => {
+    const unsub = useUIStore.subscribe((state) => {
       const currTool = state.activeTool;
       if (currTool === prevTool) return;
       const wasCon = prevTool === "connector";
@@ -260,16 +260,16 @@ describe("connector source selected flag", () => {
       if (wasCon && currTool !== "connector") {
         toolSwitchCount++;
         // Simulate clearConnectorFrom calling setConnectorSourceSelected
-        useDebugStore.getState().setConnectorSourceSelected(false);
+        useUIStore.getState().setConnectorSourceSelected(false);
       }
     });
 
-    useDebugStore.getState().setActiveTool("connector");
-    useDebugStore.getState().setActiveTool("pointer");
+    useUIStore.getState().setActiveTool("connector");
+    useUIStore.getState().setActiveTool("pointer");
 
     // Should only fire once, not infinitely
     expect(toolSwitchCount).toBe(1);
-    expect(useDebugStore.getState().connectorSourceSelected).toBe(false);
+    expect(useUIStore.getState().connectorSourceSelected).toBe(false);
     unsub();
   });
 });
@@ -290,8 +290,8 @@ describe("placement tool states", () => {
     ] as const;
 
     for (const tool of tools) {
-      useDebugStore.getState().setActiveTool(tool);
-      expect(useDebugStore.getState().activeTool).toBe(tool);
+      useUIStore.getState().setActiveTool(tool);
+      expect(useUIStore.getState().activeTool).toBe(tool);
     }
   });
 

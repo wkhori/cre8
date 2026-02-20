@@ -6,7 +6,7 @@ import type { Bounds } from "@/lib/shape-geometry";
 import { getShapeBounds } from "@/lib/shape-geometry";
 import { getSelectionHitIds } from "@/lib/selection";
 import { useCanvasStore } from "@/store/canvas-store";
-import { useDebugStore } from "@/store/debug-store";
+import { useUIStore } from "@/store/ui-store";
 
 export function useRubberBandSelection(
   stageRef: React.RefObject<Konva.Stage | null>,
@@ -89,7 +89,7 @@ export function useRubberBandSelection(
       selRect.height(0);
       selRect.getLayer()?.batchDraw();
     }
-    useDebugStore.getState().setInteraction("selecting");
+    useUIStore.getState().setInteraction("selecting");
 
     if (!shiftKey) {
       useCanvasStore.getState().clearSelection();
@@ -142,7 +142,7 @@ export function useRubberBandSelection(
           }
         }
       }
-      useDebugStore.getState().setInteraction("idle");
+      useUIStore.getState().setInteraction("idle");
       return true;
     },
     [setSelected]

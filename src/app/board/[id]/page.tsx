@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { useCanvasStore } from "@/store/canvas-store";
+import { useUIStore } from "@/store/ui-store";
 import { useDebugStore } from "@/store/debug-store";
 import { useAuth } from "@/components/auth/AuthProvider";
 import {
@@ -47,7 +48,7 @@ export default function BoardPage() {
 
   const { user, profile, loading: authLoading, actionLoading, signOut } = useAuth();
 
-  const activeTool = useDebugStore((s) => s.activeTool);
+  const activeTool = useUIStore((s) => s.activeTool);
   const isPlacing = activeTool.startsWith("place-") || activeTool === "draw-frame";
 
   const renderOnly = isRenderOnly();

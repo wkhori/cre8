@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { User } from "firebase/auth";
 import { useCanvasStore } from "@/store/canvas-store";
-import { useDebugStore } from "@/store/debug-store";
+import { useUIStore } from "@/store/ui-store";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -174,9 +174,9 @@ export default function BoardToolbar({
   const shapes = useCanvasStore((s) => s.shapes);
   const historyIndex = useCanvasStore((s) => s.historyIndex);
   const historyLength = useCanvasStore((s) => s.history.length);
-  const activeTool = useDebugStore((s) => s.activeTool);
-  const setActiveTool = useDebugStore((s) => s.setActiveTool);
-  const connectorSourceSelected = useDebugStore((s) => s.connectorSourceSelected);
+  const activeTool = useUIStore((s) => s.activeTool);
+  const setActiveTool = useUIStore((s) => s.setActiveTool);
+  const connectorSourceSelected = useUIStore((s) => s.connectorSourceSelected);
 
   const handleResetView = useCallback(() => {
     window.dispatchEvent(new CustomEvent("reset-canvas-view"));

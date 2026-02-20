@@ -2,7 +2,7 @@
 
 import { useRef, useEffect, useCallback, useMemo, useState } from "react";
 import type Konva from "konva";
-import { useDebugStore } from "@/store/debug-store";
+import { useUIStore } from "@/store/ui-store";
 import { throttle } from "@/lib/throttle";
 import { getShapeBounds } from "@/lib/shape-geometry";
 import { useCanvasStore } from "@/store/canvas-store";
@@ -38,11 +38,8 @@ export function useViewport(
   const savedTrNodesRef = useRef<Konva.Node[]>([]);
 
   // Throttled debug store updates
-  const throttledSetPointer = useMemo(() => throttle(useDebugStore.getState().setPointer, 33), []);
-  const throttledSetViewport = useMemo(
-    () => throttle(useDebugStore.getState().setViewport, 50),
-    []
-  );
+  const throttledSetPointer = useMemo(() => throttle(useUIStore.getState().setPointer, 33), []);
+  const throttledSetViewport = useMemo(() => throttle(useUIStore.getState().setViewport, 50), []);
   const throttledSetGrid = useMemo(() => throttle(setGridViewport, 50), []);
 
   const syncViewport = useCallback(() => {
@@ -95,7 +92,7 @@ export function useViewport(
       stage.scale({ x: 1, y: 1 });
       stage.position({ x: 0, y: 0 });
       stage.batchDraw();
-      useDebugStore.getState().setViewport({ scale: 1, x: 0, y: 0 });
+      useUIStore.getState().setViewport({ scale: 1, x: 0, y: 0 });
       setGridViewport({ scale: 1, x: 0, y: 0 });
       setCullViewport({ scale: 1, x: 0, y: 0 });
       lastCullRef.current = { scale: 1, x: 0, y: 0 };
@@ -270,7 +267,7 @@ export function useViewport(
   const startPan = useCallback((screenPos: { x: number; y: number }) => {
     isPanningRef.current = true;
     lastPointerRef.current = { x: screenPos.x, y: screenPos.y };
-    useDebugStore.getState().setInteraction("panning");
+    useUIStore.getState().setInteraction("panning");
   }, []);
 
   const updatePan = useCallback(
@@ -301,7 +298,7 @@ export function useViewport(
   const endPan = useCallback(() => {
     if (!isPanningRef.current) return false;
     isPanningRef.current = false;
-    useDebugStore.getState().setInteraction("idle");
+    useUIStore.getState().setInteraction("idle");
     return true;
   }, []);
 

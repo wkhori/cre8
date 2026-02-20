@@ -2,7 +2,7 @@
 
 import { useRef, useEffect, useCallback, useState } from "react";
 import { useCanvasStore } from "@/store/canvas-store";
-import { useDebugStore } from "@/store/debug-store";
+import { useUIStore } from "@/store/ui-store";
 import { getShapeBounds } from "@/lib/shape-geometry";
 
 export function useConnectorCreation() {
@@ -17,13 +17,13 @@ export function useConnectorCreation() {
     connectorFromPointRef.current = null;
     setConnectorFromId(null);
     setConnectorPreview(null);
-    useDebugStore.getState().setConnectorSourceSelected(false);
+    useUIStore.getState().setConnectorSourceSelected(false);
   }, []);
 
   // Clear connector creation state when switching away from connector tool
   useEffect(() => {
-    let prevTool = useDebugStore.getState().activeTool;
-    return useDebugStore.subscribe((state) => {
+    let prevTool = useUIStore.getState().activeTool;
+    return useUIStore.subscribe((state) => {
       const currTool = state.activeTool;
       if (currTool === prevTool) return; // only react to activeTool changes
       const wasCon = prevTool === "connector";
@@ -48,20 +48,20 @@ export function useConnectorCreation() {
   /** Handle a canvas (empty area) click during connector tool. Returns true if handled. */
   const handleCanvasClick = useCallback(
     (worldX: number, worldY: number): boolean => {
-      if (useDebugStore.getState().activeTool !== "connector") return false;
+      if (useUIStore.getState().activeTool !== "connector") return false;
 
       if (!hasConnectorFrom()) {
         connectorFromPointRef.current = { x: worldX, y: worldY };
         setConnectorFromId(null);
         setConnectorPreview(null);
-        useDebugStore.getState().setConnectorSourceSelected(true);
+        useUIStore.getState().setConnectorSourceSelected(true);
       } else {
         const from = buildConnectorFrom();
         if (from) {
           useCanvasStore
             .getState()
             .addConnector(from, { point: { x: worldX, y: worldY } }, "arrow");
-          useDebugStore.getState().setActiveTool("pointer");
+          useUIStore.getState().setActiveTool("pointer");
         }
         clearConnectorFrom();
       }
@@ -73,7 +73,7 @@ export function useConnectorCreation() {
   /** Handle a shape click during connector tool. Returns true if handled. */
   const handleShapeClick = useCallback(
     (id: string): boolean => {
-      if (useDebugStore.getState().activeTool !== "connector") return false;
+      if (useUIStore.getState().activeTool !== "connector") return false;
 
       const shape = useCanvasStore.getState().shapes.find((s) => s.id === id);
       if (!shape || shape.type === "connector") return false;
@@ -83,12 +83,12 @@ export function useConnectorCreation() {
         connectorFromPointRef.current = null;
         setConnectorFromId(id);
         useCanvasStore.getState().setSelected([id]);
-        useDebugStore.getState().setConnectorSourceSelected(true);
+        useUIStore.getState().setConnectorSourceSelected(true);
       } else {
         const from = buildConnectorFrom();
         if (from && !("id" in from && from.id === id)) {
           useCanvasStore.getState().addConnector(from, { id }, "arrow");
-          useDebugStore.getState().setActiveTool("pointer");
+          useUIStore.getState().setActiveTool("pointer");
         }
         clearConnectorFrom();
       }

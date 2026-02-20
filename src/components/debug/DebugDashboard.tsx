@@ -1,18 +1,20 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { useUIStore } from "@/store/ui-store";
 import { useDebugStore } from "@/store/debug-store";
 
 export default function DebugDashboard() {
+  // Debug-only metrics
   const fps = useDebugStore((s) => s.fps);
   const frameMs = useDebugStore((s) => s.frameMs);
-  const viewport = useDebugStore((s) => s.viewport);
   const pointer = useDebugStore((s) => s.pointer);
-  const objectCount = useDebugStore((s) => s.objectCount);
+  const shapeCount = useDebugStore((s) => s.shapeCount);
   const selectedId = useDebugStore((s) => s.selectedId);
-  const interaction = useDebugStore((s) => s.interaction);
-  const konvaNodeCount = useDebugStore((s) => s.konvaNodeCount);
-  const activeTool = useDebugStore((s) => s.activeTool);
+  // App-critical state (from ui-store)
+  const viewport = useUIStore((s) => s.viewport);
+  const interaction = useUIStore((s) => s.interaction);
+  const activeTool = useUIStore((s) => s.activeTool);
 
   // FPS counter using rAF
   const frameCountRef = useRef(0);
@@ -60,8 +62,7 @@ export default function DebugDashboard() {
       <Row label="FPS" value={<span className={fpsColor}>{fps}</span>} />
       <Row label="Frame" value={`${frameMs} ms`} />
       <Divider />
-      <Row label="Objects" value={objectCount} />
-      <Row label="Konva nodes" value={konvaNodeCount} />
+      <Row label="Shapes" value={shapeCount} />
       <Row label="Selected" value={selectedId ?? "none"} />
       <Row label="Interaction" value={interaction} />
       <Row label="Tool" value={activeTool} />

@@ -4,7 +4,7 @@ import { useRef, useEffect, useCallback, useMemo, useState } from "react";
 import type Konva from "konva";
 import type { Shape } from "@/lib/types";
 import { useCanvasStore } from "@/store/canvas-store";
-import { useDebugStore } from "@/store/debug-store";
+import { useUIStore } from "@/store/ui-store";
 import { computeStickyFontSize } from "@/lib/sticky-text";
 
 export function useTextEditing(stageRef: React.RefObject<Konva.Stage | null>, shapes: Shape[]) {
@@ -12,7 +12,7 @@ export function useTextEditing(stageRef: React.RefObject<Konva.Stage | null>, sh
   const [editingTextValue, setEditingTextValue] = useState("");
   const editingShapeTypeRef = useRef<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const viewport = useDebugStore((s) => s.viewport);
+  const viewport = useUIStore((s) => s.viewport);
 
   const beginTextEditing = useCallback(
     (id: string) => {

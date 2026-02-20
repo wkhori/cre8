@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { useCanvasStore } from "@/store/canvas-store";
-import { useDebugStore } from "@/store/debug-store";
+import { useUIStore } from "@/store/ui-store";
 
 /**
  * Keyboard shortcuts for the canvas.
@@ -42,41 +42,41 @@ export function useCanvasKeyboard({
 
       // V key → pointer tool
       if (e.key === "v" && !e.metaKey && !e.ctrlKey) {
-        useDebugStore.getState().setActiveTool("pointer");
+        useUIStore.getState().setActiveTool("pointer");
         return;
       }
 
       // H key → hand tool (sticky)
       if (e.key === "h" && !e.metaKey && !e.ctrlKey) {
-        useDebugStore.getState().setActiveTool("hand");
+        useUIStore.getState().setActiveTool("hand");
         return;
       }
 
       // C key → connector tool
       if (e.key === "c" && !e.metaKey && !e.ctrlKey) {
-        useDebugStore.getState().setActiveTool("connector");
+        useUIStore.getState().setActiveTool("connector");
         return;
       }
 
       // Shape placement shortcuts
       if (e.key === "r" && !e.metaKey && !e.ctrlKey) {
-        useDebugStore.getState().setActiveTool("place-rect");
+        useUIStore.getState().setActiveTool("place-rect");
         return;
       }
       if (e.key === "o" && !e.metaKey && !e.ctrlKey) {
-        useDebugStore.getState().setActiveTool("place-circle");
+        useUIStore.getState().setActiveTool("place-circle");
         return;
       }
       if (e.key === "t" && !e.metaKey && !e.ctrlKey) {
-        useDebugStore.getState().setActiveTool("place-text");
+        useUIStore.getState().setActiveTool("place-text");
         return;
       }
       if (e.key === "s" && !e.metaKey && !e.ctrlKey) {
-        useDebugStore.getState().setActiveTool("place-sticky");
+        useUIStore.getState().setActiveTool("place-sticky");
         return;
       }
       if (e.key === "f" && !e.metaKey && !e.ctrlKey) {
-        useDebugStore.getState().setActiveTool("draw-frame");
+        useUIStore.getState().setActiveTool("draw-frame");
         return;
       }
 
@@ -163,13 +163,13 @@ export function useCanvasKeyboard({
       // Zoom shortcuts
       if (meta && (e.key === "=" || e.key === "+")) {
         e.preventDefault();
-        const s = useDebugStore.getState().viewport.scale;
+        const s = useUIStore.getState().viewport.scale;
         window.dispatchEvent(new CustomEvent("zoom-to", { detail: { scale: s * 1.25 } }));
         return;
       }
       if (meta && e.key === "-") {
         e.preventDefault();
-        const s = useDebugStore.getState().viewport.scale;
+        const s = useUIStore.getState().viewport.scale;
         window.dispatchEvent(new CustomEvent("zoom-to", { detail: { scale: s / 1.25 } }));
         return;
       }
@@ -186,9 +186,9 @@ export function useCanvasKeyboard({
 
       if (e.key === "Escape") {
         // If in any non-pointer tool, switch back to pointer
-        const tool = useDebugStore.getState().activeTool;
+        const tool = useUIStore.getState().activeTool;
         if (tool !== "pointer") {
-          useDebugStore.getState().setActiveTool("pointer");
+          useUIStore.getState().setActiveTool("pointer");
         }
         clearSelection();
         return;
