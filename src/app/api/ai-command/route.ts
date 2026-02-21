@@ -265,14 +265,15 @@ function simulateToolCall(
       };
     }
 
-    case "deleteObject": {
+    case "deleteObjects": {
+      const objectIds = toolInput.objectIds as string[];
       const op: AIOperation = {
-        type: "deleteObject",
-        objectId: toolInput.objectId as string,
+        type: "deleteObjects",
+        objectIds,
       };
       return {
         operation: op,
-        result: JSON.stringify({ success: true, objectId: toolInput.objectId }),
+        result: JSON.stringify({ success: true, deleted: objectIds.length }),
       };
     }
 

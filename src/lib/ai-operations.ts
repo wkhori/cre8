@@ -212,9 +212,11 @@ export function executeAIOperations(operations: AIOperation[]): Map<string, stri
         break;
       }
 
-      case "deleteObject": {
-        const realId = tempIdMap.get(op.objectId) ?? op.objectId;
-        deletions.push(realId);
+      case "deleteObjects": {
+        for (const id of op.objectIds) {
+          const realId = tempIdMap.get(id) ?? id;
+          deletions.push(realId);
+        }
         break;
       }
     }
