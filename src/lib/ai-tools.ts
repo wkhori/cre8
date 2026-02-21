@@ -51,7 +51,7 @@ export type AIOperation =
   | { type: "moveObject"; objectId: string; x: number; y: number }
   | { type: "updateText"; objectId: string; newText: string }
   | { type: "changeColor"; objectId: string; color: string }
-  | { type: "deleteObject"; objectId: string }
+  | { type: "deleteObjects"; objectIds: string[] }
   | { type: "resizeObject"; objectId: string; w: number; h: number }
   | {
       type: "createGrid";
@@ -255,14 +255,19 @@ export const AI_TOOLS: Anthropic.Messages.Tool[] = [
     },
   },
   {
-    name: "deleteObject",
-    description: "Delete an object from the board.",
+    name: "deleteObjects",
+    description:
+      "Delete one or more objects from the board. Pass all object IDs to remove — there is no limit.",
     input_schema: {
       type: "object",
       properties: {
-        objectId: { type: "string", description: "ID of the object to delete" },
+        objectIds: {
+          type: "array",
+          items: { type: "string" },
+          description: "Array of object IDs to delete",
+        },
       },
-      required: ["objectId"],
+      required: ["objectIds"],
     },
   },
   {
