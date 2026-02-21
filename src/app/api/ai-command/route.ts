@@ -784,6 +784,7 @@ export async function POST(request: NextRequest) {
     });
 
     // ── LangFuse tracing (no-op if env vars missing) ──
+    const startTime = Date.now();
     const langfuse = getLangfuse();
     const trace = langfuse?.trace({
       name: "ai-command",
@@ -823,9 +824,19 @@ export async function POST(request: NextRequest) {
 
       const response = await anthropic.messages.create({
         model: "claude-sonnet-4-5-20250929",
-        max_tokens: 8192,
-        system: AI_SYSTEM_PROMPT,
-        tools: AI_TOOLS,
+        max_tokens: 16384,
+        system: [
+          {
+            type: "text" as const,
+            text: AI_SYSTEM_PROMPT,
+            cache_control: { type: "ephemeral" as const },
+          },
+        ],
+        tools: AI_TOOLS.map((tool, i) =>
+          i === AI_TOOLS.length - 1
+            ? { ...tool, cache_control: { type: "ephemeral" as const } }
+            : tool
+        ),
         messages,
       });
 
@@ -908,6 +919,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Finalize trace
+    const durationMs = Date.now() - startTime;
     trace?.update({
       output: {
         operationCount: operations.length,
@@ -916,6 +928,7 @@ export async function POST(request: NextRequest) {
       metadata: {
         totalInputTokens,
         totalOutputTokens,
+        durationMs,
         operationTypes: operations.map((o) => o.type),
       },
     });
@@ -927,6 +940,7 @@ export async function POST(request: NextRequest) {
       success: true,
       operations,
       message: finalText || "Command executed successfully.",
+      durationMs,
     });
   } catch (err) {
     console.error("AI command error:", err);
