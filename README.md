@@ -1,36 +1,77 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# cre8
 
-## Getting Started
+Real-time collaborative whiteboard with AI agent integration. Multiple users create, move, and edit shapes on an infinite canvas while seeing each other's cursors and changes instantly. An AI agent manipulates the board through natural language commands.
 
-First, run the development server:
+**Live:** [cre8-seven.vercel.app](https://cre8-seven.vercel.app/)
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+## Features
+
+- **Infinite canvas** — pan, zoom, 500+ objects at 60fps
+- **7 object types** — sticky notes, rectangles, circles, text, lines, frames, connectors
+- **Real-time multiplayer** — cursor sync, object sync, presence indicators
+- **AI agent** — 14 tool functions via Claude, natural language board manipulation
+- **Board management** — create, rename, duplicate, favorite, delete boards
+- **Full editing** — multi-select, resize, rotate, copy/paste, undo/redo, keyboard shortcuts
+- **Dark/light mode** — theme toggle with oklch color system
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| Framework | Next.js 16, React 19, TypeScript |
+| Canvas | react-konva / Konva |
+| State | Zustand |
+| Backend | Firebase Auth + Firestore + Realtime Database |
+| AI | Anthropic Claude (Haiku) with function calling |
+| Styling | Tailwind CSS v4, shadcn/ui |
+| Deployment | Vercel |
+
+## Architecture
+
+```
+User interaction (Konva) ──→ board-operations ──→ Firestore
+AI agent (tool use)      ──→ board-operations ──→ Firestore
+Firestore onSnapshot     ──→ zustand store     ──→ Konva re-render
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+- **Firestore** for board objects (last-write-wins conflict resolution)
+- **Realtime Database** for cursors (30fps) and presence (`onDisconnect` cleanup)
+- **Zustand** subscribe → diff → Firestore writes, with `isSyncingRef` to prevent loops
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Setup
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+git clone https://github.com/wkhori/cre8.git
+cd cre8
+npm install
+```
 
-## Learn More
+Create `.env` with your Firebase + Anthropic keys:
 
-To learn more about Next.js, take a look at the following resources:
+```
+NEXT_PUBLIC_FIREBASE_API_KEY=
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=
+NEXT_PUBLIC_FIREBASE_APP_ID=
+NEXT_PUBLIC_FIREBASE_DATABASE_URL=
+ANTHROPIC_API_KEY=
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+npm run dev      # Start dev server
+npm run build    # Production build
+npx vitest run   # Run tests
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## AI Agent
 
-## Deploy on Vercel
+Natural language commands via Claude function calling (14 tools). Examples:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```
+"Add a yellow sticky note that says User Research"
+"Create a SWOT analysis"
+"Move all sticky notes to the right and change them to blue"
+"Build a user journey map with 5 stages"
+```
