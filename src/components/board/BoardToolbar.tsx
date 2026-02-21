@@ -38,12 +38,14 @@ import {
   Pencil,
   Bold,
   Italic,
+  Keyboard,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import ColorPicker from "@/components/canvas/ColorPicker";
 import { useTheme } from "next-themes";
 import dynamic from "next/dynamic";
 import { cn } from "@/lib/utils";
+import KeyboardShortcutsDialog from "@/components/board/KeyboardShortcutsDialog";
 
 const PresenceBar = dynamic(() => import("@/components/presence/PresenceBar"), { ssr: false });
 
@@ -169,6 +171,14 @@ export default function BoardToolbar({
 }: BoardToolbarProps) {
   const router = useRouter();
   const { theme, setTheme } = useTheme();
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+
+  // Listen for "?" keyboard shortcut via CustomEvent
+  useEffect(() => {
+    const handler = () => setShortcutsOpen((prev) => !prev);
+    window.addEventListener("toggle-shortcuts", handler);
+    return () => window.removeEventListener("toggle-shortcuts", handler);
+  }, []);
 
   const selectedIds = useCanvasStore((s) => s.selectedIds);
   const shapes = useCanvasStore((s) => s.shapes);
@@ -602,6 +612,10 @@ export default function BoardToolbar({
               </div>
               <Switch checked={showDebug} onCheckedChange={setShowDebug} />
             </div>
+            <DropdownMenuItem onClick={() => setShortcutsOpen(true)}>
+              <Keyboard className="size-4" />
+              Shortcuts
+            </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem
               variant="destructive"
@@ -614,6 +628,8 @@ export default function BoardToolbar({
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+
+      <KeyboardShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
     </header>
   );
 }

@@ -184,6 +184,12 @@ export function useCanvasKeyboard({
         return;
       }
 
+      // ? key → show keyboard shortcuts
+      if (e.key === "?" && !meta) {
+        window.dispatchEvent(new CustomEvent("toggle-shortcuts"));
+        return;
+      }
+
       if (e.key === "Escape") {
         // If in any non-pointer tool, switch back to pointer
         const tool = useUIStore.getState().activeTool;
