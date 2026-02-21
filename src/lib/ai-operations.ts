@@ -12,6 +12,7 @@ import type {
   ConnectorShape,
 } from "@/lib/types";
 import type { AIOperation } from "@/lib/ai-tools";
+import { getShapeBounds } from "@/lib/shape-geometry";
 
 /**
  * Execute a batch of AI operations against the canvas store.
@@ -243,6 +244,27 @@ export function executeAIOperations(operations: AIOperation[]): Map<string, stri
   if (deletions.length > 0) {
     const deleteSet = new Set(deletions);
     finalShapes = finalShapes.filter((s) => !deleteSet.has(s.id));
+  }
+
+  // Auto-assign parentId: shapes fully inside a frame become its children
+  const frames = finalShapes.filter((s) => s.type === "frame");
+  if (frames.length > 0) {
+    finalShapes = finalShapes.map((s) => {
+      if (s.type === "frame" || s.type === "connector" || s.parentId) return s;
+      const b = getShapeBounds(s);
+      for (const f of frames) {
+        const frame = f as FrameShape;
+        if (
+          b.x >= frame.x &&
+          b.y >= frame.y &&
+          b.x + b.width <= frame.x + frame.w &&
+          b.y + b.height <= frame.y + frame.h
+        ) {
+          return { ...s, parentId: frame.id } as Shape;
+        }
+      }
+      return s;
+    });
   }
 
   // One store update → one subscription fire → one Firestore sync

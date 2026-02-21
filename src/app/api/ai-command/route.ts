@@ -5,6 +5,8 @@ import { AI_SYSTEM_PROMPT } from "@/lib/ai-system-prompt";
 import { getLangfuse } from "@/lib/langfuse";
 import { z } from "zod";
 
+const AI_MODEL = "claude-haiku-4-5-20251001";
+
 // ── Request validation ─────────────────────────────────────────────
 const RequestSchema = z.object({
   command: z.string().min(1).max(2000),
@@ -102,7 +104,7 @@ function formatBoardStateFull(shapes: Record<string, unknown>[]): string {
       case "rect":
         return `${base} ${s.w}×${s.h} fill=${s.fill}`;
       case "circle":
-        return `${base} r=${s.radiusX}×${s.radiusY} fill=${s.fill}`;
+        return `${base} ${(s.radiusX as number) * 2}×${(s.radiusY as number) * 2} fill=${s.fill}`;
       case "connector":
         return `${base} ${s.fromId} → ${s.toId} (${s.style})`;
       case "line":
@@ -789,7 +791,7 @@ export async function POST(request: NextRequest) {
     const trace = langfuse?.trace({
       name: "ai-command",
       input: { command, boardObjectCount: boardState.length, viewportCenter },
-      metadata: { model: "claude-sonnet-4-5-20250929" },
+      metadata: { model: AI_MODEL },
     });
 
     // Format board state for Claude context (includes occupied region + open space hints)
@@ -818,12 +820,12 @@ export async function POST(request: NextRequest) {
     for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
       const generation = trace?.generation({
         name: `tool-round-${round}`,
-        model: "claude-sonnet-4-5-20250929",
+        model: AI_MODEL,
         input: messages,
       });
 
       const response = await anthropic.messages.create({
-        model: "claude-sonnet-4-5-20250929",
+        model: AI_MODEL,
         max_tokens: 16384,
         system: [
           {
