@@ -228,6 +228,8 @@ export function useDragSession(
 
       // Build frame list for containment checks
       const frames = freshShapes.filter((s) => s.type === "frame");
+      // Did we drag any frames? If so, static shapes may now be inside them.
+      const draggedAFrame = frames.some((f) => draggedIds.has(f.id));
 
       for (const shape of freshShapes) {
         if (shape.type === "connector") continue;
@@ -235,8 +237,9 @@ export function useDragSession(
         const wasDragged = draggedIds.has(shape.id);
         const parentWasDragged = shape.parentId ? draggedIds.has(shape.parentId) : false;
 
-        // Only re-evaluate shapes that were part of this drag or whose parent was dragged
-        if (!wasDragged && !parentWasDragged) continue;
+        // Re-evaluate shapes that were dragged, whose parent was dragged,
+        // or that might now be inside a dragged frame (adoption).
+        if (!wasDragged && !parentWasDragged && !draggedAFrame) continue;
 
         const bounds = getShapeBounds(shape);
         let newParentId: string | undefined;

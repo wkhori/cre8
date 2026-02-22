@@ -16,6 +16,7 @@ import {
   arrayUnion,
   arrayRemove,
   orderBy,
+  deleteField,
 } from "firebase/firestore";
 import { ref, set as rtdbSet, onValue } from "firebase/database";
 import { firebaseDb, firebaseRtdb } from "@/lib/firebase-client";
@@ -256,15 +257,33 @@ function stripUndefined(obj: Record<string, unknown>): Record<string, unknown> {
 }
 
 /**
+ * After stripUndefined, restore fields that were explicitly set to undefined
+ * as Firestore deleteField() sentinels. With merge:true, omitting a key
+ * preserves its old value — deleteField() is the only way to actually remove it.
+ */
+function applyFieldDeletions(
+  result: Record<string, unknown>,
+  source: Record<string, unknown>
+): Record<string, unknown> {
+  if ("parentId" in source && source.parentId === undefined) {
+    result.parentId = deleteField();
+  }
+  return result;
+}
+
+/**
  * Convert a local Shape to a Firestore-safe document.
  * Adds sync metadata (updatedAt, updatedBy).
  */
 function shapeToFirestore(shape: Shape, userId: string): Record<string, unknown> {
-  return stripUndefined({
-    ...shape,
-    updatedAt: serverTimestamp(),
-    updatedBy: userId,
-  });
+  return applyFieldDeletions(
+    stripUndefined({
+      ...shape,
+      updatedAt: serverTimestamp(),
+      updatedBy: userId,
+    }),
+    shape as unknown as Record<string, unknown>
+  );
 }
 
 /**
@@ -488,11 +507,14 @@ export async function updateObject(
   const objRef = doc(firebaseDb, "boards", boardId, "objects", shapeId);
   await setDoc(
     objRef,
-    stripUndefined({
-      ...patch,
-      updatedAt: serverTimestamp(),
-      updatedBy: userId,
-    }),
+    applyFieldDeletions(
+      stripUndefined({
+        ...patch,
+        updatedAt: serverTimestamp(),
+        updatedBy: userId,
+      }),
+      patch as unknown as Record<string, unknown>
+    ),
     { merge: true }
   );
 }
@@ -522,11 +544,14 @@ export async function updateObjects(
       const objRef = doc(firebaseDb, "boards", boardId, "objects", id);
       batch.set(
         objRef,
-        stripUndefined({
-          ...patch,
-          updatedAt: serverTimestamp(),
-          updatedBy: userId,
-        }),
+        applyFieldDeletions(
+          stripUndefined({
+            ...patch,
+            updatedAt: serverTimestamp(),
+            updatedBy: userId,
+          }),
+          patch as unknown as Record<string, unknown>
+        ),
         { merge: true }
       );
     }
