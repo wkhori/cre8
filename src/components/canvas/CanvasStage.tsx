@@ -450,17 +450,6 @@ export default function CanvasStage({
             strokeWidth={1}
             dash={[4, 4]}
           />
-
-          {/* {rubberBand.selectionBounds &&
-            !textEditing.editingTextId &&
-            interaction !== "dragging" &&
-            !transformer.isTransforming &&
-            !selectedIds.every((id) => shapes.find((s) => s.id === id)?.type === "connector") && (
-              <DimensionLabel
-                bounds={rubberBand.selectionBounds}
-                viewportScale={viewport.viewportRef.current.scale}
-              />
-            )} */}
         </Layer>
         {boardId && myUid && <CursorsLayer boardId={boardId} myUid={myUid} />}
       </Stage>
