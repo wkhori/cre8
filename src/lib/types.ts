@@ -69,6 +69,13 @@ export interface FrameShape extends BaseShape {
   stroke: string;
 }
 
+export interface ImageShape extends BaseShape {
+  type: "image";
+  w: number;
+  h: number;
+  src: string;
+}
+
 export interface ConnectorShape extends BaseShape {
   type: "connector";
   fromId?: string | null;
@@ -90,6 +97,7 @@ export type Shape =
   | LineShape
   | StickyNoteShape
   | FrameShape
+  | ImageShape
   | ConnectorShape;
 
 export type ShapeType = Shape["type"];

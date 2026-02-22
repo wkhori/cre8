@@ -50,7 +50,7 @@ export function getShapeBounds(shape: Shape): Bounds {
     };
   }
 
-  if (shape.type === "sticky" || shape.type === "frame") {
+  if (shape.type === "sticky" || shape.type === "frame" || shape.type === "image") {
     return { x: shape.x, y: shape.y, width: shape.w, height: shape.h };
   }
 

@@ -1,12 +1,34 @@
 "use client";
 
-import { memo } from "react";
-import { Rect, Ellipse, Text, Line, Group, Arrow } from "react-konva";
+import { memo, useEffect, useRef, useState } from "react";
+import { Rect, Ellipse, Text, Line, Group, Arrow, Image as KonvaImage } from "react-konva";
 import type Konva from "konva";
 import type { Shape } from "@/lib/types";
 import { getShapeBounds, computeConnectorPoints } from "@/lib/shape-geometry";
 import { computeStickyFontSize, STICKY_PAD_X, STICKY_PAD_Y } from "@/lib/sticky-text";
 import { isLightColor } from "@/lib/colors";
+
+function useLoadImage(src: string | undefined) {
+  const [image, setImage] = useState<HTMLImageElement | null>(null);
+  const imgRef = useRef<HTMLImageElement | null>(null);
+  useEffect(() => {
+    if (!src) {
+      setImage(null);
+      return;
+    }
+    const img = new window.Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => setImage(img);
+    img.onerror = () => setImage(null);
+    img.src = src;
+    imgRef.current = img;
+    return () => {
+      img.onload = null;
+      img.onerror = null;
+    };
+  }, [src]);
+  return image;
+}
 
 interface ShapeRendererProps {
   shape: Shape;
@@ -217,6 +239,24 @@ export default memo(function ShapeRenderer({
             fill={frameTitleFill}
             perfectDrawEnabled={false}
           />
+        </Group>
+      );
+    }
+
+    case "image": {
+      const loadedImage = useLoadImage(shape.src);
+      return wrapWithHoverRing(
+        <Group key={shape.id} {...commonProps}>
+          <Rect width={shape.w} height={shape.h} fill="transparent" perfectDrawEnabled={false} />
+          {loadedImage && (
+            <KonvaImage
+              image={loadedImage}
+              width={shape.w}
+              height={shape.h}
+              listening={false}
+              perfectDrawEnabled={false}
+            />
+          )}
         </Group>
       );
     }

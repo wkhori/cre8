@@ -15,6 +15,7 @@ interface AICommandResult {
 }
 
 const COOLDOWN_MS = 2000;
+const ARCH_DIAGRAM_REGEX = /^\/arch-diagram\s+(https?:\/\/github\.com\/[\w.-]+\/[\w.-]+)\s*$/i;
 
 export function useAIAgent(boardId: string | null, uid: string | null) {
   const [loading, setLoading] = useState(false);
@@ -68,10 +69,17 @@ export function useAIAgent(boardId: string | null, uid: string | null) {
           y: Math.round((window.innerHeight / 2 - viewport.y) / viewport.scale),
         };
 
-        const res = await fetch("/api/ai-command", {
+        // Route /arch-diagram commands to the repo analysis endpoint
+        const archMatch = command.match(ARCH_DIAGRAM_REGEX);
+        const endpoint = archMatch ? "/api/analyze-repo" : "/api/ai-command";
+        const payload = archMatch
+          ? { repoUrl: archMatch[1], viewportCenter }
+          : { command, boardState, viewportCenter };
+
+        const res = await fetch(endpoint, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ command, boardState, viewportCenter }),
+          body: JSON.stringify(payload),
         });
 
         const data: AICommandResult = await res.json();

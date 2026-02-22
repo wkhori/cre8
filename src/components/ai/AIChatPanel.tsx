@@ -17,6 +17,7 @@ import {
   Lightbulb,
   ListChecks,
   Shuffle,
+  GitBranch,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { ChatMessage } from "@/lib/ai-chat";
@@ -28,6 +29,7 @@ const EXAMPLE_PROMPTS = [
   { text: "Design a user journey map", icon: Lightbulb },
   { text: "Build a weekly sprint board", icon: ListChecks },
   { text: "Organize everything into a neat grid", icon: Shuffle },
+  { text: "/arch-diagram https://github.com/user/repo", icon: GitBranch },
 ];
 
 interface AIChatPanelProps {

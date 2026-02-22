@@ -72,6 +72,15 @@ export type AIOperation =
       lineStyle?: "solid" | "dashed" | "dotted";
       strokeWidth?: number;
     }
+  | {
+      type: "createImage";
+      tempId: string;
+      x: number;
+      y: number;
+      w: number;
+      h: number;
+      src: string;
+    }
   | { type: "deleteObjects"; objectIds: string[] }
   | { type: "resizeObject"; objectId: string; w: number; h: number }
   | {

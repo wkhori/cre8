@@ -32,6 +32,7 @@ function getShapeBounds(
     case "sticky":
     case "rect":
     case "frame":
+    case "image":
       return { x, y, w: (s.w as number) || 260, h: (s.h as number) || 120 };
     case "text":
       return { x, y, w: (s.width as number) || 200, h: (s.fontSize as number) || 24 };

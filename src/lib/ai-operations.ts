@@ -9,6 +9,7 @@ import type {
   TextShape,
   StickyNoteShape,
   FrameShape,
+  ImageShape,
   ConnectorShape,
 } from "@/lib/types";
 import type { AIOperation } from "@/lib/ai-tools";
@@ -142,6 +143,24 @@ export function executeAIOperations(operations: AIOperation[]): Map<string, stri
           ...(op.fontStyle ? { fontStyle: op.fontStyle } : {}),
           ...(op.textDecoration ? { textDecoration: op.textDecoration } : {}),
         } as TextShape);
+        break;
+      }
+
+      case "createImage": {
+        const id = generateId();
+        tempIdMap.set(op.tempId, id);
+        newShapes.push({
+          id,
+          type: "image",
+          x: op.x,
+          y: op.y,
+          w: op.w,
+          h: op.h,
+          src: op.src,
+          rotation: 0,
+          opacity: 1,
+          zIndex: baseZIndex++,
+        } as ImageShape);
         break;
       }
 
