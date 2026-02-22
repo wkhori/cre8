@@ -57,6 +57,8 @@ export function executeAIOperations(operations: AIOperation[]): Map<string, stri
           rotation: 0,
           opacity: 1,
           zIndex: baseZIndex++,
+          ...(op.fontFamily ? { fontFamily: op.fontFamily } : {}),
+          ...(op.textDecoration ? { textDecoration: op.textDecoration } : {}),
         } as StickyNoteShape);
         break;
       }
@@ -129,13 +131,14 @@ export function executeAIOperations(operations: AIOperation[]): Map<string, stri
           y: op.y,
           text: op.text,
           fontSize,
-          fontFamily: "sans-serif",
+          fontFamily: op.fontFamily ?? "sans-serif",
           fill: op.fill ?? (isDark ? "#fafafa" : "#18181b"),
           width: estimatedWidth,
           align: "left",
           rotation: 0,
           opacity: 1,
           zIndex: baseZIndex++,
+          ...(op.textDecoration ? { textDecoration: op.textDecoration } : {}),
         } as TextShape);
         break;
       }
@@ -158,6 +161,7 @@ export function executeAIOperations(operations: AIOperation[]): Map<string, stri
           rotation: 0,
           opacity: 1,
           zIndex: baseZIndex++,
+          ...(op.lineStyle ? { lineStyle: op.lineStyle } : {}),
         } as ConnectorShape);
         break;
       }
@@ -184,11 +188,16 @@ export function executeAIOperations(operations: AIOperation[]): Map<string, stri
         const realId = tempIdMap.get(op.objectId) ?? op.objectId;
         const shape = store.shapes.find((s) => s.id === realId);
         if (!shape) break;
+        const textPatch: Partial<Shape> = {};
         if (shape.type === "frame") {
-          updates.push({ id: realId, patch: { title: op.newText } });
+          (textPatch as Record<string, unknown>).title = op.newText;
         } else {
-          updates.push({ id: realId, patch: { text: op.newText } });
+          (textPatch as Record<string, unknown>).text = op.newText;
         }
+        if (op.fontFamily) (textPatch as Record<string, unknown>).fontFamily = op.fontFamily;
+        if (op.textDecoration)
+          (textPatch as Record<string, unknown>).textDecoration = op.textDecoration;
+        updates.push({ id: realId, patch: textPatch });
         break;
       }
 

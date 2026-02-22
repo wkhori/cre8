@@ -133,6 +133,7 @@ export default memo(function ShapeRenderer({
           fontSize={shape.fontSize}
           fontFamily={shape.fontFamily}
           fontStyle={shape.fontStyle ?? "normal"}
+          textDecoration={shape.textDecoration ?? ""}
           fill={textFill}
           width={shape.width}
           align={shape.align ?? "left"}
@@ -180,8 +181,9 @@ export default memo(function ShapeRenderer({
             height={availH}
             text={shape.text}
             fontSize={stickyFontSize}
-            fontFamily="system-ui, sans-serif"
+            fontFamily={shape.fontFamily ?? "system-ui, sans-serif"}
             fontStyle={shape.fontStyle ?? "normal"}
+            textDecoration={shape.textDecoration ?? ""}
             fill={stickyTextFill}
             wrap="word"
             perfectDrawEnabled={false}
@@ -223,6 +225,8 @@ export default memo(function ShapeRenderer({
       const pts = allShapes
         ? computeConnectorPoints(shape, allShapes, shapesById, siblingMap)
         : (shape.points ?? [0, 0, 100, 0]);
+      const dashArray =
+        shape.lineStyle === "dashed" ? [12, 6] : shape.lineStyle === "dotted" ? [3, 6] : undefined;
       const connectorProps = {
         ...commonProps,
         // Connectors use absolute world coords in points, not x/y offset
@@ -233,6 +237,7 @@ export default memo(function ShapeRenderer({
         strokeWidth: shape.strokeWidth,
         hitStrokeWidth: Math.max(shape.strokeWidth, 12),
         perfectDrawEnabled: false,
+        ...(dashArray ? { dash: dashArray } : {}),
       };
       if (shape.style === "arrow") {
         return (

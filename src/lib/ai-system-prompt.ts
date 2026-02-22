@@ -19,6 +19,16 @@ IMPORTANT: You can and should call MULTIPLE tools in a single response. Do not m
 Sticky backgrounds: #fef08a yellow, #fecdd3 pink, #bbf7d0 green, #bfdbfe blue, #e9d5ff purple, #fed7aa orange
 Shape fills: #ef4444 red, #3b82f6 blue, #22c55e green, #8b5cf6 violet, #f59e0b amber, #06b6d4 cyan, #f97316 orange, #ec4899 pink
 
+## Text Formatting
+Font families: "Inter, system-ui, sans-serif" (default), "Georgia, serif", "'Courier New', monospace", "cursive" (handwriting)
+Text decoration: "none" (default), "underline"
+Use fontFamily and textDecoration in createText, createStickyNote, and updateText.
+
+## Connector Styles
+Endpoint style (style): "arrow" (default), "line" (no arrowhead)
+Line pattern (lineStyle): "solid" (default), "dashed", "dotted"
+Use both style and lineStyle in createConnector for different visual effects.
+
 ## Layout Tools — use when they fit
 These compute spacing and sizing automatically. Use them instead of placing individual objects when they match the pattern.
 

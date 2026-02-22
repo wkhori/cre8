@@ -38,6 +38,7 @@ export interface TextShape extends BaseShape {
   width?: number;
   align?: "left" | "center" | "right";
   fontStyle?: "normal" | "bold" | "italic" | "bold italic";
+  textDecoration?: "none" | "underline";
 }
 
 export interface LineShape extends BaseShape {
@@ -55,6 +56,8 @@ export interface StickyNoteShape extends BaseShape {
   color: string; // background hex color
   fontSize?: number;
   fontStyle?: "normal" | "bold" | "italic" | "bold italic";
+  fontFamily?: string;
+  textDecoration?: "none" | "underline";
 }
 
 export interface FrameShape extends BaseShape {
@@ -76,6 +79,7 @@ export interface ConnectorShape extends BaseShape {
   stroke: string;
   strokeWidth: number;
   points?: number[]; // computed from connected objects
+  lineStyle?: "solid" | "dashed" | "dotted";
 }
 
 // ── Discriminated union ────────────────────────────────────────────

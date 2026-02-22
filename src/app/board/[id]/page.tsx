@@ -23,11 +23,13 @@ import type { Shape } from "@/lib/types";
 import { isRenderOnly } from "@/lib/sync-mode";
 import { diffShapeWrites } from "@/lib/board-sync-diff";
 import { Loader2 } from "lucide-react";
-import BoardToolbar from "@/components/board/BoardToolbar";
 
+const TopBar = dynamic(() => import("@/components/board/TopBar"), { ssr: false });
+const ToolSidebar = dynamic(() => import("@/components/board/ToolSidebar"), { ssr: false });
+const FloatingToolbar = dynamic(() => import("@/components/board/FloatingToolbar"), { ssr: false });
 const CanvasStage = dynamic(() => import("@/components/canvas/CanvasStage"), { ssr: false });
 const DebugDashboard = dynamic(() => import("@/components/debug/DebugDashboard"), { ssr: false });
-const AICommandInput = dynamic(() => import("@/components/ai/AICommandInput"), { ssr: false });
+const AIChatPanel = dynamic(() => import("@/components/ai/AIChatPanel"), { ssr: false });
 const MapControls = dynamic(() => import("@/components/canvas/MapControls"), { ssr: false });
 const LIVE_DRAG_HOLD_MS = 180;
 
@@ -49,6 +51,7 @@ export default function BoardPage() {
   const { user, profile, loading: authLoading, actionLoading, signOut } = useAuth();
 
   const activeTool = useUIStore((s) => s.activeTool);
+  const aiPanelOpen = useUIStore((s) => s.aiPanelOpen);
   const isPlacing = activeTool.startsWith("place-") || activeTool === "draw-frame";
 
   const renderOnly = isRenderOnly();
@@ -446,7 +449,7 @@ export default function BoardPage() {
 
   return (
     <div className="flex h-screen flex-col bg-[#ededed] dark:bg-[#1a1a1e]">
-      <BoardToolbar
+      <TopBar
         boardId={boardId}
         boardName={boardName}
         onBoardNameChange={async (newName: string) => {
@@ -462,20 +465,27 @@ export default function BoardPage() {
         signOut={signOut}
       />
 
-      <div className="relative flex-1">
-        <CanvasStage
-          boardId={boardId}
-          myUid={user.uid}
-          onLiveDrag={handleLiveDrag}
-          onLiveDragEnd={handleLiveDragEnd}
-        />
-        <div
-          className={`absolute bottom-4 right-4 z-30 flex flex-col items-end gap-2${isPlacing ? " pointer-events-none" : ""}`}
-        >
-          <MapControls />
-          {user && <AICommandInput />}
+      <div className="relative flex-1 flex overflow-hidden">
+        <ToolSidebar />
+
+        <div className="relative flex-1">
+          <CanvasStage
+            boardId={boardId}
+            myUid={user.uid}
+            onLiveDrag={handleLiveDrag}
+            onLiveDragEnd={handleLiveDragEnd}
+          />
+          <FloatingToolbar />
+          <div
+            className={`absolute bottom-4 left-4 z-30${isPlacing ? " pointer-events-none" : ""}`}
+          >
+            <MapControls />
+          </div>
+          {showDebug && <DebugDashboard />}
         </div>
-        {showDebug && <DebugDashboard />}
+
+        {/* AI Panel — absolutely positioned over the full row from the right edge */}
+        <AIChatPanel boardId={boardId} uid={user.uid} open={aiPanelOpen} />
       </div>
     </div>
   );

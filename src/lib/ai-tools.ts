@@ -11,6 +11,8 @@ export type AIOperation =
       color?: string;
       w?: number;
       h?: number;
+      fontFamily?: string;
+      textDecoration?: "none" | "underline";
     }
   | {
       type: "createShape";
@@ -31,6 +33,8 @@ export type AIOperation =
       fontSize?: number;
       fill?: string;
       width?: number;
+      fontFamily?: string;
+      textDecoration?: "none" | "underline";
     }
   | {
       type: "createFrame";
@@ -47,9 +51,16 @@ export type AIOperation =
       fromId: string;
       toId: string;
       style?: "line" | "arrow";
+      lineStyle?: "solid" | "dashed" | "dotted";
     }
   | { type: "moveObject"; objectId: string; x: number; y: number }
-  | { type: "updateText"; objectId: string; newText: string }
+  | {
+      type: "updateText";
+      objectId: string;
+      newText: string;
+      fontFamily?: string;
+      textDecoration?: "none" | "underline";
+    }
   | { type: "changeColor"; objectId: string; color: string }
   | { type: "deleteObjects"; objectIds: string[] }
   | { type: "resizeObject"; objectId: string; w: number; h: number }
@@ -128,6 +139,16 @@ export const AI_TOOLS: Anthropic.Messages.Tool[] = [
         },
         width: { type: "number", description: "Width in px (default 260)" },
         height: { type: "number", description: "Height in px (default 120)" },
+        fontFamily: {
+          type: "string",
+          description:
+            "Font family. Options: 'Inter, system-ui, sans-serif' (default), 'Georgia, serif', \"'Courier New', monospace\", 'cursive'",
+        },
+        textDecoration: {
+          type: "string",
+          enum: ["none", "underline"],
+          description: "Text decoration (default: none)",
+        },
       },
       required: ["text", "x", "y"],
     },
@@ -183,6 +204,16 @@ export const AI_TOOLS: Anthropic.Messages.Tool[] = [
           type: "number",
           description: "Max text width in px. Auto-calculated from text length if omitted.",
         },
+        fontFamily: {
+          type: "string",
+          description:
+            "Font family. Options: 'Inter, system-ui, sans-serif' (default), 'Georgia, serif', \"'Courier New', monospace\", 'cursive'",
+        },
+        textDecoration: {
+          type: "string",
+          enum: ["none", "underline"],
+          description: "Text decoration (default: none)",
+        },
       },
       required: ["text", "x", "y"],
     },
@@ -198,7 +229,12 @@ export const AI_TOOLS: Anthropic.Messages.Tool[] = [
         style: {
           type: "string",
           enum: ["line", "arrow"],
-          description: "Connector style (default: arrow)",
+          description: "Connector endpoint style (default: arrow)",
+        },
+        lineStyle: {
+          type: "string",
+          enum: ["solid", "dashed", "dotted"],
+          description: "Line pattern (default: solid)",
         },
       },
       required: ["fromId", "toId"],
@@ -238,6 +274,16 @@ export const AI_TOOLS: Anthropic.Messages.Tool[] = [
       properties: {
         objectId: { type: "string", description: "ID of the object" },
         newText: { type: "string", description: "New text content" },
+        fontFamily: {
+          type: "string",
+          description:
+            "Font family. Options: 'Inter, system-ui, sans-serif', 'Georgia, serif', \"'Courier New', monospace\", 'cursive'",
+        },
+        textDecoration: {
+          type: "string",
+          enum: ["none", "underline"],
+          description: "Text decoration",
+        },
       },
       required: ["objectId", "newText"],
     },
