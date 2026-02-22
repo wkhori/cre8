@@ -17,9 +17,46 @@ interface AICommandResult {
 const COOLDOWN_MS = 2000;
 const ARCH_DIAGRAM_REGEX = /^\/arch-diagram\s+(https?:\/\/github\.com\/[\w.-]+\/[\w.-]+)\s*$/i;
 
+/** Read a streaming NDJSON response, calling onPhase for progress updates. */
+async function readNDJSONStream(
+  body: ReadableStream<Uint8Array>,
+  onPhase: (msg: string | null) => void
+): Promise<AICommandResult> {
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let result: AICommandResult = { success: false, message: "", error: "Stream ended unexpectedly" };
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+
+    const lines = buffer.split("\n");
+    buffer = lines.pop()!; // keep incomplete last line
+
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      try {
+        const event = JSON.parse(line);
+        if (event.phase === "complete") {
+          result = event.data as AICommandResult;
+        } else if (event.message) {
+          onPhase(event.message);
+        }
+      } catch {
+        // skip malformed lines
+      }
+    }
+  }
+
+  return result;
+}
+
 export function useAIAgent(boardId: string | null, uid: string | null) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const cooldownRef = useRef(false);
 
@@ -82,13 +119,19 @@ export function useAIAgent(boardId: string | null, uid: string | null) {
           body: JSON.stringify(payload),
         });
 
-        const data: AICommandResult = await res.json();
+        // ── Streaming NDJSON for /api/analyze-repo ───────────────
+        let data: AICommandResult;
+        if (archMatch && res.body) {
+          data = await readNDJSONStream(res.body, setStatusMessage);
+        } else {
+          data = await res.json();
+        }
+        setStatusMessage(null);
 
         if (!res.ok || !data.success) {
           const errorMsg = data.error || `Server error (${res.status})`;
           setError(errorMsg);
 
-          // Write error response to Firestore
           await addChatMessage(boardId, uid, {
             role: "assistant",
             content: errorMsg,
@@ -138,6 +181,7 @@ export function useAIAgent(boardId: string | null, uid: string | null) {
   return {
     submitCommand,
     loading,
+    statusMessage,
     error,
     messages,
     clearError,

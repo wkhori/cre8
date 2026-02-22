@@ -4,6 +4,8 @@ import { z } from "zod";
 import { tmpdir } from "os";
 import { join } from "path";
 import { readFile, mkdtemp, rm } from "fs/promises";
+import { doc, getDoc, setDoc } from "firebase/firestore";
+import { firebaseDb } from "@/lib/firebase-client";
 import { layoutArchitecture } from "@/lib/architecture-layout";
 import { getLangfuse } from "@/lib/langfuse";
 import type { ArchitectureAnalysis } from "@/lib/architecture-types";
@@ -12,6 +14,43 @@ export const maxDuration = 60;
 
 const AI_MODEL = "claude-sonnet-4-6";
 const MAX_PACKED_CHARS = 150_000;
+const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+
+// ── Firestore cache helpers (keyed by owner_repo:sha) ───────────────
+async function getCachedAnalysis(cacheKey: string): Promise<ArchitectureAnalysis | null> {
+  try {
+    const snap = await getDoc(doc(firebaseDb, "repo-cache", cacheKey));
+    if (!snap.exists()) return null;
+    const data = snap.data();
+    if (data.expiresAt < Date.now()) return null;
+    return data.architecture as ArchitectureAnalysis;
+  } catch {
+    return null;
+  }
+}
+
+async function setCachedAnalysis(cacheKey: string, architecture: ArchitectureAnalysis) {
+  try {
+    await setDoc(doc(firebaseDb, "repo-cache", cacheKey), {
+      architecture,
+      expiresAt: Date.now() + CACHE_TTL_MS,
+    });
+  } catch (err) {
+    console.warn("Failed to write cache:", err);
+  }
+}
+
+async function getCommitSha(owner: string, repo: string): Promise<string | null> {
+  try {
+    const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/commits/HEAD`, {
+      headers: { Accept: "application/vnd.github.sha" },
+    });
+    if (!res.ok) return null;
+    return (await res.text()).trim();
+  } catch {
+    return null;
+  }
+}
 
 const RequestSchema = z.object({
   repoUrl: z.string().url(),
@@ -192,180 +231,257 @@ function extractJSON(text: string): string {
   return text;
 }
 
-// ── POST handler ────────────────────────────────────────────────────
+// ── Streaming helpers ───────────────────────────────────────────────
+const encoder = new TextEncoder();
+
+function sendEvent(controller: ReadableStreamDefaultController, data: Record<string, unknown>) {
+  controller.enqueue(encoder.encode(JSON.stringify(data) + "\n"));
+}
+
+// ── POST handler (streaming NDJSON) ─────────────────────────────────
 export async function POST(request: NextRequest) {
-  const startMs = Date.now();
-  const langfuse = getLangfuse();
-
-  try {
-    const body = await request.json();
-    const parsed = RequestSchema.safeParse(body);
-    if (!parsed.success) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Invalid request. Provide a valid GitHub URL.",
-          operations: [],
-          message: "",
-        },
-        { status: 400 }
-      );
-    }
-
-    const { repoUrl, viewportCenter } = parsed.data;
-
-    const ghMatch = repoUrl.match(/github\.com\/([\w.-]+)\/([\w.-]+)/);
-    if (!ghMatch) {
-      return NextResponse.json(
-        {
-          success: false,
-          error:
-            "Please provide a valid GitHub repository URL (e.g., https://github.com/owner/repo).",
-          operations: [],
-          message: "",
-        },
-        { status: 400 }
-      );
-    }
-
-    const repoName = `${ghMatch[1]}/${ghMatch[2]}`;
-
-    // ── Langfuse trace ────────────────────────────────────────────
-    const trace = langfuse?.trace({
-      name: "analyze-repo",
-      input: { repoUrl, repoName, viewportCenter },
-    });
-
-    // ── Pack repository ───────────────────────────────────────────
-    const packSpan = trace?.span({ name: "pack-repository" });
-    let packed: string;
-    let packMethod = "repomix";
-    try {
-      packed = await packRepository(repoUrl);
-    } catch (repomixError) {
-      console.warn("Repomix failed, falling back to GitHub API:", repomixError);
-      packMethod = "github-api";
-      try {
-        packed = await packRepositoryFallback(repoUrl);
-      } catch (fallbackError) {
-        const msg =
-          fallbackError instanceof Error ? fallbackError.message : "Could not access repository.";
-        packSpan?.end({ output: { error: msg } });
-        return NextResponse.json(
-          { success: false, error: msg, operations: [], message: "" },
-          { status: 400 }
-        );
-      }
-    }
-    packSpan?.end({ output: { method: packMethod, chars: packed.length } });
-
-    // ── Claude analysis ───────────────────────────────────────────
-    const generation = trace?.generation({
-      name: "architecture-analysis",
-      model: AI_MODEL,
-      input: { packedChars: packed.length, repoName },
-    });
-
-    const anthropic = new Anthropic();
-    const response = await anthropic.messages.create({
-      model: AI_MODEL,
-      max_tokens: 4096,
-      system: ANALYSIS_PROMPT,
-      messages: [
-        {
-          role: "user",
-          content: `Analyze this codebase and produce the architecture JSON:\n\n${packed}`,
-        },
-      ],
-    });
-
-    generation?.end({
-      output: response.content,
-      usage: {
-        input: response.usage?.input_tokens,
-        output: response.usage?.output_tokens,
-      },
-    });
-
-    // Extract text response
-    const textBlock = response.content.find((b) => b.type === "text");
-    if (!textBlock || textBlock.type !== "text") {
-      trace?.update({ output: { error: "No text in response" } });
-      return NextResponse.json(
-        { success: false, error: "AI did not return an analysis.", operations: [], message: "" },
-        { status: 500 }
-      );
-    }
-
-    // Parse architecture JSON
-    let architecture: ArchitectureAnalysis;
-    try {
-      const jsonStr = extractJSON(textBlock.text);
-      architecture = JSON.parse(jsonStr) as ArchitectureAnalysis;
-    } catch {
-      console.error("Failed to parse architecture JSON:", textBlock.text.slice(0, 500));
-      trace?.update({ output: { error: "JSON parse failure" } });
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Failed to parse architecture analysis. Please try again.",
-          operations: [],
-          message: "",
-        },
-        { status: 500 }
-      );
-    }
-
-    if (!architecture.layers || architecture.layers.length === 0) {
-      trace?.update({ output: { error: "No layers found" } });
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Could not identify a clear architecture in this repository.",
-          operations: [],
-          message: "",
-        },
-        { status: 400 }
-      );
-    }
-
-    // ── Layout engine ─────────────────────────────────────────────
-    const cx = viewportCenter?.x ?? 400;
-    const cy = viewportCenter?.y ?? 200;
-    const baseX = cx - 300;
-    const baseY = cy - 200;
-
-    const operations = layoutArchitecture(architecture, baseX, baseY);
-
-    const componentCount = architecture.layers.reduce((sum, l) => sum + l.components.length, 0);
-    const durationMs = Date.now() - startMs;
-    const message = `Generated architecture diagram for **${repoName}** — ${architecture.layers.length} layers, ${componentCount} components, ${architecture.connections.length} connections.`;
-
-    // ── Finalize trace ────────────────────────────────────────────
-    trace?.update({
-      output: {
-        layers: architecture.layers.length,
-        components: componentCount,
-        connections: architecture.connections.length,
-        operations: operations.length,
-        durationMs,
-      },
-    });
-    langfuse?.flushAsync().catch(() => {});
-
-    return NextResponse.json({
-      success: true,
-      operations,
-      message,
-      durationMs,
-    });
-  } catch (err) {
-    console.error("analyze-repo error:", err);
-    const msg = err instanceof Error ? err.message : "Internal error";
-    langfuse?.flushAsync().catch(() => {});
+  const body = await request.json();
+  const parsed = RequestSchema.safeParse(body);
+  if (!parsed.success) {
     return NextResponse.json(
-      { success: false, error: msg, operations: [], message: "" },
-      { status: 500 }
+      {
+        success: false,
+        error: "Invalid request. Provide a valid GitHub URL.",
+        operations: [],
+        message: "",
+      },
+      { status: 400 }
     );
   }
+
+  const { repoUrl, viewportCenter } = parsed.data;
+
+  const ghMatch = repoUrl.match(/github\.com\/([\w.-]+)\/([\w.-]+)/);
+  if (!ghMatch) {
+    return NextResponse.json(
+      {
+        success: false,
+        error:
+          "Please provide a valid GitHub repository URL (e.g., https://github.com/owner/repo).",
+        operations: [],
+        message: "",
+      },
+      { status: 400 }
+    );
+  }
+
+  const [, owner, repo] = ghMatch;
+  const repoName = `${owner}/${repo}`;
+
+  const stream = new ReadableStream({
+    async start(controller) {
+      const startMs = Date.now();
+      const langfuse = getLangfuse();
+
+      try {
+        const trace = langfuse?.trace({
+          name: "analyze-repo",
+          input: { repoUrl, repoName, viewportCenter },
+        });
+
+        // ── Check cache ──────────────────────────────────────────
+        sendEvent(controller, { phase: "resolving", message: "Resolving latest commit..." });
+
+        const sha = await getCommitSha(owner, repo);
+        const cacheKey = sha ? `${repoName}:${sha}` : null;
+
+        if (cacheKey) {
+          // Firestore doc IDs can't contain '/' — use '_' separator
+          const docId = cacheKey.replace(/\//g, "_");
+          const cachedArch = await getCachedAnalysis(docId);
+          if (cachedArch) {
+            // Cache hit — skip packing + Claude entirely
+            sendEvent(controller, { phase: "cached", message: "Using cached analysis" });
+
+            const cx = viewportCenter?.x ?? 400;
+            const cy = viewportCenter?.y ?? 200;
+            const operations = layoutArchitecture(cachedArch, cx - 300, cy - 200);
+            const componentCount = cachedArch.layers.reduce(
+              (s: number, l: { components: unknown[] }) => s + l.components.length,
+              0
+            );
+            const durationMs = Date.now() - startMs;
+
+            trace?.update({ output: { cached: true, durationMs } });
+            langfuse?.flushAsync().catch(() => {});
+
+            sendEvent(controller, {
+              phase: "complete",
+              data: {
+                success: true,
+                operations,
+                message: `Generated architecture diagram for **${repoName}** (cached) — ${cachedArch.layers.length} layers, ${componentCount} components, ${cachedArch.connections.length} connections.`,
+                durationMs,
+              },
+            });
+            controller.close();
+            return;
+          }
+        }
+
+        // ── Pack repository ──────────────────────────────────────
+        sendEvent(controller, { phase: "packing", message: "Cloning & packing repository..." });
+
+        const packSpan = trace?.span({ name: "pack-repository" });
+        let packed: string;
+        let packMethod = "repomix";
+        try {
+          packed = await packRepository(repoUrl);
+        } catch (repomixError) {
+          console.warn("Repomix failed, falling back to GitHub API:", repomixError);
+          packMethod = "github-api";
+          try {
+            packed = await packRepositoryFallback(repoUrl);
+          } catch (fallbackError) {
+            const msg =
+              fallbackError instanceof Error
+                ? fallbackError.message
+                : "Could not access repository.";
+            packSpan?.end({ output: { error: msg } });
+            sendEvent(controller, {
+              phase: "complete",
+              data: { success: false, error: msg, operations: [], message: "" },
+            });
+            controller.close();
+            return;
+          }
+        }
+        packSpan?.end({ output: { method: packMethod, chars: packed.length } });
+
+        // ── Claude analysis ──────────────────────────────────────
+        sendEvent(controller, { phase: "analyzing", message: "AI is analyzing architecture..." });
+
+        const generation = trace?.generation({
+          name: "architecture-analysis",
+          model: AI_MODEL,
+          input: { packedChars: packed.length, repoName },
+        });
+
+        const anthropic = new Anthropic();
+        const response = await anthropic.messages.create({
+          model: AI_MODEL,
+          max_tokens: 4096,
+          system: ANALYSIS_PROMPT,
+          messages: [
+            {
+              role: "user",
+              content: `Analyze this codebase and produce the architecture JSON:\n\n${packed}`,
+            },
+          ],
+        });
+
+        generation?.end({
+          output: response.content,
+          usage: { input: response.usage?.input_tokens, output: response.usage?.output_tokens },
+        });
+
+        const textBlock = response.content.find((b) => b.type === "text");
+        if (!textBlock || textBlock.type !== "text") {
+          trace?.update({ output: { error: "No text in response" } });
+          sendEvent(controller, {
+            phase: "complete",
+            data: {
+              success: false,
+              error: "AI did not return an analysis.",
+              operations: [],
+              message: "",
+            },
+          });
+          controller.close();
+          return;
+        }
+
+        // ── Parse architecture JSON ──────────────────────────────
+        sendEvent(controller, { phase: "laying_out", message: "Building diagram layout..." });
+
+        let architecture: ArchitectureAnalysis;
+        try {
+          const jsonStr = extractJSON(textBlock.text);
+          architecture = JSON.parse(jsonStr) as ArchitectureAnalysis;
+        } catch {
+          console.error("Failed to parse architecture JSON:", textBlock.text.slice(0, 500));
+          trace?.update({ output: { error: "JSON parse failure" } });
+          sendEvent(controller, {
+            phase: "complete",
+            data: {
+              success: false,
+              error: "Failed to parse architecture analysis. Please try again.",
+              operations: [],
+              message: "",
+            },
+          });
+          controller.close();
+          return;
+        }
+
+        if (!architecture.layers || architecture.layers.length === 0) {
+          trace?.update({ output: { error: "No layers found" } });
+          sendEvent(controller, {
+            phase: "complete",
+            data: {
+              success: false,
+              error: "Could not identify a clear architecture in this repository.",
+              operations: [],
+              message: "",
+            },
+          });
+          controller.close();
+          return;
+        }
+
+        // ── Store in cache ───────────────────────────────────────
+        if (cacheKey) {
+          const docId = cacheKey.replace(/\//g, "_");
+          setCachedAnalysis(docId, architecture); // fire-and-forget
+        }
+
+        // ── Layout engine ────────────────────────────────────────
+        const cx = viewportCenter?.x ?? 400;
+        const cy = viewportCenter?.y ?? 200;
+        const operations = layoutArchitecture(architecture, cx - 300, cy - 200);
+
+        const componentCount = architecture.layers.reduce((s, l) => s + l.components.length, 0);
+        const durationMs = Date.now() - startMs;
+        const message = `Generated architecture diagram for **${repoName}** — ${architecture.layers.length} layers, ${componentCount} components, ${architecture.connections.length} connections.`;
+
+        trace?.update({
+          output: {
+            layers: architecture.layers.length,
+            components: componentCount,
+            connections: architecture.connections.length,
+            operations: operations.length,
+            durationMs,
+          },
+        });
+        langfuse?.flushAsync().catch(() => {});
+
+        sendEvent(controller, {
+          phase: "complete",
+          data: { success: true, operations, message, durationMs },
+        });
+      } catch (err) {
+        console.error("analyze-repo error:", err);
+        const msg = err instanceof Error ? err.message : "Internal error";
+        sendEvent(controller, {
+          phase: "complete",
+          data: { success: false, error: msg, operations: [], message: "" },
+        });
+      } finally {
+        controller.close();
+      }
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "application/x-ndjson",
+      "Cache-Control": "no-cache",
+      "Transfer-Encoding": "chunked",
+    },
+  });
 }

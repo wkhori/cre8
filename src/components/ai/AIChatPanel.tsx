@@ -44,7 +44,10 @@ export default function AIChatPanel({ boardId, uid, open }: AIChatPanelProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const setAIPanelOpen = useUIStore((s) => s.setAIPanelOpen);
 
-  const { submitCommand, loading, error, messages, clearError } = useAIAgent(boardId, uid);
+  const { submitCommand, loading, statusMessage, error, messages, clearError } = useAIAgent(
+    boardId,
+    uid
+  );
 
   // Auto-scroll to bottom on new messages
   useEffect(() => {
@@ -126,7 +129,10 @@ export default function AIChatPanel({ boardId, uid, open }: AIChatPanelProps) {
         <div className="mx-4 h-px bg-gradient-to-r from-transparent via-zinc-200 to-transparent dark:via-zinc-700" />
 
         {/* Messages */}
-        <div ref={scrollRef} className="scrollbar-thin flex-1 overflow-y-auto px-4 py-3">
+        <div
+          ref={scrollRef}
+          className="scrollbar-thin flex-1 overflow-y-auto overscroll-contain px-4 py-3"
+        >
           {messages.length === 0 && !loading && (
             <EmptyState onExampleClick={(prompt) => handleSubmit(prompt)} />
           )}
@@ -143,7 +149,7 @@ export default function AIChatPanel({ boardId, uid, open }: AIChatPanelProps) {
                 </div>
                 <div className="flex items-center gap-2 pt-1 text-xs text-zinc-500">
                   <Loader2 className="size-3 animate-spin" />
-                  <span>Working on it...</span>
+                  <span>{statusMessage || "Working on it..."}</span>
                 </div>
               </div>
             )}

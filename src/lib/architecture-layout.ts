@@ -14,9 +14,6 @@ const ICON_SIZE = 28;
 const TECH_ICON_SIZE = 24;
 const TECH_ICON_GAP = 10;
 const MAX_COMPONENTS_PER_ROW = 6;
-const SUMMARY_W = 280;
-const SUMMARY_GAP = 40;
-
 // ── Tier color palette ────────────────────────────────────────────
 const TIER_COLORS: { fill: string; text: string }[] = [
   { fill: "#3b82f6", text: "#ffffff" },
