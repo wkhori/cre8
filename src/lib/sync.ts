@@ -265,21 +265,6 @@ function applyFieldDeletions(
 }
 
 /**
- * Convert a local Shape to a Firestore-safe document.
- * Adds sync metadata (updatedAt, updatedBy).
- */
-function shapeToFirestore(shape: Shape, userId: string): Record<string, unknown> {
-  return applyFieldDeletions(
-    stripUndefined({
-      ...shape,
-      updatedAt: serverTimestamp(),
-      updatedBy: userId,
-    }),
-    shape as unknown as Record<string, unknown>
-  );
-}
-
-/**
  * Convert a Firestore document back to a local Shape.
  * Strips Firestore-specific fields.
  */
@@ -485,7 +470,15 @@ export async function createObjects(
     for (const shape of chunk) {
       const id = shape.id || generateId();
       const objRef = doc(firebaseDb, "boards", boardId, "objects", id);
-      batch.set(objRef, shapeToFirestore({ ...shape, id }, userId));
+      batch.set(
+        objRef,
+        stripUndefined({
+          ...shape,
+          id,
+          updatedAt: serverTimestamp(),
+          updatedBy: userId,
+        })
+      );
     }
     await batch.commit();
   }

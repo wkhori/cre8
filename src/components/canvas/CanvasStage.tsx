@@ -302,6 +302,18 @@ export default function CanvasStage({
 
       if (spaceHeldRef.current || useUIStore.getState().activeTool === "hand") return;
 
+      // Placement tools take priority over shape selection
+      if (placement.isPlacementActive) {
+        const stage = stageRef.current;
+        const pos = stage?.getPointerPosition();
+        if (pos) {
+          const vp = viewport.viewportRef.current;
+          const worldX = (pos.x - vp.x) / vp.scale;
+          const worldY = (pos.y - vp.y) / vp.scale;
+          if (placement.handlePlacementMouseDown(worldX, worldY)) return;
+        }
+      }
+
       if (connector.handleShapeClick(id)) return;
 
       const evt = e.evt as MouseEvent;
@@ -311,7 +323,7 @@ export default function CanvasStage({
         setSelected([id]);
       }
     },
-    [setSelected, toggleSelected, connector]
+    [setSelected, toggleSelected, connector, placement, viewport]
   );
 
   // ── Render ───────────────────────────────────────────────────────

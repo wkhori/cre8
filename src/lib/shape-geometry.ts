@@ -55,7 +55,7 @@ export function getShapeBounds(shape: Shape): Bounds {
   }
 
   // Connector and Line both use points-based bounds
-  const pts = shape.type === "connector" ? (shape.points ?? [0, 0, 100, 0]) : shape.points;
+  const pts = shape.points ?? [0, 0, 100, 0];
 
   if (pts.length < 2) {
     return { x: shape.x, y: shape.y, width: 0, height: 0 };

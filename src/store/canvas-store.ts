@@ -95,6 +95,26 @@ function baseProps(shapes: Shape[]): Pick<BaseShape, "rotation" | "opacity" | "z
   return { rotation: 0, opacity: 1, zIndex: nextZIndex(shapes) };
 }
 
+/** Find the smallest frame that fully contains the given bounds. */
+function findParentFrame(
+  shapes: Shape[],
+  bx: number,
+  by: number,
+  bw: number,
+  bh: number
+): string | undefined {
+  let best: FrameShape | undefined;
+  const br = bx + bw;
+  const bb = by + bh;
+  for (const s of shapes) {
+    if (s.type !== "frame") continue;
+    if (bx >= s.x && by >= s.y && br <= s.x + s.w && bb <= s.y + s.h) {
+      if (!best || s.w * s.h < best.w * best.h) best = s;
+    }
+  }
+  return best?.id;
+}
+
 function remapConnectorRefs(shape: Shape, idMap: Map<string, string>): Shape {
   if (shape.type !== "connector") return shape;
 
@@ -145,17 +165,20 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
     state.pushHistory();
     const w = 200;
     const h = 200;
+    const x = centerX - w / 2;
+    const y = centerY - h / 2;
     const shape: StickyNoteShape = {
       id: generateId(),
       type: "sticky",
-      x: centerX - w / 2,
-      y: centerY - h / 2,
+      x,
+      y,
       w,
       h,
       text,
       color,
       fontSize: 16,
       ...baseProps(state.shapes),
+      parentId: findParentFrame(state.shapes, x, y, w, h),
     };
     set({ shapes: [...state.shapes, shape], selectedIds: [shape.id] });
     return shape.id;
@@ -188,16 +211,19 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
     state.pushHistory();
     const w = 120;
     const h = 80;
+    const x = centerX - w / 2;
+    const y = centerY - h / 2;
     const shape: RectShape = {
       id: generateId(),
       type: "rect",
-      x: centerX - w / 2,
-      y: centerY - h / 2,
+      x,
+      y,
       w,
       h,
       fill: "#3b82f6",
       cornerRadius: 4,
       ...baseProps(state.shapes),
+      parentId: findParentFrame(state.shapes, x, y, w, h),
     };
     set({ shapes: [...state.shapes, shape], selectedIds: [shape.id] });
   },
@@ -215,6 +241,13 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
       radiusY: radius,
       fill: "#3b82f6",
       ...baseProps(state.shapes),
+      parentId: findParentFrame(
+        state.shapes,
+        centerX - radius,
+        centerY - radius,
+        radius * 2,
+        radius * 2
+      ),
     };
     set({ shapes: [...state.shapes, shape], selectedIds: [shape.id] });
   },
@@ -224,18 +257,23 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
     state.pushHistory();
     const isDark =
       typeof document !== "undefined" && document.documentElement.classList.contains("dark");
+    const x = centerX - 40;
+    const y = centerY - 12;
+    const w = 200;
+    const h = 24; // approximate single-line height
     const shape: TextShape = {
       id: generateId(),
       type: "text",
-      x: centerX - 40,
-      y: centerY - 12,
+      x,
+      y,
       text,
       fontSize: 24,
       fontFamily: "sans-serif",
       fill: isDark ? "#fafafa" : "#18181b",
-      width: 200,
+      width: w,
       align: "left",
       ...baseProps(state.shapes),
+      parentId: findParentFrame(state.shapes, x, y, w, h),
     };
     set({ shapes: [...state.shapes, shape], selectedIds: [shape.id] });
     return shape.id;
