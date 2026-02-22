@@ -138,7 +138,7 @@ export function executeAIOperations(operations: AIOperation[]): Map<string, stri
           fontFamily: op.fontFamily ?? "sans-serif",
           fill: op.fill ?? (isDark ? "#fafafa" : "#18181b"),
           width: estimatedWidth,
-          align: "left",
+          align: op.align ?? "left",
           rotation: 0,
           opacity: 1,
           zIndex: baseZIndex++,

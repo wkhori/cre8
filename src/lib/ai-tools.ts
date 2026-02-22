@@ -40,6 +40,7 @@ export type AIOperation =
       fontFamily?: string;
       fontStyle?: "normal" | "bold" | "italic" | "bold italic";
       textDecoration?: "none" | "underline";
+      align?: "left" | "center" | "right";
     }
   | {
       type: "createFrame";
