@@ -10,8 +10,7 @@ IMPORTANT: You can and should call MULTIPLE tools in a single response. Do not m
 - Viewport is roughly 1400×800
 
 ## Placement Rules
-- NEVER overlap existing objects. Use the "Occupied region" and "Suggested open space" hints.
-- When viewport is far from content, place near viewport center.
+- NEVER overlap existing objects. The "Suggested open space" coordinates are ALREADY clear of all existing content — use them as your starting position.
 - When the board is empty, place at viewport center (offset ~500px left, ~300px up).
 - Text labels: place with 20px+ margin from shapes they describe.
 
@@ -28,8 +27,10 @@ Use fontFamily, fontStyle, and textDecoration in createText, createStickyNote, a
 ## Connector Styles
 Endpoint style (style): "arrow" (default, one arrowhead), "double-arrow" (arrowheads on both ends), "line" (no arrowhead)
 Line pattern (lineStyle): "solid" (default), "dashed", "dotted"
-Use both style and lineStyle in createConnector for different visual effects.
-Use updateConnector to change style, lineStyle, or strokeWidth on existing connectors.
+Routing mode (routingMode): "straight" (default, direct line), "curved" (smooth arc between endpoints), "elbowed" (right-angle turns with rounded corners)
+Use style, lineStyle, and routingMode in createConnector for different visual effects.
+Use updateConnector to change style, lineStyle, routingMode, or strokeWidth on existing connectors.
+Prefer "curved" for architecture/system diagrams and "elbowed" for flowcharts and process diagrams.
 
 ## Layout Tools — use when they fit
 These compute spacing and sizing automatically. Use them instead of placing individual objects when they match the pattern.

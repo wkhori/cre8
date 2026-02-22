@@ -17,9 +17,11 @@ import {
   Lightbulb,
   ListChecks,
   Shuffle,
+  GitBranch,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { ChatMessage } from "@/lib/ai-chat";
+import { addChatMessage } from "@/lib/ai-chat";
 
 const EXAMPLE_PROMPTS = [
   { text: "Create a SWOT analysis for a coffee shop", icon: LayoutGrid },
@@ -28,6 +30,36 @@ const EXAMPLE_PROMPTS = [
   { text: "Design a user journey map", icon: Lightbulb },
   { text: "Build a weekly sprint board", icon: ListChecks },
   { text: "Organize everything into a neat grid", icon: Shuffle },
+  { text: "Generate an architecture diagram", icon: GitBranch, slashPrefill: "/arch-diagram " },
+];
+
+// ── Slash commands ──────────────────────────────────────────────────
+const SLASH_COMMANDS = [
+  {
+    command: "/arch-diagram",
+    description: "Generate an architecture diagram from a GitHub repo",
+    icon: GitBranch,
+  },
+  {
+    command: "/brainstorm",
+    description: "Brainstorm ideas on sticky notes",
+    icon: Lightbulb,
+  },
+  {
+    command: "/organize",
+    description: "Organize and arrange items on the board",
+    icon: Shuffle,
+  },
+  {
+    command: "/flowchart",
+    description: "Create a flowchart or process diagram",
+    icon: ArrowRightLeft,
+  },
+  {
+    command: "/grid",
+    description: "Layout items in a structured grid",
+    icon: LayoutGrid,
+  },
 ];
 
 interface AIChatPanelProps {
@@ -38,11 +70,28 @@ interface AIChatPanelProps {
 
 export default function AIChatPanel({ boardId, uid, open }: AIChatPanelProps) {
   const [command, setCommand] = useState("");
+  const [slashMenuOpen, setSlashMenuOpen] = useState(false);
+  const [slashMenuIndex, setSlashMenuIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const setAIPanelOpen = useUIStore((s) => s.setAIPanelOpen);
 
-  const { submitCommand, loading, error, messages, clearError } = useAIAgent(boardId, uid);
+  const { submitCommand, loading, statusMessage, error, messages, clearError } = useAIAgent(
+    boardId,
+    uid
+  );
+
+  // Filter slash commands based on current input
+  const filteredCommands = command.startsWith("/")
+    ? SLASH_COMMANDS.filter((c) => c.command.startsWith(command.split(" ")[0].toLowerCase()))
+    : [];
+
+  // Show menu when typing / and there are matches (and no space yet = haven't picked a command)
+  useEffect(() => {
+    const isTypingSlash = command.startsWith("/") && !command.includes(" ");
+    setSlashMenuOpen(isTypingSlash && filteredCommands.length > 0);
+    setSlashMenuIndex(0);
+  }, [command, filteredCommands.length]);
 
   // Auto-scroll to bottom on new messages
   useEffect(() => {
@@ -58,18 +107,72 @@ export default function AIChatPanel({ boardId, uid, open }: AIChatPanelProps) {
     }
   }, [open]);
 
+  const selectSlashCommand = useCallback((cmd: string) => {
+    setCommand(cmd + " ");
+    setSlashMenuOpen(false);
+    inputRef.current?.focus();
+  }, []);
+
   const handleSubmit = useCallback(
     async (text?: string) => {
       const cmd = text ?? command;
       if (!cmd.trim() || loading) return;
       setCommand("");
+      setSlashMenuOpen(false);
       await submitCommand(cmd);
     },
     [command, loading, submitCommand]
   );
 
+  const handleExampleClick = useCallback(
+    async (prompt: { text: string; slashPrefill?: string }) => {
+      if (prompt.slashPrefill) {
+        setCommand(prompt.slashPrefill);
+        await addChatMessage(boardId, uid, {
+          role: "assistant",
+          content:
+            "Please share the repo URL and I'll get started! e.g.\n/arch-diagram https://github.com/owner/repo",
+          timestamp: null,
+        });
+        // Focus and move cursor to end (after React re-renders the value)
+        setTimeout(() => {
+          const el = inputRef.current;
+          if (el) {
+            el.focus();
+            el.setSelectionRange(el.value.length, el.value.length);
+          }
+        }, 0);
+        return;
+      }
+      handleSubmit(prompt.text);
+    },
+    [boardId, uid, handleSubmit]
+  );
+
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
+      if (slashMenuOpen) {
+        if (e.key === "ArrowDown") {
+          e.preventDefault();
+          setSlashMenuIndex((i) => Math.min(i + 1, filteredCommands.length - 1));
+          return;
+        }
+        if (e.key === "ArrowUp") {
+          e.preventDefault();
+          setSlashMenuIndex((i) => Math.max(i - 1, 0));
+          return;
+        }
+        if (e.key === "Tab" || e.key === "Enter") {
+          e.preventDefault();
+          selectSlashCommand(filteredCommands[slashMenuIndex].command);
+          return;
+        }
+        if (e.key === "Escape") {
+          e.preventDefault();
+          setSlashMenuOpen(false);
+          return;
+        }
+      }
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
         handleSubmit();
@@ -79,7 +182,14 @@ export default function AIChatPanel({ boardId, uid, open }: AIChatPanelProps) {
       }
       e.stopPropagation();
     },
-    [handleSubmit, setAIPanelOpen]
+    [
+      handleSubmit,
+      setAIPanelOpen,
+      slashMenuOpen,
+      filteredCommands,
+      slashMenuIndex,
+      selectSlashCommand,
+    ]
   );
 
   return (
@@ -124,10 +234,11 @@ export default function AIChatPanel({ boardId, uid, open }: AIChatPanelProps) {
         <div className="mx-4 h-px bg-gradient-to-r from-transparent via-zinc-200 to-transparent dark:via-zinc-700" />
 
         {/* Messages */}
-        <div ref={scrollRef} className="scrollbar-thin flex-1 overflow-y-auto px-4 py-3">
-          {messages.length === 0 && !loading && (
-            <EmptyState onExampleClick={(prompt) => handleSubmit(prompt)} />
-          )}
+        <div
+          ref={scrollRef}
+          className="scrollbar-thin flex-1 overflow-y-auto overscroll-contain px-4 py-3"
+        >
+          {messages.length === 0 && !loading && <EmptyState onExampleClick={handleExampleClick} />}
 
           <div className="space-y-3">
             {messages.map((msg) => (
@@ -141,7 +252,7 @@ export default function AIChatPanel({ boardId, uid, open }: AIChatPanelProps) {
                 </div>
                 <div className="flex items-center gap-2 pt-1 text-xs text-zinc-500">
                   <Loader2 className="size-3 animate-spin" />
-                  <span>Working on it...</span>
+                  <span className="whitespace-pre-line">{statusMessage || "Working on it..."}</span>
                 </div>
               </div>
             )}
@@ -155,7 +266,42 @@ export default function AIChatPanel({ boardId, uid, open }: AIChatPanelProps) {
         </div>
 
         {/* Input */}
-        <div className="px-4 pb-4 pt-2">
+        <div className="relative px-4 pb-4 pt-2">
+          {/* Slash command menu */}
+          {slashMenuOpen && (
+            <div className="absolute bottom-full left-4 right-4 mb-1 overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+              <div className="px-2 py-1.5 text-[10px] font-medium uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+                Commands
+              </div>
+              {filteredCommands.map((cmd, i) => {
+                const Icon = cmd.icon;
+                return (
+                  <button
+                    key={cmd.command}
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      selectSlashCommand(cmd.command);
+                    }}
+                    className={cn(
+                      "flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm transition-colors",
+                      i === slashMenuIndex
+                        ? "bg-violet-50 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300"
+                        : "text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                    )}
+                  >
+                    <Icon className="size-3.5 shrink-0 text-zinc-400 dark:text-zinc-500" />
+                    <div className="min-w-0">
+                      <span className="font-medium">{cmd.command}</span>
+                      <span className="ml-2 text-xs text-zinc-400 dark:text-zinc-500">
+                        {cmd.description}
+                      </span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
           <div className="flex gap-2 rounded-xl border border-zinc-200 bg-zinc-50/50 p-1.5 shadow-sm transition-colors focus-within:border-violet-300 focus-within:ring-2 focus-within:ring-violet-500/20 dark:border-zinc-700 dark:bg-zinc-800/50 dark:focus-within:border-violet-600/50">
             <input
               ref={inputRef}
@@ -165,7 +311,7 @@ export default function AIChatPanel({ boardId, uid, open }: AIChatPanelProps) {
                 if (error) clearError();
               }}
               onKeyDown={handleKeyDown}
-              placeholder="What should I create or change?"
+              placeholder="Type / for commands or ask anything..."
               disabled={loading}
               className={cn(
                 "flex h-8 w-full bg-transparent px-2 text-sm outline-none",
@@ -193,6 +339,31 @@ export default function AIChatPanel({ boardId, uid, open }: AIChatPanelProps) {
   );
 }
 
+/** Render inline markdown: **bold** and `code` */
+function renderInlineMarkdown(text: string) {
+  const parts = text.split(/(\*\*[^*]+\*\*|`[^`]+`)/g);
+  return parts.map((part, i) => {
+    if (part.startsWith("**") && part.endsWith("**")) {
+      return (
+        <strong key={i} className="font-semibold">
+          {part.slice(2, -2)}
+        </strong>
+      );
+    }
+    if (part.startsWith("`") && part.endsWith("`")) {
+      return (
+        <code
+          key={i}
+          className="rounded bg-zinc-200/60 px-1 py-0.5 text-[0.85em] dark:bg-zinc-700/60"
+        >
+          {part.slice(1, -1)}
+        </code>
+      );
+    }
+    return part;
+  });
+}
+
 function MessageBubble({ message }: { message: ChatMessage }) {
   const isUser = message.role === "user";
 
@@ -200,7 +371,7 @@ function MessageBubble({ message }: { message: ChatMessage }) {
     return (
       <div className="flex justify-end">
         <div className="max-w-[85%] rounded-2xl rounded-br-md bg-violet-600 px-3.5 py-2 text-sm text-white shadow-sm">
-          <p className="whitespace-pre-wrap">{message.content}</p>
+          <p className="whitespace-pre-wrap wrap-break-word">{message.content}</p>
         </div>
       </div>
     );
@@ -213,7 +384,9 @@ function MessageBubble({ message }: { message: ChatMessage }) {
       </div>
       <div className="min-w-0 flex-1">
         <div className="rounded-2xl rounded-tl-md bg-zinc-100 px-3.5 py-2 text-sm text-zinc-800 shadow-sm dark:bg-zinc-800 dark:text-zinc-200">
-          <p className="whitespace-pre-wrap">{message.content}</p>
+          <p className="whitespace-pre-wrap wrap-break-word">
+            {renderInlineMarkdown(message.content)}
+          </p>
         </div>
         {message.operationCount != null && message.operationCount > 0 && (
           <div className="mt-1 ml-1 flex items-center gap-1 text-[10px] font-medium text-violet-500/80">
@@ -226,7 +399,11 @@ function MessageBubble({ message }: { message: ChatMessage }) {
   );
 }
 
-function EmptyState({ onExampleClick }: { onExampleClick: (prompt: string) => void }) {
+function EmptyState({
+  onExampleClick,
+}: {
+  onExampleClick: (prompt: { text: string; slashPrefill?: string }) => void;
+}) {
   return (
     <div className="flex flex-col items-center py-6">
       <div className="mb-4 flex size-12 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-purple-600 shadow-lg shadow-violet-500/25">
@@ -239,22 +416,25 @@ function EmptyState({ onExampleClick }: { onExampleClick: (prompt: string) => vo
         I can create, organize, and modify your board.
       </p>
       <div className="mt-5 w-full space-y-1.5">
-        {EXAMPLE_PROMPTS.map(({ text, icon: Icon }) => (
-          <button
-            key={text}
-            onClick={() => onExampleClick(text)}
-            className={cn(
-              "flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-[12px] text-zinc-600",
-              "border border-transparent transition-all",
-              "hover:border-violet-200 hover:bg-violet-50/60 hover:text-violet-700 hover:shadow-sm",
-              "dark:text-zinc-400",
-              "dark:hover:border-violet-800/40 dark:hover:bg-violet-950/30 dark:hover:text-violet-300"
-            )}
-          >
-            <Icon className="size-3.5 shrink-0 text-zinc-400 dark:text-zinc-500" />
-            <span>{text}</span>
-          </button>
-        ))}
+        {EXAMPLE_PROMPTS.map((prompt) => {
+          const Icon = prompt.icon;
+          return (
+            <button
+              key={prompt.text}
+              onClick={() => onExampleClick(prompt)}
+              className={cn(
+                "flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-[12px] text-zinc-600",
+                "border border-transparent transition-all",
+                "hover:border-violet-200 hover:bg-violet-50/60 hover:text-violet-700 hover:shadow-sm",
+                "dark:text-zinc-400",
+                "dark:hover:border-violet-800/40 dark:hover:bg-violet-950/30 dark:hover:text-violet-300"
+              )}
+            >
+              <Icon className="size-3.5 shrink-0 text-zinc-400 dark:text-zinc-500" />
+              <span>{prompt.text}</span>
+            </button>
+          );
+        })}
       </div>
     </div>
   );

@@ -1,12 +1,74 @@
 "use client";
 
-import { memo } from "react";
-import { Rect, Ellipse, Text, Line, Group, Arrow } from "react-konva";
+import { memo, useEffect, useRef, useState } from "react";
+import { Rect, Ellipse, Text, Line, Group, Arrow, Image as KonvaImage } from "react-konva";
 import type Konva from "konva";
 import type { Shape } from "@/lib/types";
 import { getShapeBounds, computeConnectorPoints } from "@/lib/shape-geometry";
 import { computeStickyFontSize, STICKY_PAD_X, STICKY_PAD_Y } from "@/lib/sticky-text";
 import { isLightColor } from "@/lib/colors";
+
+function useLoadImage(src: string | undefined) {
+  const [image, setImage] = useState<HTMLImageElement | null>(null);
+  const imgRef = useRef<HTMLImageElement | null>(null);
+  useEffect(() => {
+    if (!src) {
+      setImage(null);
+      return;
+    }
+    let cancelled = false;
+
+    // SVGs from CDNs (like Simple Icons) may lack explicit width/height,
+    // causing them to render as 0×0 in some browsers. Fetch the SVG text,
+    // ensure it has dimensions, and load as a data URI for maximum compat.
+    const isSvgUrl = src.includes("simpleicons.org") || src.endsWith(".svg");
+
+    if (isSvgUrl) {
+      fetch(src)
+        .then((res) => {
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          return res.text();
+        })
+        .then((svgText) => {
+          if (cancelled) return;
+          // Ensure the SVG has width/height attributes
+          let patched = svgText;
+          if (!svgText.includes('width="') && !svgText.includes("width='")) {
+            patched = svgText.replace("<svg", '<svg width="128" height="128"');
+          }
+          const dataUri = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(patched)}`;
+          const img = new window.Image();
+          img.onload = () => {
+            if (!cancelled) setImage(img);
+          };
+          img.onerror = () => {
+            if (!cancelled) setImage(null);
+          };
+          img.src = dataUri;
+          imgRef.current = img;
+        })
+        .catch(() => {
+          if (!cancelled) setImage(null);
+        });
+    } else {
+      const img = new window.Image();
+      img.crossOrigin = "anonymous";
+      img.onload = () => {
+        if (!cancelled) setImage(img);
+      };
+      img.onerror = () => {
+        if (!cancelled) setImage(null);
+      };
+      img.src = src;
+      imgRef.current = img;
+    }
+
+    return () => {
+      cancelled = true;
+    };
+  }, [src]);
+  return image;
+}
 
 interface ShapeRendererProps {
   shape: Shape;
@@ -41,6 +103,10 @@ export default memo(function ShapeRenderer({
   onMouseEnter,
   onMouseLeave,
 }: ShapeRendererProps) {
+  // Must call hooks unconditionally (rules of hooks) — pass undefined for non-image shapes
+  const imageSrc = shape.type === "image" ? shape.src : undefined;
+  const loadedImage = useLoadImage(imageSrc);
+
   const isConnector = shape.type === "connector";
   const commonProps = {
     id: shape.id,
@@ -221,12 +287,30 @@ export default memo(function ShapeRenderer({
       );
     }
 
+    case "image": {
+      return wrapWithHoverRing(
+        <Group key={shape.id} {...commonProps}>
+          <Rect width={shape.w} height={shape.h} fill="transparent" perfectDrawEnabled={false} />
+          {loadedImage && (
+            <KonvaImage
+              image={loadedImage}
+              width={shape.w}
+              height={shape.h}
+              listening={false}
+              perfectDrawEnabled={false}
+            />
+          )}
+        </Group>
+      );
+    }
+
     case "connector": {
       const pts = allShapes
         ? computeConnectorPoints(shape, allShapes, shapesById, siblingMap)
         : (shape.points ?? [0, 0, 100, 0]);
       const dashArray =
         shape.lineStyle === "dashed" ? [12, 6] : shape.lineStyle === "dotted" ? [3, 6] : undefined;
+      const routing = shape.routingMode ?? "straight";
       const connectorProps = {
         ...commonProps,
         // Connectors use absolute world coords in points, not x/y offset
@@ -238,6 +322,10 @@ export default memo(function ShapeRenderer({
         hitStrokeWidth: Math.max(shape.strokeWidth, 12),
         perfectDrawEnabled: false,
         ...(dashArray ? { dash: dashArray } : {}),
+        // Curved: tension makes Arrow follow curve tangent for correct arrowhead direction
+        ...(routing === "curved" ? { tension: 0.5 } : {}),
+        // Elbowed: subtler corner smoothing
+        ...(routing === "elbowed" ? { tension: 0.2 } : {}),
       };
       if (shape.style === "arrow") {
         return (

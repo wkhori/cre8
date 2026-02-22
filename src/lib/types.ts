@@ -69,17 +69,31 @@ export interface FrameShape extends BaseShape {
   stroke: string;
 }
 
+export interface ImageShape extends BaseShape {
+  type: "image";
+  w: number;
+  h: number;
+  src: string;
+}
+
 export interface ConnectorShape extends BaseShape {
   type: "connector";
   fromId?: string | null;
   toId?: string | null;
   fromPoint?: { x: number; y: number } | null;
   toPoint?: { x: number; y: number } | null;
+  /** Angle (radians) on the fromId shape perimeter where the connector exits. */
+  fromPort?: number | null;
+  /** Angle (radians) on the toId shape perimeter where the connector enters. */
+  toPort?: number | null;
   style: "line" | "arrow" | "double-arrow";
   stroke: string;
   strokeWidth: number;
   points?: number[]; // computed from connected objects
   lineStyle?: "solid" | "dashed" | "dotted";
+  routingMode?: "straight" | "curved" | "elbowed";
+  curveOffset?: number;
+  elbowMidRatio?: number;
 }
 
 // ── Discriminated union ────────────────────────────────────────────
@@ -90,6 +104,7 @@ export type Shape =
   | LineShape
   | StickyNoteShape
   | FrameShape
+  | ImageShape
   | ConnectorShape;
 
 export type ShapeType = Shape["type"];

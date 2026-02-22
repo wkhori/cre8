@@ -50,7 +50,7 @@ export function getShapeBounds(shape: Shape): Bounds {
     };
   }
 
-  if (shape.type === "sticky" || shape.type === "frame") {
+  if (shape.type === "sticky" || shape.type === "frame" || shape.type === "image") {
     return { x: shape.x, y: shape.y, width: shape.w, height: shape.h };
   }
 
@@ -143,12 +143,43 @@ export function shapeContainsPoint(shape: Shape, x: number, y: number): boolean 
   return x >= b.x && x <= b.x + b.width && y >= b.y && y <= b.y + b.height;
 }
 
+/** Compute a point on a shape's perimeter at a given angle (radians, 0 = right). */
+export function shapePerimeterPoint(shape: Shape, angle: number): { x: number; y: number } {
+  if (shape.type === "circle") {
+    return {
+      x: shape.x + shape.radiusX * Math.cos(angle),
+      y: shape.y + shape.radiusY * Math.sin(angle),
+    };
+  }
+  const bounds = getShapeBounds(shape);
+  const cx = bounds.x + bounds.width / 2;
+  const cy = bounds.y + bounds.height / 2;
+  // Cast a ray from center in the direction of `angle` and intersect with bounding rect
+  const far = Math.max(bounds.width, bounds.height) * 2;
+  const tx = cx + Math.cos(angle) * far;
+  const ty = cy + Math.sin(angle) * far;
+  return edgeIntersection(bounds, cx, cy, tx, ty);
+}
+
+/** Compute the port angle (radians) for a point relative to a shape's center. */
+export function computePortAngle(shape: Shape, px: number, py: number): number {
+  if (shape.type === "circle") {
+    return Math.atan2(py - shape.y, px - shape.x);
+  }
+  const bounds = getShapeBounds(shape);
+  const cx = bounds.x + bounds.width / 2;
+  const cy = bounds.y + bounds.height / 2;
+  return Math.atan2(py - cy, px - cx);
+}
+
 /** Build a deterministic pair key for an unordered {a, b} pair. */
 export function connectorPairKey(a: string, b: string): string {
   return a < b ? `${a}|${b}` : `${b}|${a}`;
 }
 
-/** Compute the [x1,y1, x2,y2] line points for a connector, resolving endpoints.
+/** Compute line points for a connector, resolving endpoints.
+ *  Returns [x1,y1,x2,y2] for straight, [x1,y1,cx,cy,x2,y2] for curved (bezier),
+ *  or multi-point array for elbowed routing.
  *  Optional maps for O(1) lookups instead of O(N) scans. */
 export function computeConnectorPoints(
   connector: ConnectorShape,
@@ -189,10 +220,19 @@ export function computeConnectorPoints(
     return [0, 0, 100, 0];
   }
 
-  const startPt = fromShape
-    ? shapeEdgeIntersection(fromShape, toCx, toCy)
-    : { x: fromCx, y: fromCy };
-  const endPt = toShape ? shapeEdgeIntersection(toShape, fromCx, fromCy) : { x: toCx, y: toCy };
+  // Use port angle for pinned perimeter placement, otherwise auto-aim at opposite center
+  const startPt =
+    fromShape && connector.fromPort != null
+      ? shapePerimeterPoint(fromShape, connector.fromPort)
+      : fromShape
+        ? shapeEdgeIntersection(fromShape, toCx, toCy)
+        : { x: fromCx, y: fromCy };
+  const endPt =
+    toShape && connector.toPort != null
+      ? shapePerimeterPoint(toShape, connector.toPort)
+      : toShape
+        ? shapeEdgeIntersection(toShape, fromCx, fromCy)
+        : { x: toCx, y: toCy };
 
   // Fan-out: offset connectors that share the same unordered {fromId, toId} pair
   if (connector.fromId && connector.toId) {
@@ -218,6 +258,42 @@ export function computeConnectorPoints(
       startPt.y += py * offset;
       endPt.x += px * offset;
       endPt.y += py * offset;
+    }
+  }
+
+  const mode = connector.routingMode ?? "straight";
+
+  if (mode === "curved") {
+    // Waypoint for tension: offset perpendicular to the midpoint
+    const midX = (startPt.x + endPt.x) / 2;
+    const midY = (startPt.y + endPt.y) / 2;
+    const dx = endPt.x - startPt.x;
+    const dy = endPt.y - startPt.y;
+    const len = Math.sqrt(dx * dx + dy * dy) || 1;
+    // Use stored offset or auto-compute (capped at 40px, tension amplifies the visual curve)
+    const curvature = connector.curveOffset ?? Math.min(len * 0.15, 40);
+    const px = -dy / len;
+    const py = dx / len;
+    const wx = midX + px * curvature;
+    const wy = midY + py * curvature;
+    return [startPt.x, startPt.y, wx, wy, endPt.x, endPt.y];
+  }
+
+  if (mode === "elbowed") {
+    // Right-angle routing: exit source → turn → enter target
+    const dx = endPt.x - startPt.x;
+    const dy = endPt.y - startPt.y;
+
+    const ratio = connector.elbowMidRatio ?? 0.5;
+
+    if (Math.abs(dy) > Math.abs(dx)) {
+      // Primarily vertical: go down/up to midpoint Y, then horizontal, then finish
+      const midY = startPt.y + dy * ratio;
+      return [startPt.x, startPt.y, startPt.x, midY, endPt.x, midY, endPt.x, endPt.y];
+    } else {
+      // Primarily horizontal: go right/left to midpoint X, then vertical, then finish
+      const midX = startPt.x + dx * ratio;
+      return [startPt.x, startPt.y, midX, startPt.y, midX, endPt.y, endPt.x, endPt.y];
     }
   }
 

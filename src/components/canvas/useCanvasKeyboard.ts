@@ -96,6 +96,9 @@ export function useCanvasKeyboard({
       }
 
       if (meta && e.key === "c") {
+        // Let native copy work when user has text selected (e.g. in AI chat panel)
+        const sel = window.getSelection();
+        if (sel && sel.toString().length > 0) return;
         e.preventDefault();
         copySelected();
         return;

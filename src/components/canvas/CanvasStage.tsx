@@ -6,7 +6,7 @@ import type Konva from "konva";
 import type { Shape, ConnectorShape } from "@/lib/types";
 import { useCanvasStore } from "@/store/canvas-store";
 import { useUIStore } from "@/store/ui-store";
-import { getShapeBounds, connectorPairKey } from "@/lib/shape-geometry";
+import { getShapeBounds, connectorPairKey, computeConnectorPoints } from "@/lib/shape-geometry";
 import ShapeRenderer from "./ShapeRenderer";
 import DotGrid from "./DotGrid";
 import CursorsLayer from "./CursorsLayer";
@@ -152,9 +152,68 @@ export default function CanvasStage({
       base = base.map((s) => {
         if (s.id !== ep.connectorId || s.type !== "connector") return s;
         if (ep.end === "from") {
-          return { ...s, fromId: null, fromPoint: { x: ep.x - s.x, y: ep.y - s.y } } as Shape;
+          return {
+            ...s,
+            fromId: null,
+            fromPoint: { x: ep.x - s.x, y: ep.y - s.y },
+            fromPort: null,
+          } as Shape;
         }
-        return { ...s, toId: null, toPoint: { x: ep.x - s.x, y: ep.y - s.y } } as Shape;
+        return {
+          ...s,
+          toId: null,
+          toPoint: { x: ep.x - s.x, y: ep.y - s.y },
+          toPort: null,
+        } as Shape;
+      });
+    }
+
+    // Apply control point drag override for live curve/elbow preview
+    if (connectorEP.controlPointDrag) {
+      const cpd = connectorEP.controlPointDrag;
+      base = base.map((s) => {
+        if (s.id !== cpd.connectorId || s.type !== "connector") return s;
+        const c = s as ConnectorShape;
+        const routing = c.routingMode ?? "straight";
+        if (routing === "curved") {
+          const pts = computeConnectorPoints(c, base);
+          if (pts.length >= 6) {
+            const sx = pts[0],
+              sy = pts[1],
+              ex = pts[4],
+              ey = pts[5];
+            const midX = (sx + ex) / 2,
+              midY = (sy + ey) / 2;
+            const dx = ex - sx,
+              dy = ey - sy;
+            const len = Math.sqrt(dx * dx + dy * dy) || 1;
+            const px = -dy / len,
+              py = dx / len;
+            const offset = (cpd.x - midX) * px + (cpd.y - midY) * py;
+            return { ...s, curveOffset: offset } as Shape;
+          }
+        } else if (routing === "elbowed") {
+          const pts = computeConnectorPoints(
+            { ...c, elbowMidRatio: undefined } as ConnectorShape,
+            base
+          );
+          if (pts.length >= 8) {
+            const sx = pts[0],
+              sy = pts[1],
+              ex = pts[6],
+              ey = pts[7];
+            const dx = ex - sx,
+              dy = ey - sy;
+            let ratio = 0.5;
+            if (Math.abs(dy) > Math.abs(dx)) {
+              ratio = dy !== 0 ? (cpd.y - sy) / dy : 0.5;
+            } else {
+              ratio = dx !== 0 ? (cpd.x - sx) / dx : 0.5;
+            }
+            return { ...s, elbowMidRatio: Math.max(0.1, Math.min(0.9, ratio)) } as Shape;
+          }
+        }
+        return s;
       });
     }
 
@@ -170,7 +229,13 @@ export default function CanvasStage({
       return s;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shapes, connectorIds.size, drag.dragEpoch, connectorEP.endpointDrag]);
+  }, [
+    shapes,
+    connectorIds.size,
+    drag.dragEpoch,
+    connectorEP.endpointDrag,
+    connectorEP.controlPointDrag,
+  ]);
 
   // Connector point resolution must use drag-aware positions while dragging.
   // Reuse the base map when no drag/endpoint override is active.
@@ -396,7 +461,7 @@ export default function CanvasStage({
           {interaction !== "dragging" &&
             connectorEP.selectedConnectorEndpoints.map((ep) => (
               <Circle
-                key={`${ep.connectorId}-${ep.end}`}
+                key={`${ep.connectorId}-${ep.end}-${connectorEP.endpointDragEpoch}`}
                 x={ep.x}
                 y={ep.y}
                 radius={6 / viewport.viewportRef.current.scale}
@@ -421,6 +486,119 @@ export default function CanvasStage({
                 }}
               />
             ))}
+
+          {/* Draggable control-point handles for curved/elbowed connectors */}
+          {interaction !== "dragging" &&
+            connectorEP.selectedConnectorControlPoints.map((cp) => {
+              // Look up connector to determine constraint axis
+              const cpConn = shapesById.get(cp.connectorId) as ConnectorShape | undefined;
+              const cpRouting = cpConn?.routingMode ?? "straight";
+
+              // Constrain drag to the appropriate axis
+              const getDragBound = () => {
+                if (!cpConn) return undefined;
+                const pts = computeConnectorPoints(cpConn, connectorAllShapes, connectorShapesById);
+
+                if (cpRouting === "curved" && pts.length >= 6) {
+                  const sx = pts[0],
+                    sy = pts[1],
+                    ex = pts[pts.length - 2],
+                    ey = pts[pts.length - 1];
+                  const midX = (sx + ex) / 2,
+                    midY = (sy + ey) / 2;
+                  const dx = ex - sx,
+                    dy = ey - sy;
+                  const len = Math.sqrt(dx * dx + dy * dy) || 1;
+                  const px = -dy / len,
+                    py = dx / len;
+                  const maxT = len / 2;
+                  return (pos: { x: number; y: number }) => {
+                    const vp = viewport.viewportRef.current;
+                    const wx = (pos.x - vp.x) / vp.scale;
+                    const wy = (pos.y - vp.y) / vp.scale;
+                    const t = (wx - midX) * px + (wy - midY) * py;
+                    const clamped = Math.max(-maxT, Math.min(maxT, t));
+                    const cx = midX + px * clamped;
+                    const cy = midY + py * clamped;
+                    return { x: cx * vp.scale + vp.x, y: cy * vp.scale + vp.y };
+                  };
+                }
+
+                if (cpRouting === "elbowed" && pts.length >= 8) {
+                  const sx = pts[0],
+                    sy = pts[1],
+                    ex = pts[pts.length - 2],
+                    ey = pts[pts.length - 1];
+                  const dx = ex - sx,
+                    dy = ey - sy;
+                  const primaryVertical = Math.abs(dy) > Math.abs(dx);
+                  // Horizontal: bend at x=midX, drag horizontally to move the turn
+                  // Vertical: bend at y=midY, drag vertically to move the turn
+                  if (primaryVertical) {
+                    // Vertical connector: turn at y=midY, drag vertically
+                    const fixedX = (sx + ex) / 2;
+                    const minY = Math.min(sy, ey);
+                    const maxY = Math.max(sy, ey);
+                    return (pos: { x: number; y: number }) => {
+                      const vp = viewport.viewportRef.current;
+                      const wy = (pos.y - vp.y) / vp.scale;
+                      const clampedY = Math.max(minY, Math.min(maxY, wy));
+                      return {
+                        x: fixedX * vp.scale + vp.x,
+                        y: clampedY * vp.scale + vp.y,
+                      };
+                    };
+                  } else {
+                    // Horizontal connector: turn at x=midX, drag horizontally
+                    const fixedY = (sy + ey) / 2;
+                    const minX = Math.min(sx, ex);
+                    const maxX = Math.max(sx, ex);
+                    return (pos: { x: number; y: number }) => {
+                      const vp = viewport.viewportRef.current;
+                      const wx = (pos.x - vp.x) / vp.scale;
+                      const clampedX = Math.max(minX, Math.min(maxX, wx));
+                      return {
+                        x: clampedX * vp.scale + vp.x,
+                        y: fixedY * vp.scale + vp.y,
+                      };
+                    };
+                  }
+                }
+
+                return undefined;
+              };
+
+              const dragBound = getDragBound();
+
+              return (
+                <Circle
+                  key={`cp-${cp.connectorId}-${cp.index}-${connectorEP.endpointDragEpoch}`}
+                  x={cp.x}
+                  y={cp.y}
+                  radius={5 / viewport.viewportRef.current.scale}
+                  fill="#3b82f6"
+                  stroke="#fff"
+                  strokeWidth={2 / viewport.viewportRef.current.scale}
+                  draggable
+                  perfectDrawEnabled={false}
+                  dragBoundFunc={dragBound}
+                  onDragMove={(e) => {
+                    connectorEP.handleControlPointDragMove(cp.connectorId, cp.index, e);
+                  }}
+                  onDragEnd={(e) => {
+                    connectorEP.handleControlPointDragEnd(cp.connectorId, cp.index, e);
+                  }}
+                  onMouseEnter={(e) => {
+                    const container = e.target.getStage()?.container();
+                    if (container) container.style.cursor = "grab";
+                  }}
+                  onMouseLeave={(e) => {
+                    const container = e.target.getStage()?.container();
+                    if (container) container.style.cursor = cursorStyle;
+                  }}
+                />
+              );
+            })}
 
           {/* Ghost preview for placement tools */}
           {(activeTool.startsWith("place-") || activeTool === "draw-frame") && (

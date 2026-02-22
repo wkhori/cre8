@@ -24,6 +24,9 @@ export type AIOperation =
       w: number;
       h: number;
       fill?: string;
+      stroke?: string;
+      strokeWidth?: number;
+      cornerRadius?: number;
     }
   | {
       type: "createText";
@@ -37,6 +40,7 @@ export type AIOperation =
       fontFamily?: string;
       fontStyle?: "normal" | "bold" | "italic" | "bold italic";
       textDecoration?: "none" | "underline";
+      align?: "left" | "center" | "right";
     }
   | {
       type: "createFrame";
@@ -54,6 +58,9 @@ export type AIOperation =
       toId: string;
       style?: "line" | "arrow" | "double-arrow";
       lineStyle?: "solid" | "dashed" | "dotted";
+      routingMode?: "straight" | "curved" | "elbowed";
+      stroke?: string;
+      strokeWidth?: number;
     }
   | { type: "moveObject"; objectId: string; x: number; y: number }
   | {
@@ -71,6 +78,16 @@ export type AIOperation =
       style?: "line" | "arrow" | "double-arrow";
       lineStyle?: "solid" | "dashed" | "dotted";
       strokeWidth?: number;
+      routingMode?: "straight" | "curved" | "elbowed";
+    }
+  | {
+      type: "createImage";
+      tempId: string;
+      x: number;
+      y: number;
+      w: number;
+      h: number;
+      src: string;
     }
   | { type: "deleteObjects"; objectIds: string[] }
   | { type: "resizeObject"; objectId: string; w: number; h: number }
@@ -259,6 +276,12 @@ export const AI_TOOLS: Anthropic.Messages.Tool[] = [
           enum: ["solid", "dashed", "dotted"],
           description: "Line pattern (default: solid)",
         },
+        routingMode: {
+          type: "string",
+          enum: ["straight", "curved", "elbowed"],
+          description:
+            "Path routing: straight (default), curved (smooth arc), elbowed (right-angle turns with rounded corners)",
+        },
       },
       required: ["fromId", "toId"],
     },
@@ -350,6 +373,12 @@ export const AI_TOOLS: Anthropic.Messages.Tool[] = [
         strokeWidth: {
           type: "number",
           description: "Stroke width in px (1=thin, 2=regular, 4=thick)",
+        },
+        routingMode: {
+          type: "string",
+          enum: ["straight", "curved", "elbowed"],
+          description:
+            "Path routing: straight (default), curved (smooth arc), elbowed (right-angle turns with rounded corners)",
         },
       },
       required: ["objectId"],

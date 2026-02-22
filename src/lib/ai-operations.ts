@@ -9,6 +9,7 @@ import type {
   TextShape,
   StickyNoteShape,
   FrameShape,
+  ImageShape,
   ConnectorShape,
 } from "@/lib/types";
 import type { AIOperation } from "@/lib/ai-tools";
@@ -110,7 +111,9 @@ export function executeAIOperations(operations: AIOperation[]): Map<string, stri
             w: op.w,
             h: op.h,
             fill: op.fill ?? "#3b82f6",
-            cornerRadius: 4,
+            cornerRadius: op.cornerRadius ?? 4,
+            ...(op.stroke ? { stroke: op.stroke } : {}),
+            ...(op.strokeWidth ? { strokeWidth: op.strokeWidth } : {}),
             rotation: 0,
             opacity: 1,
             zIndex: baseZIndex++,
@@ -135,13 +138,31 @@ export function executeAIOperations(operations: AIOperation[]): Map<string, stri
           fontFamily: op.fontFamily ?? "sans-serif",
           fill: op.fill ?? (isDark ? "#fafafa" : "#18181b"),
           width: estimatedWidth,
-          align: "left",
+          align: op.align ?? "left",
           rotation: 0,
           opacity: 1,
           zIndex: baseZIndex++,
           ...(op.fontStyle ? { fontStyle: op.fontStyle } : {}),
           ...(op.textDecoration ? { textDecoration: op.textDecoration } : {}),
         } as TextShape);
+        break;
+      }
+
+      case "createImage": {
+        const id = generateId();
+        tempIdMap.set(op.tempId, id);
+        newShapes.push({
+          id,
+          type: "image",
+          x: op.x,
+          y: op.y,
+          w: op.w,
+          h: op.h,
+          src: op.src,
+          rotation: 0,
+          opacity: 1,
+          zIndex: baseZIndex++,
+        } as ImageShape);
         break;
       }
 
@@ -158,12 +179,13 @@ export function executeAIOperations(operations: AIOperation[]): Map<string, stri
           fromId,
           toId,
           style: op.style ?? "arrow",
-          stroke: "#6b7280",
-          strokeWidth: 2,
+          stroke: op.stroke ?? "#6b7280",
+          strokeWidth: op.strokeWidth ?? 2,
           rotation: 0,
           opacity: 1,
           zIndex: baseZIndex++,
           ...(op.lineStyle ? { lineStyle: op.lineStyle } : {}),
+          ...(op.routingMode ? { routingMode: op.routingMode } : {}),
         } as ConnectorShape);
         break;
       }
@@ -210,6 +232,7 @@ export function executeAIOperations(operations: AIOperation[]): Map<string, stri
         if (op.style) (patch as Record<string, unknown>).style = op.style;
         if (op.lineStyle) (patch as Record<string, unknown>).lineStyle = op.lineStyle;
         if (op.strokeWidth) (patch as Record<string, unknown>).strokeWidth = op.strokeWidth;
+        if (op.routingMode) (patch as Record<string, unknown>).routingMode = op.routingMode;
         updates.push({ id: realId, patch });
         break;
       }
