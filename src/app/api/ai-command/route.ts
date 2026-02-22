@@ -208,7 +208,8 @@ function simulateToolCall(
         tempId,
         fromId: toolInput.fromId as string,
         toId: toolInput.toId as string,
-        style: toolInput.style as "line" | "arrow" | undefined,
+        style: toolInput.style as "line" | "arrow" | "double-arrow" | undefined,
+        lineStyle: toolInput.lineStyle as "solid" | "dashed" | "dotted" | undefined,
       };
       tempIdMap.set(tempId, tempId);
       return {

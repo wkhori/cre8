@@ -25,7 +25,7 @@ Text decoration: "none" (default), "underline"
 Use fontFamily and textDecoration in createText, createStickyNote, and updateText.
 
 ## Connector Styles
-Endpoint style (style): "arrow" (default), "line" (no arrowhead)
+Endpoint style (style): "arrow" (default, one arrowhead), "double-arrow" (arrowheads on both ends), "line" (no arrowhead)
 Line pattern (lineStyle): "solid" (default), "dashed", "dotted"
 Use both style and lineStyle in createConnector for different visual effects.
 

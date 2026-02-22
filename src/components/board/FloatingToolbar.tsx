@@ -12,6 +12,7 @@ import {
   Underline,
   Minus,
   ArrowRight,
+  ArrowLeftRight,
   Copy,
   ArrowUpToLine,
   ArrowDownToLine,
@@ -157,10 +158,9 @@ export default function FloatingToolbar() {
   const isUnderline = currentTextDecoration === "underline";
 
   // Connector state
-  const allSelectedAreArrows =
-    hasSelectedConnectors && selectedConnectors.every((s) => s.style === "arrow");
-  const allSelectedAreLines =
-    hasSelectedConnectors && selectedConnectors.every((s) => s.style === "line");
+  const currentEndpoint: "line" | "arrow" | "double-arrow" = hasSelectedConnectors
+    ? (selectedConnectors[0].style ?? "arrow")
+    : "arrow";
   const currentLineStyle = hasSelectedConnectors
     ? (selectedConnectors[0].lineStyle ?? "solid")
     : "solid";
@@ -194,8 +194,7 @@ export default function FloatingToolbar() {
         {hasSelectedConnectors && (
           <ConnectorControls
             selectedConnectors={selectedConnectors}
-            allSelectedAreArrows={allSelectedAreArrows}
-            allSelectedAreLines={allSelectedAreLines}
+            currentEndpoint={currentEndpoint}
             currentLineStyle={currentLineStyle}
             currentStrokeWidth={currentStrokeWidth}
           />
@@ -392,180 +391,132 @@ function TextControls({
 }
 
 // ── Connector Controls ────────────────────────────────────────────────
+const ENDPOINTS = [
+  { value: "line" as const, label: "Line", Icon: Minus },
+  { value: "arrow" as const, label: "Arrow", Icon: ArrowRight },
+  { value: "double-arrow" as const, label: "Double Arrow", Icon: ArrowLeftRight },
+] as const;
+
 function ConnectorControls({
   selectedConnectors,
-  allSelectedAreArrows,
-  allSelectedAreLines,
+  currentEndpoint,
   currentLineStyle,
   currentStrokeWidth,
 }: {
   selectedConnectors: ConnectorShape[];
-  allSelectedAreArrows: boolean;
-  allSelectedAreLines: boolean;
+  currentEndpoint: "line" | "arrow" | "double-arrow";
   currentLineStyle: string;
   currentStrokeWidth: number;
 }) {
-  const [styleOpen, setStyleOpen] = useState(false);
+  const [open, setOpen] = useState(false);
 
-  const applyConnectorStyle = useCallback(
-    (style: "line" | "arrow") => {
+  const applyPatch = useCallback(
+    (patch: Partial<Shape>) => {
       const store = useCanvasStore.getState();
       store.pushHistory();
-      const updates = selectedConnectors.map((c) => ({
-        id: c.id,
-        patch: { style } as Partial<Shape>,
-      }));
-      store.updateShapes(updates);
+      store.updateShapes(selectedConnectors.map((c) => ({ id: c.id, patch })));
     },
     [selectedConnectors]
   );
 
-  const applyLineStyle = useCallback(
-    (lineStyle: "solid" | "dashed" | "dotted") => {
-      const store = useCanvasStore.getState();
-      store.pushHistory();
-      const updates = selectedConnectors.map((c) => ({
-        id: c.id,
-        patch: { lineStyle } as Partial<Shape>,
-      }));
-      store.updateShapes(updates);
-    },
-    [selectedConnectors]
-  );
-
-  const applyStrokeWidth = useCallback(
-    (strokeWidth: number) => {
-      const store = useCanvasStore.getState();
-      store.pushHistory();
-      const updates = selectedConnectors.map((c) => ({
-        id: c.id,
-        patch: { strokeWidth } as Partial<Shape>,
-      }));
-      store.updateShapes(updates);
-    },
-    [selectedConnectors]
-  );
-
-  // Current style label for the trigger button
-  const endpointLabel = allSelectedAreArrows ? "Arrow" : allSelectedAreLines ? "Line" : "Mixed";
-  const lineLabel = LINE_STYLES.find((ls) => ls.value === currentLineStyle)?.label ?? "Solid";
+  const TriggerIcon = ENDPOINTS.find((e) => e.value === currentEndpoint)?.Icon ?? ArrowRight;
 
   return (
-    <>
-      {/* Endpoint style: line / arrow */}
-      <Button
-        size="icon-xs"
-        variant={allSelectedAreLines ? "default" : "ghost"}
-        onClick={() => applyConnectorStyle("line")}
-        title="Line (no arrow)"
-      >
-        <Minus className="size-3.5" />
-      </Button>
-      <Button
-        size="icon-xs"
-        variant={allSelectedAreArrows ? "default" : "ghost"}
-        onClick={() => applyConnectorStyle("arrow")}
-        title="Arrow"
-      >
-        <ArrowRight className="size-3.5" />
-      </Button>
-
-      <Separator orientation="vertical" className="mx-0.5 h-5" />
-
-      {/* Line style + stroke width dropdown */}
-      <Popover open={styleOpen} onOpenChange={setStyleOpen}>
-        <PopoverTrigger asChild>
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          className="flex h-7 items-center gap-0.5 rounded-md px-1.5 text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+          title="Connector style"
+        >
+          <TriggerIcon className="size-3.5" />
+          <ChevronDown className="size-3 text-zinc-400" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent side="bottom" align="start" sideOffset={8} className="w-44 p-1.5">
+        {/* Endpoint section */}
+        <p className="px-2 py-1 text-[10px] font-medium uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+          Endpoint
+        </p>
+        {ENDPOINTS.map(({ value, label, Icon }) => (
           <button
-            className="flex h-7 items-center gap-1 rounded-md px-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
-            title="Line style"
+            key={value}
+            onClick={() => applyPatch({ style: value } as Partial<Shape>)}
+            className={cn(
+              "flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors",
+              "hover:bg-zinc-100 dark:hover:bg-zinc-800",
+              currentEndpoint === value && "bg-zinc-100 font-medium dark:bg-zinc-800"
+            )}
           >
-            <svg width="18" height="2" viewBox="0 0 18 2" className="mr-0.5">
+            <Icon className="size-4 shrink-0 text-zinc-600 dark:text-zinc-300" />
+            {label}
+          </button>
+        ))}
+
+        <Separator className="my-1.5" />
+
+        {/* Line pattern section */}
+        <p className="px-2 py-1 text-[10px] font-medium uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+          Pattern
+        </p>
+        {LINE_STYLES.map((ls) => (
+          <button
+            key={ls.value}
+            onClick={() => applyPatch({ lineStyle: ls.value } as Partial<Shape>)}
+            className={cn(
+              "flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors",
+              "hover:bg-zinc-100 dark:hover:bg-zinc-800",
+              currentLineStyle === ls.value && "bg-zinc-100 font-medium dark:bg-zinc-800"
+            )}
+          >
+            <svg width="24" height="2" viewBox="0 0 24 2" className="shrink-0">
               <line
                 x1="0"
                 y1="1"
-                x2="18"
+                x2="24"
                 y2="1"
                 className="stroke-current text-zinc-600 dark:text-zinc-300"
                 strokeWidth="2"
                 strokeDasharray={
-                  currentLineStyle === "dashed"
-                    ? "4,3"
-                    : currentLineStyle === "dotted"
-                      ? "1,3"
-                      : "none"
+                  ls.value === "dashed" ? "5,3" : ls.value === "dotted" ? "1,3" : "none"
                 }
                 strokeLinecap="round"
               />
             </svg>
-            {lineLabel}
-            <ChevronDown className="size-3 text-zinc-400" />
+            {ls.label}
           </button>
-        </PopoverTrigger>
-        <PopoverContent side="bottom" align="start" sideOffset={8} className="w-40 p-1.5">
-          {/* Line style section */}
-          <p className="px-2 py-1 text-[10px] font-medium uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
-            Style
-          </p>
-          {LINE_STYLES.map((ls) => (
-            <button
-              key={ls.value}
-              onClick={() => applyLineStyle(ls.value)}
-              className={cn(
-                "flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors",
-                "hover:bg-zinc-100 dark:hover:bg-zinc-800",
-                currentLineStyle === ls.value && "bg-zinc-100 font-medium dark:bg-zinc-800"
-              )}
-            >
-              <svg width="24" height="2" viewBox="0 0 24 2" className="shrink-0">
-                <line
-                  x1="0"
-                  y1="1"
-                  x2="24"
-                  y2="1"
-                  className="stroke-current text-zinc-600 dark:text-zinc-300"
-                  strokeWidth="2"
-                  strokeDasharray={
-                    ls.value === "dashed" ? "5,3" : ls.value === "dotted" ? "1,3" : "none"
-                  }
-                  strokeLinecap="round"
-                />
-              </svg>
-              {ls.label}
-            </button>
-          ))}
+        ))}
 
-          <Separator className="my-1.5" />
+        <Separator className="my-1.5" />
 
-          {/* Stroke width section */}
-          <p className="px-2 py-1 text-[10px] font-medium uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
-            Weight
-          </p>
-          {[
-            { w: 1, label: "Thin" },
-            { w: 2, label: "Regular" },
-            { w: 4, label: "Thick" },
-          ].map(({ w, label }) => (
-            <button
-              key={w}
-              onClick={() => applyStrokeWidth(w)}
-              className={cn(
-                "flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors",
-                "hover:bg-zinc-100 dark:hover:bg-zinc-800",
-                currentStrokeWidth === w && "bg-zinc-100 font-medium dark:bg-zinc-800"
-              )}
-            >
-              <div className="flex w-6 items-center justify-center">
-                <div
-                  className="rounded-full bg-zinc-600 dark:bg-zinc-300"
-                  style={{ width: 18, height: Math.max(w, 1) }}
-                />
-              </div>
-              {label}
-            </button>
-          ))}
-        </PopoverContent>
-      </Popover>
-    </>
+        {/* Stroke width section */}
+        <p className="px-2 py-1 text-[10px] font-medium uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+          Weight
+        </p>
+        {[
+          { w: 1, label: "Thin" },
+          { w: 2, label: "Regular" },
+          { w: 4, label: "Thick" },
+        ].map(({ w, label }) => (
+          <button
+            key={w}
+            onClick={() => applyPatch({ strokeWidth: w } as Partial<Shape>)}
+            className={cn(
+              "flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors",
+              "hover:bg-zinc-100 dark:hover:bg-zinc-800",
+              currentStrokeWidth === w && "bg-zinc-100 font-medium dark:bg-zinc-800"
+            )}
+          >
+            <div className="flex w-6 items-center justify-center">
+              <div
+                className="rounded-full bg-zinc-600 dark:bg-zinc-300"
+                style={{ width: 18, height: Math.max(w, 1) }}
+              />
+            </div>
+            {label}
+          </button>
+        ))}
+      </PopoverContent>
+    </Popover>
   );
 }
 

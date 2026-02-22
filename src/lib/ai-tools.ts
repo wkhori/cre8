@@ -50,7 +50,7 @@ export type AIOperation =
       tempId: string;
       fromId: string;
       toId: string;
-      style?: "line" | "arrow";
+      style?: "line" | "arrow" | "double-arrow";
       lineStyle?: "solid" | "dashed" | "dotted";
     }
   | { type: "moveObject"; objectId: string; x: number; y: number }
@@ -228,8 +228,9 @@ export const AI_TOOLS: Anthropic.Messages.Tool[] = [
         toId: { type: "string", description: "Target object ID" },
         style: {
           type: "string",
-          enum: ["line", "arrow"],
-          description: "Connector endpoint style (default: arrow)",
+          enum: ["line", "arrow", "double-arrow"],
+          description:
+            "Connector endpoint style (default: arrow). double-arrow has arrowheads on both ends.",
         },
         lineStyle: {
           type: "string",

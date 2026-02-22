@@ -75,7 +75,7 @@ export interface ConnectorShape extends BaseShape {
   toId?: string | null;
   fromPoint?: { x: number; y: number } | null;
   toPoint?: { x: number; y: number } | null;
-  style: "line" | "arrow";
+  style: "line" | "arrow" | "double-arrow";
   stroke: string;
   strokeWidth: number;
   points?: number[]; // computed from connected objects
