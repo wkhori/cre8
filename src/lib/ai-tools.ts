@@ -24,6 +24,9 @@ export type AIOperation =
       w: number;
       h: number;
       fill?: string;
+      stroke?: string;
+      strokeWidth?: number;
+      cornerRadius?: number;
     }
   | {
       type: "createText";
@@ -55,6 +58,8 @@ export type AIOperation =
       style?: "line" | "arrow" | "double-arrow";
       lineStyle?: "solid" | "dashed" | "dotted";
       routingMode?: "straight" | "curved" | "elbowed";
+      stroke?: string;
+      strokeWidth?: number;
     }
   | { type: "moveObject"; objectId: string; x: number; y: number }
   | {
