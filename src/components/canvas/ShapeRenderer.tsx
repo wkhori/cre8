@@ -11,7 +11,6 @@ import { isLightColor } from "@/lib/colors";
 function useLoadImage(src: string | undefined) {
   const [image, setImage] = useState<HTMLImageElement | null>(null);
   const imgRef = useRef<HTMLImageElement | null>(null);
-  const blobUrlRef = useRef<string | null>(null);
   useEffect(() => {
     if (!src) {
       setImage(null);
@@ -19,32 +18,53 @@ function useLoadImage(src: string | undefined) {
     }
     let cancelled = false;
 
-    // SVGs without explicit width/height (like Simple Icons CDN) can render
-    // as 0×0 in some environments. Fetch the SVG, inject dimensions, and
-    // load from a blob URL instead.
+    // SVGs from CDNs (like Simple Icons) may lack explicit width/height,
+    // causing them to render as 0×0 in some browsers. Fetch the SVG text,
+    // ensure it has dimensions, and load as a data URI for maximum compat.
     const isSvgUrl = src.includes("simpleicons.org") || src.endsWith(".svg");
 
     if (isSvgUrl) {
+      console.log("[useLoadImage] fetching SVG:", src);
       fetch(src)
-        .then((res) => res.text())
+        .then((res) => {
+          console.log("[useLoadImage] fetch status:", res.status, src);
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          return res.text();
+        })
         .then((svgText) => {
           if (cancelled) return;
-          // Inject width/height if missing
-          const patched = svgText.replace(/^<svg\b/, '<svg width="128" height="128"');
-          const blob = new Blob([patched], { type: "image/svg+xml" });
-          const url = URL.createObjectURL(blob);
-          blobUrlRef.current = url;
+          console.log(
+            "[useLoadImage] SVG text length:",
+            svgText.length,
+            "starts with:",
+            svgText.slice(0, 80)
+          );
+          // Ensure the SVG has width/height attributes
+          let patched = svgText;
+          if (!svgText.includes('width="') && !svgText.includes("width='")) {
+            patched = svgText.replace("<svg", '<svg width="128" height="128"');
+          }
+          const dataUri = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(patched)}`;
           const img = new window.Image();
           img.onload = () => {
+            console.log(
+              "[useLoadImage] image loaded OK:",
+              src,
+              img.naturalWidth,
+              "x",
+              img.naturalHeight
+            );
             if (!cancelled) setImage(img);
           };
-          img.onerror = () => {
+          img.onerror = (err) => {
+            console.error("[useLoadImage] image.onerror:", src, err);
             if (!cancelled) setImage(null);
           };
-          img.src = url;
+          img.src = dataUri;
           imgRef.current = img;
         })
-        .catch(() => {
+        .catch((err) => {
+          console.error("[useLoadImage] fetch failed:", src, err);
           if (!cancelled) setImage(null);
         });
     } else {
@@ -62,10 +82,6 @@ function useLoadImage(src: string | undefined) {
 
     return () => {
       cancelled = true;
-      if (blobUrlRef.current) {
-        URL.revokeObjectURL(blobUrlRef.current);
-        blobUrlRef.current = null;
-      }
     };
   }, [src]);
   return image;
@@ -104,6 +120,10 @@ export default memo(function ShapeRenderer({
   onMouseEnter,
   onMouseLeave,
 }: ShapeRendererProps) {
+  // Must call hooks unconditionally (rules of hooks) — pass undefined for non-image shapes
+  const imageSrc = shape.type === "image" ? shape.src : undefined;
+  const loadedImage = useLoadImage(imageSrc);
+
   const isConnector = shape.type === "connector";
   const commonProps = {
     id: shape.id,
@@ -285,7 +305,6 @@ export default memo(function ShapeRenderer({
     }
 
     case "image": {
-      const loadedImage = useLoadImage(shape.src);
       return wrapWithHoverRing(
         <Group key={shape.id} {...commonProps}>
           <Rect width={shape.w} height={shape.h} fill="transparent" perfectDrawEnabled={false} />
