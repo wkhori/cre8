@@ -87,6 +87,7 @@ export interface ConnectorShape extends BaseShape {
   strokeWidth: number;
   points?: number[]; // computed from connected objects
   lineStyle?: "solid" | "dashed" | "dotted";
+  routingMode?: "straight" | "curved" | "elbowed";
 }
 
 // ── Discriminated union ────────────────────────────────────────────

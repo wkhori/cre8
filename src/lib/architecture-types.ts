@@ -23,6 +23,8 @@ export interface ArchitectureConnection {
 export interface ArchitectureAnalysis {
   title: string;
   description?: string;
+  summary?: string;
+  techStackIcons?: string[];
   layers: ArchitectureLayer[];
   connections: ArchitectureConnection[];
 }

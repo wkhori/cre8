@@ -183,6 +183,7 @@ export function executeAIOperations(operations: AIOperation[]): Map<string, stri
           opacity: 1,
           zIndex: baseZIndex++,
           ...(op.lineStyle ? { lineStyle: op.lineStyle } : {}),
+          ...(op.routingMode ? { routingMode: op.routingMode } : {}),
         } as ConnectorShape);
         break;
       }
@@ -229,6 +230,7 @@ export function executeAIOperations(operations: AIOperation[]): Map<string, stri
         if (op.style) (patch as Record<string, unknown>).style = op.style;
         if (op.lineStyle) (patch as Record<string, unknown>).lineStyle = op.lineStyle;
         if (op.strokeWidth) (patch as Record<string, unknown>).strokeWidth = op.strokeWidth;
+        if (op.routingMode) (patch as Record<string, unknown>).routingMode = op.routingMode;
         updates.push({ id: realId, patch });
         break;
       }

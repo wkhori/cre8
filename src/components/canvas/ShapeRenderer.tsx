@@ -267,6 +267,7 @@ export default memo(function ShapeRenderer({
         : (shape.points ?? [0, 0, 100, 0]);
       const dashArray =
         shape.lineStyle === "dashed" ? [12, 6] : shape.lineStyle === "dotted" ? [3, 6] : undefined;
+      const routing = shape.routingMode ?? "straight";
       const connectorProps = {
         ...commonProps,
         // Connectors use absolute world coords in points, not x/y offset
@@ -278,6 +279,10 @@ export default memo(function ShapeRenderer({
         hitStrokeWidth: Math.max(shape.strokeWidth, 12),
         perfectDrawEnabled: false,
         ...(dashArray ? { dash: dashArray } : {}),
+        // Curved: points include bezier control points
+        ...(routing === "curved" ? { bezier: true } : {}),
+        // Elbowed: smooth the right-angle corners
+        ...(routing === "elbowed" ? { tension: 0.4 } : {}),
       };
       if (shape.style === "arrow") {
         return (

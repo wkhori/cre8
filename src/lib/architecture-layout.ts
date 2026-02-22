@@ -6,31 +6,34 @@ const COMPONENT_W = 180;
 const COMPONENT_H = 90;
 const COMPONENT_GAP = 30;
 const LAYER_PAD_X = 30;
-const LAYER_PAD_TOP = 50; // room for frame title
+const LAYER_PAD_TOP = 50;
 const LAYER_PAD_BOTTOM = 30;
-const LAYER_GAP = 80; // vertical gap between layers
-const TITLE_GAP = 50; // gap between title and first layer
+const LAYER_GAP = 80;
+const TITLE_GAP = 20;
 const ICON_SIZE = 28;
+const TECH_ICON_SIZE = 24;
+const TECH_ICON_GAP = 10;
 const MAX_COMPONENTS_PER_ROW = 6;
+const SUMMARY_W = 280;
+const SUMMARY_GAP = 40;
 
 // ── Tier color palette ────────────────────────────────────────────
 const TIER_COLORS: { fill: string; text: string }[] = [
-  { fill: "#3b82f6", text: "#ffffff" }, // blue — client/frontend
-  { fill: "#8b5cf6", text: "#ffffff" }, // violet — API/middleware
-  { fill: "#22c55e", text: "#ffffff" }, // green — services/backend
-  { fill: "#f59e0b", text: "#ffffff" }, // amber — data/infrastructure
-  { fill: "#ef4444", text: "#ffffff" }, // red — external/third-party
-  { fill: "#06b6d4", text: "#ffffff" }, // cyan — extras
+  { fill: "#3b82f6", text: "#ffffff" },
+  { fill: "#8b5cf6", text: "#ffffff" },
+  { fill: "#22c55e", text: "#ffffff" },
+  { fill: "#f59e0b", text: "#ffffff" },
+  { fill: "#ef4444", text: "#ffffff" },
+  { fill: "#06b6d4", text: "#ffffff" },
 ];
 
-// Lighter versions for component boxes (backgrounds)
 const TIER_COMPONENT_FILLS: string[] = [
-  "#2563eb", // darker blue
-  "#7c3aed", // darker violet
-  "#16a34a", // darker green
-  "#d97706", // darker amber
-  "#dc2626", // darker red
-  "#0891b2", // darker cyan
+  "#2563eb",
+  "#7c3aed",
+  "#16a34a",
+  "#d97706",
+  "#dc2626",
+  "#0891b2",
 ];
 
 // ── Temp ID generation ────────────────────────────────────────────
@@ -41,8 +44,8 @@ function genTempId(): string {
 
 /**
  * Convert an ArchitectureAnalysis into positioned AIOperation[].
- * Produces frames for layers, rects + text + optional icons for components,
- * and connectors for relationships.
+ * Produces: title, description, tech stack icon row, summary panel,
+ * layer frames with component boxes + icons, and labeled connectors.
  */
 export function layoutArchitecture(
   arch: ArchitectureAnalysis,
@@ -51,11 +54,12 @@ export function layoutArchitecture(
 ): AIOperation[] {
   const ops: AIOperation[] = [];
   const componentTempIds = new Map<string, string>();
+  // Track component positions for connector label placement
+  const componentPositions = new Map<string, { x: number; y: number; w: number; h: number }>();
 
-  // Sort layers by tier (lowest tier = top of diagram)
   const sortedLayers = [...arch.layers].sort((a, b) => a.tier - b.tier);
 
-  // Calculate the widest layer to make all frames uniform width
+  // Calculate uniform layer width
   let maxComponentsInRow = 0;
   for (const layer of sortedLayers) {
     const cols = Math.min(layer.components.length, MAX_COMPONENTS_PER_ROW);
@@ -63,15 +67,18 @@ export function layoutArchitecture(
   }
   const uniformLayerW = Math.max(
     LAYER_PAD_X * 2 + maxComponentsInRow * COMPONENT_W + (maxComponentsInRow - 1) * COMPONENT_GAP,
-    400
+    500
   );
 
-  // Title
-  const titleId = genTempId();
+  // Determine if we have a summary panel (shifts layers right)
+  const hasSummary = !!arch.summary;
+  const diagramX = hasSummary ? baseX + SUMMARY_W + SUMMARY_GAP : baseX;
+
+  // ── Title ───────────────────────────────────────────────────────
   ops.push({
     type: "createText",
-    tempId: titleId,
-    x: baseX,
+    tempId: genTempId(),
+    x: diagramX,
     y: baseY,
     text: arch.title,
     fontSize: 28,
@@ -79,14 +86,14 @@ export function layoutArchitecture(
     width: uniformLayerW,
   });
 
-  // Description
   let contentY = baseY + 36;
+
+  // ── Description ─────────────────────────────────────────────────
   if (arch.description) {
-    const descId = genTempId();
     ops.push({
       type: "createText",
-      tempId: descId,
-      x: baseX,
+      tempId: genTempId(),
+      x: diagramX,
       y: contentY,
       text: arch.description,
       fontSize: 14,
@@ -95,9 +102,56 @@ export function layoutArchitecture(
     });
     contentY += 24;
   }
-  contentY += TITLE_GAP - 24;
 
-  // Build layers
+  // ── Tech Stack Icon Row ─────────────────────────────────────────
+  if (arch.techStackIcons && arch.techStackIcons.length > 0) {
+    contentY += 12;
+    // Background rect for the icon row
+    const iconRowW =
+      arch.techStackIcons.length * (TECH_ICON_SIZE + TECH_ICON_GAP) - TECH_ICON_GAP + 20;
+    ops.push({
+      type: "createShape",
+      tempId: genTempId(),
+      shapeType: "rectangle",
+      x: diagramX,
+      y: contentY,
+      w: iconRowW,
+      h: TECH_ICON_SIZE + 16,
+      fill: "#27272a",
+    });
+
+    for (let i = 0; i < arch.techStackIcons.length; i++) {
+      ops.push({
+        type: "createImage",
+        tempId: genTempId(),
+        x: diagramX + 10 + i * (TECH_ICON_SIZE + TECH_ICON_GAP),
+        y: contentY + 8,
+        w: TECH_ICON_SIZE,
+        h: TECH_ICON_SIZE,
+        src: `https://cdn.simpleicons.org/${arch.techStackIcons[i]}/ffffff`,
+      });
+    }
+    contentY += TECH_ICON_SIZE + 16;
+  }
+
+  contentY += TITLE_GAP;
+
+  // ── Summary Panel (left side) ───────────────────────────────────
+  if (hasSummary) {
+    const summaryH = 300;
+    ops.push({
+      type: "createStickyNote",
+      tempId: genTempId(),
+      x: baseX,
+      y: contentY,
+      w: SUMMARY_W,
+      h: summaryH,
+      text: arch.summary!,
+      color: "#27272a",
+    });
+  }
+
+  // ── Layers ──────────────────────────────────────────────────────
   for (const layer of sortedLayers) {
     const tierIdx = Math.min(layer.tier, TIER_COLORS.length - 1);
     const tierColor = TIER_COLORS[tierIdx];
@@ -108,23 +162,21 @@ export function layoutArchitecture(
     const layerH =
       LAYER_PAD_TOP + rows * COMPONENT_H + (rows - 1) * COMPONENT_GAP + LAYER_PAD_BOTTOM;
 
-    // Frame for this layer
-    const frameId = genTempId();
+    // Frame
     ops.push({
       type: "createFrame",
-      tempId: frameId,
-      x: baseX,
+      tempId: genTempId(),
+      x: diagramX,
       y: contentY,
       title: layer.name,
       w: uniformLayerW,
       h: layerH,
     });
 
-    // Components inside the layer
-    // Center the components horizontally within the frame
+    // Center components horizontally
     const actualCols = Math.min(numComponents, cols);
     const contentW = actualCols * COMPONENT_W + (actualCols - 1) * COMPONENT_GAP;
-    const startX = baseX + (uniformLayerW - contentW) / 2;
+    const startX = diagramX + (uniformLayerW - contentW) / 2;
 
     for (let i = 0; i < numComponents; i++) {
       const comp = layer.components[i];
@@ -132,6 +184,9 @@ export function layoutArchitecture(
       const row = Math.floor(i / MAX_COMPONENTS_PER_ROW);
       const cx = startX + col * (COMPONENT_W + COMPONENT_GAP);
       const cy = contentY + LAYER_PAD_TOP + row * (COMPONENT_H + COMPONENT_GAP);
+
+      // Track position for connector labels
+      componentPositions.set(comp.id, { x: cx, y: cy, w: COMPONENT_W, h: COMPONENT_H });
 
       // Component rectangle
       const rectId = genTempId();
@@ -147,16 +202,15 @@ export function layoutArchitecture(
         fill: compFill,
       });
 
-      // Icon (if iconSlug provided)
+      // Icon
       const hasIcon = !!comp.iconSlug;
       const textStartX = hasIcon ? cx + ICON_SIZE + 14 : cx + 10;
       const textWidth = hasIcon ? COMPONENT_W - ICON_SIZE - 24 : COMPONENT_W - 20;
 
       if (hasIcon) {
-        const iconId = genTempId();
         ops.push({
           type: "createImage",
-          tempId: iconId,
+          tempId: genTempId(),
           x: cx + 10,
           y: cy + (COMPONENT_H - ICON_SIZE) / 2,
           w: ICON_SIZE,
@@ -166,10 +220,9 @@ export function layoutArchitecture(
       }
 
       // Component name
-      const nameId = genTempId();
       ops.push({
         type: "createText",
-        tempId: nameId,
+        tempId: genTempId(),
         x: textStartX,
         y: cy + 14,
         text: comp.name,
@@ -179,13 +232,12 @@ export function layoutArchitecture(
         width: textWidth,
       });
 
-      // Component description or tech stack
+      // Description / tech stack
       const subText = comp.techStack || comp.description;
       if (subText) {
-        const subId = genTempId();
         ops.push({
           type: "createText",
-          tempId: subId,
+          tempId: genTempId(),
           x: textStartX,
           y: cy + 34,
           text: subText,
@@ -199,21 +251,41 @@ export function layoutArchitecture(
     contentY += layerH + LAYER_GAP;
   }
 
-  // Connectors between components
+  // ── Connectors with labels ──────────────────────────────────────
   for (const conn of arch.connections) {
     const fromTempId = componentTempIds.get(conn.from);
     const toTempId = componentTempIds.get(conn.to);
     if (!fromTempId || !toTempId) continue;
 
-    const connId = genTempId();
     ops.push({
       type: "createConnector",
-      tempId: connId,
+      tempId: genTempId(),
       fromId: fromTempId,
       toId: toTempId,
       style: conn.style ?? "arrow",
       lineStyle: conn.lineStyle ?? "solid",
+      routingMode: "curved",
     });
+
+    // Add label text at the midpoint of the connection
+    if (conn.label) {
+      const fromPos = componentPositions.get(conn.from);
+      const toPos = componentPositions.get(conn.to);
+      if (fromPos && toPos) {
+        const midX = (fromPos.x + fromPos.w / 2 + toPos.x + toPos.w / 2) / 2;
+        const midY = (fromPos.y + fromPos.h / 2 + toPos.y + toPos.h / 2) / 2;
+        ops.push({
+          type: "createText",
+          tempId: genTempId(),
+          x: midX - 40,
+          y: midY - 8,
+          text: conn.label,
+          fontSize: 10,
+          fill: "#a1a1aa",
+          width: 80,
+        });
+      }
+    }
   }
 
   return ops;

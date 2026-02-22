@@ -5,6 +5,7 @@ import { tmpdir } from "os";
 import { join } from "path";
 import { readFile, mkdtemp, rm } from "fs/promises";
 import { layoutArchitecture } from "@/lib/architecture-layout";
+import { getLangfuse } from "@/lib/langfuse";
 import type { ArchitectureAnalysis } from "@/lib/architecture-types";
 
 export const maxDuration = 60;
@@ -19,7 +20,7 @@ const RequestSchema = z.object({
 
 // ── Common Simple Icons slugs reference for Claude ──────────────────
 const ICON_SLUG_REFERENCE = `
-Common Simple Icons slugs (use these exact values for iconSlug):
+Common Simple Icons slugs (use these exact values for iconSlug and techStackIcons):
 react, nextdotjs, vuedotjs, angular, svelte, astro, nuxtdotjs, gatsby,
 nodedotjs, express, fastify, nestjs, hono, bun, deno,
 typescript, javascript, python, go, rust, java, ruby, php, swift, kotlin, cplusplus, csharp,
@@ -36,14 +37,18 @@ linux, ubuntu, apple, windows, android,
 // ── Architecture analysis prompt ────────────────────────────────────
 const ANALYSIS_PROMPT = `You are a senior software architect. Analyze the following codebase and produce a structured architecture description as JSON.
 
-RULES:
-- Identify 2-5 logical layers/tiers (e.g., "Client / Frontend", "API Layer", "Backend Services", "Data / Infrastructure")
-- Assign tier numbers starting from 0 (client-facing) going deeper
-- Identify 2-7 major components per layer (max ~25 total across all layers)
-- Each component should map to a real module, service, or package in the codebase
-- For each component, provide an iconSlug from Simple Icons if a well-known technology is used
-- Identify key connections showing data flow between components
-- Focus on ARCHITECTURE, not individual files — group related files into logical components
+ANALYSIS RULES:
+- Identify 2-5 logical layers or groups. They do NOT have to be traditional client/server tiers.
+  - If the project has distinct feature modules, group by feature area instead.
+  - If it's a monolith, group by concern (UI, state, data, services, utilities).
+  - If it has separate packages/workspaces, group by package.
+- Assign tier numbers (0 = top/client-facing, higher = deeper). Use the same tier number for groups that sit side-by-side at the same level.
+- Identify 2-7 major components per layer (max ~25 total across all layers).
+- Each component should map to a real module, service, or package in the codebase.
+- For each component, provide an iconSlug from Simple Icons if a well-known technology is used.
+- Identify 5-12 key connections showing data flow between components. Add a short label describing the relationship.
+- Provide a 3-5 sentence "summary" explaining what the project does, its key architectural decisions, and notable patterns.
+- Provide "techStackIcons": an array of 4-8 Simple Icons slugs for the project's main technologies.
 
 ${ICON_SLUG_REFERENCE}
 
@@ -51,9 +56,11 @@ OUTPUT FORMAT — Return ONLY valid JSON, no markdown fences, no explanation:
 {
   "title": "Project Name — Architecture",
   "description": "One-line summary of what this project does",
+  "summary": "3-5 sentence architectural overview. Describe the project purpose, key architectural patterns, data flow approach, and notable design decisions.",
+  "techStackIcons": ["react", "typescript", "firebase", "tailwindcss"],
   "layers": [
     {
-      "name": "Layer Display Name",
+      "name": "Layer or Group Name",
       "tier": 0,
       "components": [
         {
@@ -81,11 +88,16 @@ CONNECTION RULES:
 - "arrow" for directed data flow, "double-arrow" for bidirectional, "line" for loose coupling
 - "dashed" lineStyle for async/event-driven, "dotted" for optional, "solid" for synchronous
 - Every "from" and "to" must reference a valid component "id"
-- Keep connections to 5-15 total (most important relationships only)`;
+- Always include a short "label" describing the connection (e.g. "REST API", "imports", "subscribes", "WebSocket", "queries")
+- Keep connections to the most important 5-12 relationships
+
+LAYOUT HINTS:
+- Not every architecture is a top-down waterfall. Feel free to use the same tier number for groups that are peers/siblings.
+- Group related infrastructure together (e.g. "Data / Infrastructure" layer for DB + cache + auth).
+- If the project has a clear feature-based structure, reflect that in the grouping.`;
 
 // ── Pack repository with repomix ────────────────────────────────────
 async function packRepository(repoUrl: string): Promise<string> {
-  // Dynamic import to avoid bundling issues
   const { runCli } = await import("repomix");
 
   const tempDir = await mkdtemp(join(tmpdir(), "cre8-repo-"));
@@ -121,7 +133,6 @@ async function packRepositoryFallback(repoUrl: string): Promise<string> {
   if (!match) throw new Error("Invalid GitHub URL");
   const [, owner, repo] = match;
 
-  // Fetch file tree
   const treeRes = await fetch(
     `https://api.github.com/repos/${owner}/${repo}/git/trees/HEAD?recursive=1`,
     { headers: { Accept: "application/vnd.github.v3+json" } }
@@ -135,7 +146,6 @@ async function packRepositoryFallback(repoUrl: string): Promise<string> {
   }
   const tree = await treeRes.json();
 
-  // Select important files
   const importantPatterns = [
     /README\.md$/i,
     /package\.json$/,
@@ -154,7 +164,6 @@ async function packRepositoryFallback(repoUrl: string): Promise<string> {
     .filter((f) => f.type === "blob" && importantPatterns.some((p) => p.test(f.path)))
     .slice(0, 40);
 
-  // Fetch file contents in parallel
   const contents = await Promise.all(
     files.map(async (f) => {
       try {
@@ -171,26 +180,22 @@ async function packRepositoryFallback(repoUrl: string): Promise<string> {
   );
 
   const allPaths = (tree.tree as Array<{ path: string }>).map((f) => f.path).join("\n");
-
   return `Repository: ${owner}/${repo}\n\nFile tree:\n${allPaths}\n\n${contents.join("\n")}`;
 }
 
 // ── Extract JSON from Claude response ───────────────────────────────
 function extractJSON(text: string): string {
-  // Try to find JSON in markdown code fences first
   const fenced = text.match(/```(?:json)?\s*\n?([\s\S]*?)```/);
   if (fenced) return fenced[1].trim();
-
-  // Try to find raw JSON object
   const jsonMatch = text.match(/\{[\s\S]*\}/);
   if (jsonMatch) return jsonMatch[0];
-
   return text;
 }
 
 // ── POST handler ────────────────────────────────────────────────────
 export async function POST(request: NextRequest) {
   const startMs = Date.now();
+  const langfuse = getLangfuse();
 
   try {
     const body = await request.json();
@@ -209,7 +214,6 @@ export async function POST(request: NextRequest) {
 
     const { repoUrl, viewportCenter } = parsed.data;
 
-    // Validate it's a GitHub URL
     const ghMatch = repoUrl.match(/github\.com\/([\w.-]+)\/([\w.-]+)/);
     if (!ghMatch) {
       return NextResponse.json(
@@ -224,26 +228,44 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Pack the repository
+    const repoName = `${ghMatch[1]}/${ghMatch[2]}`;
+
+    // ── Langfuse trace ────────────────────────────────────────────
+    const trace = langfuse?.trace({
+      name: "analyze-repo",
+      input: { repoUrl, repoName, viewportCenter },
+    });
+
+    // ── Pack repository ───────────────────────────────────────────
+    const packSpan = trace?.span({ name: "pack-repository" });
     let packed: string;
+    let packMethod = "repomix";
     try {
       packed = await packRepository(repoUrl);
     } catch (repomixError) {
-      // Fallback to GitHub API if repomix fails
       console.warn("Repomix failed, falling back to GitHub API:", repomixError);
+      packMethod = "github-api";
       try {
         packed = await packRepositoryFallback(repoUrl);
       } catch (fallbackError) {
         const msg =
           fallbackError instanceof Error ? fallbackError.message : "Could not access repository.";
+        packSpan?.end({ output: { error: msg } });
         return NextResponse.json(
           { success: false, error: msg, operations: [], message: "" },
           { status: 400 }
         );
       }
     }
+    packSpan?.end({ output: { method: packMethod, chars: packed.length } });
 
-    // Send to Claude for architecture analysis
+    // ── Claude analysis ───────────────────────────────────────────
+    const generation = trace?.generation({
+      name: "architecture-analysis",
+      model: AI_MODEL,
+      input: { packedChars: packed.length, repoName },
+    });
+
     const anthropic = new Anthropic();
     const response = await anthropic.messages.create({
       model: AI_MODEL,
@@ -257,9 +279,18 @@ export async function POST(request: NextRequest) {
       ],
     });
 
+    generation?.end({
+      output: response.content,
+      usage: {
+        input: response.usage?.input_tokens,
+        output: response.usage?.output_tokens,
+      },
+    });
+
     // Extract text response
     const textBlock = response.content.find((b) => b.type === "text");
     if (!textBlock || textBlock.type !== "text") {
+      trace?.update({ output: { error: "No text in response" } });
       return NextResponse.json(
         { success: false, error: "AI did not return an analysis.", operations: [], message: "" },
         { status: 500 }
@@ -273,6 +304,7 @@ export async function POST(request: NextRequest) {
       architecture = JSON.parse(jsonStr) as ArchitectureAnalysis;
     } catch {
       console.error("Failed to parse architecture JSON:", textBlock.text.slice(0, 500));
+      trace?.update({ output: { error: "JSON parse failure" } });
       return NextResponse.json(
         {
           success: false,
@@ -284,8 +316,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate minimum structure
     if (!architecture.layers || architecture.layers.length === 0) {
+      trace?.update({ output: { error: "No layers found" } });
       return NextResponse.json(
         {
           success: false,
@@ -297,28 +329,40 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Run layout engine
+    // ── Layout engine ─────────────────────────────────────────────
     const cx = viewportCenter?.x ?? 400;
     const cy = viewportCenter?.y ?? 200;
-    // Offset so diagram appears centered-ish in viewport
     const baseX = cx - 300;
     const baseY = cy - 200;
 
     const operations = layoutArchitecture(architecture, baseX, baseY);
 
-    const repoName = `${ghMatch[1]}/${ghMatch[2]}`;
     const componentCount = architecture.layers.reduce((sum, l) => sum + l.components.length, 0);
+    const durationMs = Date.now() - startMs;
     const message = `Generated architecture diagram for **${repoName}** — ${architecture.layers.length} layers, ${componentCount} components, ${architecture.connections.length} connections.`;
+
+    // ── Finalize trace ────────────────────────────────────────────
+    trace?.update({
+      output: {
+        layers: architecture.layers.length,
+        components: componentCount,
+        connections: architecture.connections.length,
+        operations: operations.length,
+        durationMs,
+      },
+    });
+    langfuse?.flushAsync().catch(() => {});
 
     return NextResponse.json({
       success: true,
       operations,
       message,
-      durationMs: Date.now() - startMs,
+      durationMs,
     });
   } catch (err) {
     console.error("analyze-repo error:", err);
     const msg = err instanceof Error ? err.message : "Internal error";
+    langfuse?.flushAsync().catch(() => {});
     return NextResponse.json(
       { success: false, error: msg, operations: [], message: "" },
       { status: 500 }

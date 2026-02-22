@@ -148,7 +148,9 @@ export function connectorPairKey(a: string, b: string): string {
   return a < b ? `${a}|${b}` : `${b}|${a}`;
 }
 
-/** Compute the [x1,y1, x2,y2] line points for a connector, resolving endpoints.
+/** Compute line points for a connector, resolving endpoints.
+ *  Returns [x1,y1,x2,y2] for straight, [x1,y1,cx,cy,x2,y2] for curved (bezier),
+ *  or multi-point array for elbowed routing.
  *  Optional maps for O(1) lookups instead of O(N) scans. */
 export function computeConnectorPoints(
   connector: ConnectorShape,
@@ -218,6 +220,40 @@ export function computeConnectorPoints(
       startPt.y += py * offset;
       endPt.x += px * offset;
       endPt.y += py * offset;
+    }
+  }
+
+  const mode = connector.routingMode ?? "straight";
+
+  if (mode === "curved") {
+    // Quadratic bezier: compute a control point offset perpendicular to the midpoint
+    const midX = (startPt.x + endPt.x) / 2;
+    const midY = (startPt.y + endPt.y) / 2;
+    const dx = endPt.x - startPt.x;
+    const dy = endPt.y - startPt.y;
+    const len = Math.sqrt(dx * dx + dy * dy) || 1;
+    // Curvature scales with distance, capped at 60px
+    const curvature = Math.min(len * 0.25, 60);
+    const px = -dy / len;
+    const py = dx / len;
+    const cx = midX + px * curvature;
+    const cy = midY + py * curvature;
+    return [startPt.x, startPt.y, cx, cy, endPt.x, endPt.y];
+  }
+
+  if (mode === "elbowed") {
+    // Right-angle routing: exit source → turn → enter target
+    const dx = endPt.x - startPt.x;
+    const dy = endPt.y - startPt.y;
+
+    if (Math.abs(dy) > Math.abs(dx)) {
+      // Primarily vertical: go down/up to midpoint Y, then horizontal, then finish
+      const midY = (startPt.y + endPt.y) / 2;
+      return [startPt.x, startPt.y, startPt.x, midY, endPt.x, midY, endPt.x, endPt.y];
+    } else {
+      // Primarily horizontal: go right/left to midpoint X, then vertical, then finish
+      const midX = (startPt.x + endPt.x) / 2;
+      return [startPt.x, startPt.y, midX, startPt.y, midX, endPt.y, endPt.x, endPt.y];
     }
   }
 
