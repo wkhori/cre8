@@ -410,8 +410,25 @@ export async function POST(request: NextRequest) {
           return;
         }
 
+        // ── Log icon data before sanitization ──
+        const preSanitizeIcons = {
+          techStackIcons: architecture.techStackIcons,
+          componentIcons: architecture.layers.flatMap((l) =>
+            l.components.filter((c) => c.iconSlug).map((c) => ({ id: c.id, iconSlug: c.iconSlug }))
+          ),
+        };
+        console.log("[analyze-repo] icons BEFORE sanitize:", JSON.stringify(preSanitizeIcons));
+
         // ── Validate icon slugs (strip bad ones to prevent invisible gaps) ──
         await sanitizeIconSlugs(architecture);
+
+        const postSanitizeIcons = {
+          techStackIcons: architecture.techStackIcons,
+          componentIcons: architecture.layers.flatMap((l) =>
+            l.components.filter((c) => c.iconSlug).map((c) => ({ id: c.id, iconSlug: c.iconSlug }))
+          ),
+        };
+        console.log("[analyze-repo] icons AFTER sanitize:", JSON.stringify(postSanitizeIcons));
 
         // ── Store in cache ───────────────────────────────────────
         if (cacheKey) {
