@@ -143,6 +143,35 @@ export function shapeContainsPoint(shape: Shape, x: number, y: number): boolean 
   return x >= b.x && x <= b.x + b.width && y >= b.y && y <= b.y + b.height;
 }
 
+/** Compute a point on a shape's perimeter at a given angle (radians, 0 = right). */
+export function shapePerimeterPoint(shape: Shape, angle: number): { x: number; y: number } {
+  if (shape.type === "circle") {
+    return {
+      x: shape.x + shape.radiusX * Math.cos(angle),
+      y: shape.y + shape.radiusY * Math.sin(angle),
+    };
+  }
+  const bounds = getShapeBounds(shape);
+  const cx = bounds.x + bounds.width / 2;
+  const cy = bounds.y + bounds.height / 2;
+  // Cast a ray from center in the direction of `angle` and intersect with bounding rect
+  const far = Math.max(bounds.width, bounds.height) * 2;
+  const tx = cx + Math.cos(angle) * far;
+  const ty = cy + Math.sin(angle) * far;
+  return edgeIntersection(bounds, cx, cy, tx, ty);
+}
+
+/** Compute the port angle (radians) for a point relative to a shape's center. */
+export function computePortAngle(shape: Shape, px: number, py: number): number {
+  if (shape.type === "circle") {
+    return Math.atan2(py - shape.y, px - shape.x);
+  }
+  const bounds = getShapeBounds(shape);
+  const cx = bounds.x + bounds.width / 2;
+  const cy = bounds.y + bounds.height / 2;
+  return Math.atan2(py - cy, px - cx);
+}
+
 /** Build a deterministic pair key for an unordered {a, b} pair. */
 export function connectorPairKey(a: string, b: string): string {
   return a < b ? `${a}|${b}` : `${b}|${a}`;
@@ -191,10 +220,19 @@ export function computeConnectorPoints(
     return [0, 0, 100, 0];
   }
 
-  const startPt = fromShape
-    ? shapeEdgeIntersection(fromShape, toCx, toCy)
-    : { x: fromCx, y: fromCy };
-  const endPt = toShape ? shapeEdgeIntersection(toShape, fromCx, fromCy) : { x: toCx, y: toCy };
+  // Use port angle for pinned perimeter placement, otherwise auto-aim at opposite center
+  const startPt =
+    fromShape && connector.fromPort != null
+      ? shapePerimeterPoint(fromShape, connector.fromPort)
+      : fromShape
+        ? shapeEdgeIntersection(fromShape, toCx, toCy)
+        : { x: fromCx, y: fromCy };
+  const endPt =
+    toShape && connector.toPort != null
+      ? shapePerimeterPoint(toShape, connector.toPort)
+      : toShape
+        ? shapeEdgeIntersection(toShape, fromCx, fromCy)
+        : { x: toCx, y: toCy };
 
   // Fan-out: offset connectors that share the same unordered {fromId, toId} pair
   if (connector.fromId && connector.toId) {

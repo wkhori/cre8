@@ -82,6 +82,10 @@ export interface ConnectorShape extends BaseShape {
   toId?: string | null;
   fromPoint?: { x: number; y: number } | null;
   toPoint?: { x: number; y: number } | null;
+  /** Angle (radians) on the fromId shape perimeter where the connector exits. */
+  fromPort?: number | null;
+  /** Angle (radians) on the toId shape perimeter where the connector enters. */
+  toPort?: number | null;
   style: "line" | "arrow" | "double-arrow";
   stroke: string;
   strokeWidth: number;

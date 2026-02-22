@@ -7,6 +7,8 @@ import {
   getShapeBounds,
   shapeEdgeIntersection,
   shapeContainsPoint,
+  shapePerimeterPoint,
+  computePortAngle,
   computeConnectorPoints,
 } from "@/lib/shape-geometry";
 import { useCanvasStore } from "@/store/canvas-store";
@@ -97,10 +99,19 @@ export function useConnectorEndpoints(
 
       if (fromCx == null || fromCy == null || toCx == null || toCy == null) continue;
 
-      const fromPt = fromShape
-        ? shapeEdgeIntersection(fromShape, toCx, toCy)
-        : { x: fromCx, y: fromCy };
-      const toPt = toShape ? shapeEdgeIntersection(toShape, fromCx, fromCy) : { x: toCx, y: toCy };
+      // Use port angle if set, otherwise auto-aim at opposite center
+      const fromPt =
+        fromShape && c.fromPort != null
+          ? shapePerimeterPoint(fromShape, c.fromPort)
+          : fromShape
+            ? shapeEdgeIntersection(fromShape, toCx, toCy)
+            : { x: fromCx, y: fromCy };
+      const toPt =
+        toShape && c.toPort != null
+          ? shapePerimeterPoint(toShape, c.toPort)
+          : toShape
+            ? shapeEdgeIntersection(toShape, fromCx, fromCy)
+            : { x: toCx, y: toCy };
 
       result.push({ connectorId: id, end: "from", x: fromPt.x, y: fromPt.y });
       result.push({ connectorId: id, end: "to", x: toPt.x, y: toPt.y });
@@ -130,8 +141,10 @@ export function useConnectorEndpoints(
       if (routing === "curved" && pts.length === 6) {
         result.push({ connectorId: id, index: 0, x: pts[2], y: pts[3] });
       } else if (routing === "elbowed" && pts.length === 8) {
-        result.push({ connectorId: id, index: 0, x: pts[2], y: pts[3] });
-        result.push({ connectorId: id, index: 1, x: pts[4], y: pts[5] });
+        // Single handle at the bend midpoint (average of the two corner points)
+        const mx = (pts[2] + pts[4]) / 2;
+        const my = (pts[3] + pts[5]) / 2;
+        result.push({ connectorId: id, index: 0, x: mx, y: my });
       }
     }
     return result;
@@ -166,24 +179,33 @@ export function useConnectorEndpoints(
       store.pushHistory();
 
       if (hitShape) {
+        // Compute port angle from the drop position relative to the shape
+        const port = computePortAngle(hitShape, dropX, dropY);
         if (end === "from") {
           store.updateShape(connectorId, {
             fromId: hitShape.id,
             fromPoint: null,
+            fromPort: port,
           } as Partial<Shape>);
         } else {
-          store.updateShape(connectorId, { toId: hitShape.id, toPoint: null } as Partial<Shape>);
+          store.updateShape(connectorId, {
+            toId: hitShape.id,
+            toPoint: null,
+            toPort: port,
+          } as Partial<Shape>);
         }
       } else {
         if (end === "from") {
           store.updateShape(connectorId, {
             fromId: null,
             fromPoint: { x: dropX - connectorX, y: dropY - connectorY },
+            fromPort: null,
           } as Partial<Shape>);
         } else {
           store.updateShape(connectorId, {
             toId: null,
             toPoint: { x: dropX - connectorX, y: dropY - connectorY },
+            toPort: null,
           } as Partial<Shape>);
         }
       }
