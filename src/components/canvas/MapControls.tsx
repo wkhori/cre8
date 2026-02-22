@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Minus, Plus, Maximize2, Map, ImageDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const MAP_W = 180;
+const MAP_W = 220;
 const MAP_H = 110;
 
 export default function MapControls() {

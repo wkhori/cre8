@@ -1,13 +1,14 @@
 export interface ArchitectureComponent {
   id: string;
   name: string;
-  description: string;
+  description?: string;
   techStack?: string;
   iconSlug?: string;
 }
 
 export interface ArchitectureLayer {
   name: string;
+  description?: string;
   tier: number;
   section?: string;
   components: ArchitectureComponent[];

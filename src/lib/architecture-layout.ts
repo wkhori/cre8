@@ -6,28 +6,28 @@ import type {
 import type { AIOperation } from "./ai-tools";
 
 // ── Layout constants ──────────────────────────────────────────────
-const COMPONENT_W = 220;
-const COMPONENT_H = 100;
-const COMPONENT_GAP = 28;
-const COMPONENT_CORNER_R = 14;
-const LAYER_PAD_X = 36;
-const LAYER_PAD_TOP = 56;
-const LAYER_PAD_BOTTOM = 32;
-const LAYER_GAP = 44;
-const SECTION_GAP = 32;
-const SECTION_PAD = 20;
-const SECTION_HEADER_H = 28;
-const TITLE_GAP = 24;
-const TECH_ICON_SIZE = 24;
-const TECH_ICON_GAP = 12;
+const COMPONENT_W = 180;
+const COMPONENT_H = 52;
+const COMPONENT_GAP = 16;
+const COMPONENT_CORNER_R = 10;
+const LAYER_PAD_X = 24;
+const LAYER_PAD_TOP = 56; // more room for header band + subtitle
+const LAYER_PAD_BOTTOM = 18;
+const LAYER_GAP = 28;
+const SECTION_GAP = 24;
+const SECTION_PAD = 14;
+const SECTION_HEADER_H = 24;
+const TITLE_GAP = 20;
+const TECH_ICON_SIZE = 22;
+const TECH_ICON_GAP = 10;
 const MAX_COMPONENTS_PER_ROW = 6;
-const HEADER_BAND_H = 36;
-const HEADER_CORNER_R = 12;
-const SHADOW_DX = 4;
-const SHADOW_DY = 4;
-const BACKDROP_PAD = 48;
-const BACKDROP_CORNER_R = 24;
-const COLUMN_GAP = 32;
+const HEADER_BAND_H = 32;
+const HEADER_CORNER_R = 10;
+const SHADOW_DX = 3;
+const SHADOW_DY = 3;
+const BACKDROP_PAD = 36;
+const BACKDROP_CORNER_R = 20;
+const COLUMN_GAP = 24;
 
 // ── Dynamic palette generation ────────────────────────────────────
 interface TierPalette {
@@ -268,9 +268,12 @@ export function layoutArchitecture(
   let gridW: number;
   let gridH: number;
 
+  // Minimum column width: enough for 3 components side by side
+  const MIN_COL_W = layerContentWidth(3);
+
   if (sections.length <= 1 || layoutHint === "vertical") {
     // ── Vertical: single column ──────────────────────────────────
-    const maxW = Math.max(560, ...sections.map((s) => s.minW));
+    const maxW = Math.max(MIN_COL_W, ...sections.map((s) => s.minW));
     let curY = 0;
     placedSections = sections.map((sec) => {
       const h = measureSection(sec.layers, maxW);
@@ -295,11 +298,10 @@ export function layoutArchitecture(
     const leftMaxCols = Math.max(...leftSections.map((s) => s.maxLayerCols), 2);
     const rightMaxCols = Math.max(...rightSections.map((s) => s.maxLayerCols), 2);
     const totalCols = leftMaxCols + rightMaxCols;
-    const minTotal = 560 * 2 + COLUMN_GAP;
     const rawTotal = layerContentWidth(leftMaxCols) + layerContentWidth(rightMaxCols) + COLUMN_GAP;
-    const total = Math.max(rawTotal, minTotal);
-    const leftW = Math.floor((total - COLUMN_GAP) * (leftMaxCols / totalCols));
-    const rightW = total - COLUMN_GAP - leftW;
+    const total = rawTotal;
+    const leftW = Math.max(Math.floor((total - COLUMN_GAP) * (leftMaxCols / totalCols)), MIN_COL_W);
+    const rightW = Math.max(total - COLUMN_GAP - leftW, MIN_COL_W);
 
     placedSections = [];
     let leftY = 0;
@@ -314,7 +316,7 @@ export function layoutArchitecture(
       placedSections.push({ ...sec, col: 1, x: leftW + COLUMN_GAP, y: rightY, w: rightW, h });
       rightY += h + SECTION_GAP;
     }
-    gridW = total;
+    gridW = leftW + COLUMN_GAP + rightW;
     gridH = Math.max(
       leftY - (leftSections.length > 0 ? SECTION_GAP : 0),
       rightY - (rightSections.length > 0 ? SECTION_GAP : 0)
@@ -331,10 +333,9 @@ export function layoutArchitecture(
       const rest = sections.filter((s) => s !== dominant);
       const restMaxCols = Math.max(...rest.map((s) => s.maxLayerCols), 2);
       const domMinW = dominant.minW;
-      // Rest splits into 2 columns
-      const restColW = Math.max(layerContentWidth(restMaxCols), 280);
+      const restColW = Math.max(layerContentWidth(restMaxCols), MIN_COL_W);
       const restTotalW = rest.length >= 2 ? restColW * 2 + COLUMN_GAP : restColW;
-      const fullW = Math.max(domMinW, restTotalW, 560);
+      const fullW = Math.max(domMinW, restTotalW);
 
       const domH = measureSection(dominant.layers, fullW);
       placedSections = [{ ...dominant, col: 0, x: 0, y: 0, w: fullW, h: domH }];
@@ -366,10 +367,8 @@ export function layoutArchitecture(
       gridH = belowY;
     } else {
       // Standard 2-column bento — greedy shortest-column-first
-      // Sort sections by weight descending for better packing
       const sorted = [...sections].sort((a, b) => b.componentCount - a.componentCount);
 
-      // Determine column widths based on what lands in each column
       const leftIdxs: number[] = [];
       const rightIdxs: number[] = [];
       let leftH = 0;
@@ -387,14 +386,8 @@ export function layoutArchitecture(
       const leftMaxCols = Math.max(...leftIdxs.map((i) => sorted[i].maxLayerCols), 2);
       const rightMaxCols =
         rightIdxs.length > 0 ? Math.max(...rightIdxs.map((i) => sorted[i].maxLayerCols), 2) : 2;
-      const totalCols = leftMaxCols + rightMaxCols;
-      const rawW = layerContentWidth(leftMaxCols) + layerContentWidth(rightMaxCols) + COLUMN_GAP;
-      const fullW = Math.max(rawW, 560 + 560 + COLUMN_GAP);
-      const leftW = Math.max(
-        Math.floor((fullW - COLUMN_GAP) * (leftMaxCols / totalCols)),
-        Math.floor((fullW - COLUMN_GAP) * 0.4) // min 40%
-      );
-      const rightW = fullW - COLUMN_GAP - leftW;
+      const leftW = Math.max(layerContentWidth(leftMaxCols), MIN_COL_W);
+      const rightW = Math.max(layerContentWidth(rightMaxCols), MIN_COL_W);
 
       placedSections = [];
       let curLeftY = 0;
@@ -418,7 +411,7 @@ export function layoutArchitecture(
         });
         curRightY += h + SECTION_GAP;
       }
-      gridW = fullW;
+      gridW = leftW + COLUMN_GAP + rightW;
       gridH = Math.max(
         curLeftY - (leftIdxs.length > 0 ? SECTION_GAP : 0),
         curRightY - (rightIdxs.length > 0 ? SECTION_GAP : 0)
@@ -556,9 +549,9 @@ export function layoutArchitecture(
       type: "createText",
       tempId: genTempId(),
       x: secX + 14,
-      y: secY + 8,
+      y: secY + 6,
       text: sec.name.toUpperCase(),
-      fontSize: 11,
+      fontSize: 10,
       fontStyle: "bold",
       fill: "rgba(255,255,255,0.35)",
       width: secW - 28,
@@ -681,7 +674,7 @@ function emitConnectors(
 
     ops.push(connectorOp);
 
-    // Label pill (skip for tertiary)
+    // Label pill — offset away from component cards to avoid overlap
     if (showLabel && conn.label) {
       const fromPos = componentPositions.get(conn.from);
       const toPos = componentPositions.get(conn.to);
@@ -690,11 +683,43 @@ function emitConnectors(
         const fcy = fromPos.y + fromPos.h / 2;
         const tcx = toPos.x + toPos.w / 2;
         const tcy = toPos.y + toPos.h / 2;
-        const midX = (fcx + tcx) / 2;
-        const midY = (fcy + tcy) / 2;
+        let midX = (fcx + tcx) / 2;
+        let midY = (fcy + tcy) / 2;
 
         const labelW = Math.max(conn.label.length * 6 + 20, 60);
         const labelH = 20;
+
+        // Nudge the label away from any overlapping component card
+        const labelRect = {
+          x: midX - labelW / 2,
+          y: midY - labelH / 2,
+          w: labelW,
+          h: labelH,
+        };
+        for (const [, pos] of componentPositions) {
+          const pad = 6;
+          if (
+            labelRect.x < pos.x + pos.w + pad &&
+            labelRect.x + labelRect.w > pos.x - pad &&
+            labelRect.y < pos.y + pos.h + pad &&
+            labelRect.y + labelRect.h > pos.y - pad
+          ) {
+            // Overlap detected — shift label perpendicular to connector direction
+            const dx = tcx - fcx;
+            const dy = tcy - fcy;
+            const len = Math.sqrt(dx * dx + dy * dy) || 1;
+            // Perpendicular unit vector
+            const px = -dy / len;
+            const py = dx / len;
+            // Shift 30px perpendicular (away from card center)
+            const cardCx = pos.x + pos.w / 2;
+            const cardCy = pos.y + pos.h / 2;
+            const sign = (midX - cardCx) * px + (midY - cardCy) * py >= 0 ? 1 : -1;
+            midX += px * 30 * sign;
+            midY += py * 30 * sign;
+            break; // one nudge is enough
+          }
+        }
 
         ops.push({
           type: "createShape",
@@ -790,13 +815,27 @@ function emitLayer(
     type: "createText",
     tempId: genTempId(),
     x: layerX + 16,
-    y: layerY + 10,
+    y: layerY + 8,
     text: layer.name,
-    fontSize: 14,
+    fontSize: 13,
     fontStyle: "bold",
     fill: "#ffffff",
     width: layerW - 32,
   });
+
+  // ── Layer subtitle (description) ────────────────────────────
+  if (layer.description) {
+    ops.push({
+      type: "createText",
+      tempId: genTempId(),
+      x: layerX + 16,
+      y: layerY + HEADER_BAND_H + 4,
+      text: layer.description,
+      fontSize: 10,
+      fill: "rgba(226,232,240,0.5)",
+      width: layerW - 32,
+    });
+  }
 
   // ── Per-layer icons in header (right side) ──────────────────
   const layerIcons = layer.components
@@ -804,24 +843,26 @@ function emitLayer(
     .filter((slug): slug is string => !!slug);
   const uniqueIcons = [...new Set(layerIcons)];
   if (uniqueIcons.length > 0) {
-    const iconRowW = uniqueIcons.length * (TECH_ICON_SIZE + TECH_ICON_GAP) - TECH_ICON_GAP;
-    const iconStartX = layerX + layerW - iconRowW - 16;
-    const iconY = layerY + (HEADER_BAND_H - TECH_ICON_SIZE) / 2;
+    const iconSize = 16;
+    const iconGap = 6;
+    const iconRowW = uniqueIcons.length * (iconSize + iconGap) - iconGap;
+    const iconStartX = layerX + layerW - iconRowW - 14;
+    const iconY = layerY + (HEADER_BAND_H - iconSize) / 2;
 
     for (let i = 0; i < uniqueIcons.length; i++) {
       ops.push({
         type: "createImage",
         tempId: genTempId(),
-        x: iconStartX + i * (TECH_ICON_SIZE + TECH_ICON_GAP),
+        x: iconStartX + i * (iconSize + iconGap),
         y: iconY,
-        w: TECH_ICON_SIZE,
-        h: TECH_ICON_SIZE,
+        w: iconSize,
+        h: iconSize,
         src: `https://cdn.simpleicons.org/${uniqueIcons[i]}/ffffff`,
       });
     }
   }
 
-  // ── Component cards ─────────────────────────────────────────
+  // ── Component cards (compact: name + tech label) ────────────
   const actualCols = Math.min(numComponents, cols);
   const contentW = actualCols * COMPONENT_W + (actualCols - 1) * COMPONENT_GAP;
   const startX = layerX + (layerW - contentW) / 2;
@@ -844,7 +885,7 @@ function emitLayer(
       y: cy + SHADOW_DY,
       w: COMPONENT_W,
       h: COMPONENT_H,
-      fill: "rgba(0,0,0,0.4)",
+      fill: "rgba(0,0,0,0.35)",
       cornerRadius: COMPONENT_CORNER_R,
     });
 
@@ -865,45 +906,45 @@ function emitLayer(
       strokeWidth: 1,
     });
 
-    // Component name
+    // Component name (centered vertically if no tech label)
+    const nameY = comp.techStack ? cy + 10 : cy + (COMPONENT_H - 14) / 2;
     ops.push({
       type: "createText",
       tempId: genTempId(),
-      x: cx + 14,
-      y: cy + 16,
+      x: cx + 12,
+      y: nameY,
       text: comp.name,
-      fontSize: 13,
+      fontSize: 12,
       fontStyle: "bold",
       fill: palette.text,
-      width: COMPONENT_W - 28,
+      width: COMPONENT_W - 24,
     });
 
-    // Description / tech stack
-    const subText = comp.techStack || comp.description;
-    if (subText) {
+    // Tech stack as small muted label below name
+    if (comp.techStack) {
       ops.push({
         type: "createText",
         tempId: genTempId(),
-        x: cx + 14,
-        y: cy + 38,
-        text: subText,
-        fontSize: 11,
-        fill: palette.subtext,
-        width: COMPONENT_W - 28,
+        x: cx + 12,
+        y: cy + 28,
+        text: comp.techStack,
+        fontSize: 9,
+        fill: "rgba(226,232,240,0.4)",
+        width: COMPONENT_W - 24,
       });
     }
 
-    // Tier accent line at bottom of card
+    // Accent line at bottom
     ops.push({
       type: "createShape",
       tempId: genTempId(),
       shapeType: "rectangle",
-      x: cx + 14,
-      y: cy + COMPONENT_H - 14,
-      w: 32,
-      h: 3,
+      x: cx + 12,
+      y: cy + COMPONENT_H - 10,
+      w: 28,
+      h: 2,
       fill: palette.header,
-      cornerRadius: 2,
+      cornerRadius: 1,
     });
   }
 
