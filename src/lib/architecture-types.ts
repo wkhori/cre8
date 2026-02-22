@@ -9,6 +9,7 @@ export interface ArchitectureComponent {
 export interface ArchitectureLayer {
   name: string;
   tier: number;
+  section?: string;
   components: ArchitectureComponent[];
 }
 
@@ -18,6 +19,7 @@ export interface ArchitectureConnection {
   label?: string;
   style: "arrow" | "double-arrow" | "line";
   lineStyle?: "solid" | "dashed" | "dotted";
+  importance?: "primary" | "secondary" | "tertiary";
 }
 
 export interface ArchitectureAnalysis {
@@ -25,6 +27,8 @@ export interface ArchitectureAnalysis {
   description?: string;
   summary?: string;
   techStackIcons?: string[];
+  colorTheme?: "warm" | "cool" | "earth" | "neon" | "ocean" | "mono";
+  layoutHint?: "vertical" | "horizontal" | "bento";
   layers: ArchitectureLayer[];
   connections: ArchitectureConnection[];
 }

@@ -61,6 +61,7 @@ export type AIOperation =
       routingMode?: "straight" | "curved" | "elbowed";
       stroke?: string;
       strokeWidth?: number;
+      curveOffset?: number;
     }
   | { type: "moveObject"; objectId: string; x: number; y: number }
   | {

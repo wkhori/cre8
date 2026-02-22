@@ -5,7 +5,7 @@ import { useCanvasStore } from "@/store/canvas-store";
 import { useUIStore } from "@/store/ui-store";
 import { getShapeBounds } from "@/lib/shape-geometry";
 import { Button } from "@/components/ui/button";
-import { Minus, Plus, Maximize2, Map } from "lucide-react";
+import { Minus, Plus, Maximize2, Map, ImageDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const MAP_W = 180;
@@ -315,6 +315,21 @@ export default function MapControls() {
           title="Fit to content (Cmd+1)"
         >
           <Maximize2 className="size-3.5" />
+        </Button>
+
+        <div className="mx-0.5 h-4 w-px bg-zinc-200 dark:bg-zinc-700" />
+
+        <Button
+          size="icon-xs"
+          variant="ghost"
+          onClick={() =>
+            window.dispatchEvent(
+              new CustomEvent("export-image", { detail: { scope: "board", format: "png" } })
+            )
+          }
+          title="Export board as PNG"
+        >
+          <ImageDown className="size-3.5" />
         </Button>
       </div>
     </div>
