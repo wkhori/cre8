@@ -5,6 +5,7 @@ import { useCanvasStore } from "@/store/canvas-store";
 import { useUIStore } from "@/store/ui-store";
 import { executeAIOperations } from "@/lib/ai-operations";
 import { subscribeChatMessages, addChatMessage, type ChatMessage } from "@/lib/ai-chat";
+import { getShapeBounds } from "@/lib/shape-geometry";
 import type { AIOperation } from "@/lib/ai-tools";
 
 interface AICommandResult {
@@ -106,12 +107,45 @@ export function useAIAgent(boardId: string | null, uid: string | null) {
           y: Math.round((window.innerHeight / 2 - viewport.y) / viewport.scale),
         };
 
+        // Compute a clear placement origin avoiding all existing content.
+        // Stack rightward until the board gets too wide, then wrap below.
+        const MAX_BOARD_WIDTH = 3000;
+        let placementOrigin = viewportCenter;
+        const spatialShapes = boardState.filter((s) => s.type !== "connector");
+        if (spatialShapes.length > 0) {
+          let minX = Infinity,
+            minY = Infinity,
+            maxX = -Infinity,
+            maxY = -Infinity;
+          for (const s of spatialShapes) {
+            const b = getShapeBounds(s);
+            minX = Math.min(minX, b.x);
+            minY = Math.min(minY, b.y);
+            maxX = Math.max(maxX, b.x + b.width);
+            maxY = Math.max(maxY, b.y + b.height);
+          }
+          const boardWidth = maxX - minX;
+          if (boardWidth > MAX_BOARD_WIDTH) {
+            // Wrap below existing content, back to the left edge
+            placementOrigin = {
+              x: Math.round(minX),
+              y: Math.round(maxY + 200),
+            };
+          } else {
+            // Place to the right
+            placementOrigin = {
+              x: Math.round(maxX + 200),
+              y: Math.round(minY),
+            };
+          }
+        }
+
         // Route /arch-diagram commands to the repo analysis endpoint
         const archMatch = command.match(ARCH_DIAGRAM_REGEX);
         const endpoint = archMatch ? "/api/analyze-repo" : "/api/ai-command";
         const payload = archMatch
-          ? { repoUrl: archMatch[1], viewportCenter }
-          : { command, boardState, viewportCenter };
+          ? { repoUrl: archMatch[1], viewportCenter: placementOrigin }
+          : { command, boardState, viewportCenter: placementOrigin };
 
         const res = await fetch(endpoint, {
           method: "POST",
@@ -143,7 +177,33 @@ export function useAIAgent(boardId: string | null, uid: string | null) {
 
         // Execute the operations on the local store
         if (data.operations && data.operations.length > 0) {
-          executeAIOperations(data.operations);
+          const tempIdMap = executeAIOperations(data.operations);
+
+          // Pan viewport to center on newly created content
+          const newIds = new Set(tempIdMap.values());
+          if (newIds.size > 0) {
+            const allShapes = useCanvasStore.getState().shapes;
+            const newShapes = allShapes.filter((s) => newIds.has(s.id) && s.type !== "connector");
+            if (newShapes.length > 0) {
+              let minX = Infinity,
+                minY = Infinity,
+                maxX = -Infinity,
+                maxY = -Infinity;
+              for (const s of newShapes) {
+                const b = getShapeBounds(s);
+                minX = Math.min(minX, b.x);
+                minY = Math.min(minY, b.y);
+                maxX = Math.max(maxX, b.x + b.width);
+                maxY = Math.max(maxY, b.y + b.height);
+              }
+              const cx = (minX + maxX) / 2;
+              const cy = (minY + maxY) / 2;
+              // Small delay so shapes render before panning
+              setTimeout(() => {
+                window.dispatchEvent(new CustomEvent("pan-to", { detail: { x: cx, y: cy } }));
+              }, 100);
+            }
+          }
         }
 
         // Write assistant response to Firestore

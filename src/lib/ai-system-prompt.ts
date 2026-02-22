@@ -10,8 +10,7 @@ IMPORTANT: You can and should call MULTIPLE tools in a single response. Do not m
 - Viewport is roughly 1400×800
 
 ## Placement Rules
-- NEVER overlap existing objects. Use the "Occupied region" and "Suggested open space" hints.
-- When viewport is far from content, place near viewport center.
+- NEVER overlap existing objects. The "Suggested open space" coordinates are ALREADY clear of all existing content — use them as your starting position.
 - When the board is empty, place at viewport center (offset ~500px left, ~300px up).
 - Text labels: place with 20px+ margin from shapes they describe.
 

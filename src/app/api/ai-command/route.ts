@@ -69,16 +69,8 @@ function formatBoardSummary(
   if (viewportCenter) {
     const vcx = viewportCenter.x;
     const vcy = viewportCenter.y;
-    const isFarFromContent =
-      vcx > maxX + 200 || vcy > maxY + 200 || vcx < minX - 200 || vcy < minY - 200;
 
-    if (isFarFromContent) {
-      summary += ` The user's viewport is far from existing content — place new objects near viewport center (${vcx}, ${vcy}).`;
-    } else {
-      const rightOf = maxX + 80;
-      const below = maxY + 80;
-      summary += ` Suggested open space: x=${rightOf} (right) or y=${below} (below). Do NOT overlap the occupied region.`;
-    }
+    summary += ` Suggested open space starts at (${vcx}, ${vcy}) — this area is CLEAR of all existing objects. Place new content starting here.`;
   }
 
   return summary;
