@@ -15,9 +15,11 @@ export const maxDuration = 60;
 const AI_MODEL = "claude-sonnet-4-6";
 const MAX_PACKED_CHARS = 150_000;
 const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+const CACHE_DISABLED = process.env.DISABLE_ARCH_CACHE === "true";
 
 // ── Firestore cache helpers (keyed by owner_repo:sha) ───────────────
 async function getCachedAnalysis(cacheKey: string): Promise<ArchitectureAnalysis | null> {
+  if (CACHE_DISABLED) return null;
   try {
     const snap = await getDoc(doc(firebaseDb, "repo-cache", cacheKey));
     if (!snap.exists()) return null;
@@ -57,21 +59,8 @@ const RequestSchema = z.object({
   viewportCenter: z.object({ x: z.number(), y: z.number() }).optional(),
 });
 
-// ── Common Simple Icons slugs reference for Claude ──────────────────
-const ICON_SLUG_REFERENCE = `
-Common Simple Icons slugs (use these exact values for iconSlug and techStackIcons):
-react, nextdotjs, vuedotjs, angular, svelte, astro, nuxtdotjs, gatsby,
-nodedotjs, express, fastify, nestjs, hono, bun, deno,
-typescript, javascript, python, go, rust, java, ruby, php, swift, kotlin, cplusplus, csharp,
-postgresql, mysql, mongodb, redis, sqlite, supabase, firebase, prisma, drizzle,
-docker, kubernetes, nginx, vercel, netlify, amazonwebservices, googlecloud, microsoftazure,
-graphql, trpc, tailwindcss, sass, vite, webpack, turborepo, pnpm, npm,
-git, github, gitlab, jest, vitest, cypress, playwright,
-figma, storybook, electron, tauri, flutter, reactnative,
-openai, anthropic, langchain, huggingface,
-stripe, auth0, clerk, sentry, datadog,
-linux, ubuntu, apple, windows, android,
-`.trim();
+// ── Icon slug instruction for Claude ─────────────────────────────────
+const ICON_SLUG_REFERENCE = `Use Simple Icons slugs (simpleicons.org) for iconSlug/techStackIcons. Common mappings: Next.js="nextdotjs", Node.js="nodedotjs", Vue.js="vuedotjs", C++="cplusplus", C#="csharp", AWS="amazonwebservices". Most others match the lowercase name.`;
 
 // ── Architecture analysis prompt ────────────────────────────────────
 const ANALYSIS_PROMPT = `You are a senior software architect. Analyze the following codebase and produce a structured architecture description as JSON.

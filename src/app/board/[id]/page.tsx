@@ -73,7 +73,6 @@ export default function BoardPage() {
   const writeQueueRef = useRef<Promise<void>>(Promise.resolve());
 
   // ── Initialize board + sync ────────────────────────────────────────
-
   const sweepLiveDragging = useCallback((now = Date.now()) => {
     const liveDragging = liveDraggingUntilRef.current;
     for (const [id, until] of liveDragging) {
@@ -352,7 +351,6 @@ export default function BoardPage() {
   }, [boardReady]);
 
   // ── Sync local mutations to Firestore ───────────────────────────────
-
   useEffect(() => {
     if (!boardReady || !user || renderOnly) return;
 
@@ -431,7 +429,6 @@ export default function BoardPage() {
   }, []);
 
   // ── Auth guard ──────────────────────────────────────────────────────
-
   useEffect(() => {
     if (!authLoading && !user) router.replace("/");
   }, [authLoading, router, user]);
