@@ -4,12 +4,12 @@ import type { AIOperation } from "./ai-tools";
 // ── Layout constants ──────────────────────────────────────────────
 const COMPONENT_W = 220;
 const COMPONENT_H = 100;
-const COMPONENT_GAP = 20;
+const COMPONENT_GAP = 28;
 const COMPONENT_CORNER_R = 14;
 const LAYER_PAD_X = 36;
 const LAYER_PAD_TOP = 56;
 const LAYER_PAD_BOTTOM = 32;
-const LAYER_GAP = 40;
+const LAYER_GAP = 56;
 const TIER_GROUP_GAP = 24;
 const TITLE_GAP = 24;
 const TECH_ICON_SIZE = 24;
@@ -82,13 +82,22 @@ function genTempId(): string {
   return `arch_${Date.now()}_${layoutCounter++}`;
 }
 
-// ── Measure a single layer's height ──────────────────────────────
-function measureLayerH(layer: ArchitectureLayer): number {
-  const rows = Math.ceil(layer.components.length / MAX_COMPONENTS_PER_ROW);
+// ── Measure a single layer's height given available width ────
+function measureLayerH(layer: ArchitectureLayer, availW?: number): number {
+  let maxCols = MAX_COMPONENTS_PER_ROW;
+  if (availW != null) {
+    const fittable = Math.max(
+      1,
+      Math.floor((availW - LAYER_PAD_X * 2 + COMPONENT_GAP) / (COMPONENT_W + COMPONENT_GAP))
+    );
+    maxCols = Math.max(fittable, MAX_COMPONENTS_PER_ROW);
+  }
+  const cols = Math.min(layer.components.length, maxCols);
+  const rows = Math.max(1, Math.ceil(layer.components.length / cols));
   return LAYER_PAD_TOP + rows * COMPONENT_H + (rows - 1) * COMPONENT_GAP + LAYER_PAD_BOTTOM;
 }
 
-// ── Compute width needed for a layer given a max column count ────
+// ── Compute width needed for a layer given a column count ────
 function layerContentWidth(cols: number): number {
   return LAYER_PAD_X * 2 + cols * COMPONENT_W + (cols - 1) * COMPONENT_GAP;
 }
@@ -122,25 +131,22 @@ export function layoutArchitecture(
   }
 
   // ── Calculate uniform diagram width ───────────────────────────
+  // Key rule: side-by-side layers must NEVER force components to wrap to a second row.
+  // Each layer needs at least enough width to fit ALL its components in one row.
   let maxRowWidth = 0;
   for (const group of tierGroups) {
     if (group.length === 1) {
       const cols = Math.min(group[0].components.length, MAX_COMPONENTS_PER_ROW);
       maxRowWidth = Math.max(maxRowWidth, layerContentWidth(cols));
     } else {
-      // Side-by-side: each layer gets proportional width, total = sum + gaps
-      let totalCols = 0;
+      // Side-by-side: sum of each layer's minimum width + gaps between layers
+      let groupWidth = (group.length - 1) * TIER_GROUP_GAP;
       for (const layer of group) {
-        totalCols += Math.min(layer.components.length, MAX_COMPONENTS_PER_ROW);
+        // Each layer must fit ALL its components in a single row (no wrapping)
+        const cols = layer.components.length;
+        groupWidth += layerContentWidth(cols);
       }
-      // Approximate: use the widest single-layer width as minimum
-      const widest = Math.max(
-        ...group.map((l) =>
-          layerContentWidth(Math.min(l.components.length, MAX_COMPONENTS_PER_ROW))
-        )
-      );
-      const combined = group.length * widest + (group.length - 1) * TIER_GROUP_GAP;
-      maxRowWidth = Math.max(maxRowWidth, combined, layerContentWidth(totalCols));
+      maxRowWidth = Math.max(maxRowWidth, groupWidth);
     }
   }
   const uniformLayerW = Math.max(maxRowWidth, 560);
@@ -148,18 +154,18 @@ export function layoutArchitecture(
   // ── PASS 1: Measure total diagram height ──────────────────────
   let measureY = 0;
 
-  // Title
-  measureY += 40; // title height
+  // Title row (title + tech icons share same line)
+  measureY += 40;
 
   // Description
   if (arch.description) measureY += 28;
 
-  // Summary
-  if (arch.summary) measureY += 20;
-
-  // Tech stack icon row
-  if (arch.techStackIcons && arch.techStackIcons.length > 0) {
-    measureY += 16 + TECH_ICON_SIZE + 16;
+  // Summary — estimate lines needed (approx 90 chars per line at width 700, fontSize 12)
+  if (arch.summary) {
+    const summaryLineW = uniformLayerW;
+    const estCharsPerLine = Math.floor(summaryLineW / 6.5);
+    const summaryLines = Math.max(1, Math.ceil(arch.summary.length / estCharsPerLine));
+    measureY += summaryLines * 16 + 8;
   }
 
   measureY += TITLE_GAP;
@@ -167,9 +173,17 @@ export function layoutArchitecture(
   // Layers
   for (const group of tierGroups) {
     if (group.length === 1) {
-      measureY += measureLayerH(group[0]) + LAYER_GAP;
+      measureY += measureLayerH(group[0], uniformLayerW) + LAYER_GAP;
     } else {
-      const maxH = Math.max(...group.map(measureLayerH));
+      // Each layer gets width proportional to its component count
+      const availableW = uniformLayerW - (group.length - 1) * TIER_GROUP_GAP;
+      const totalCols = group.reduce((sum, l) => sum + l.components.length, 0);
+      const maxH = Math.max(
+        ...group.map((l) => {
+          const w = Math.floor(availableW * (l.components.length / totalCols));
+          return measureLayerH(l, w);
+        })
+      );
       measureY += maxH + LAYER_GAP;
     }
   }
@@ -196,7 +210,13 @@ export function layoutArchitecture(
     cornerRadius: BACKDROP_CORNER_R,
   });
 
-  // ── Title ─────────────────────────────────────────────────────
+  // ── Title row (title left, tech icons right) ─────────────────
+  const hasIcons = arch.techStackIcons && arch.techStackIcons.length > 0;
+  const iconsTotalW = hasIcons
+    ? arch.techStackIcons!.length * (TECH_ICON_SIZE + TECH_ICON_GAP) - TECH_ICON_GAP
+    : 0;
+  const titleTextW = hasIcons ? uniformLayerW - iconsTotalW - 24 : uniformLayerW;
+
   ops.push({
     type: "createText",
     tempId: genTempId(),
@@ -206,8 +226,25 @@ export function layoutArchitecture(
     fontSize: 32,
     fontStyle: "bold",
     fill: "#f1f5f9",
-    width: uniformLayerW,
+    width: titleTextW,
   });
+
+  // Tech icons aligned right on the same row as title
+  if (hasIcons) {
+    const iconsX = diagramX + uniformLayerW - iconsTotalW;
+    const iconsY = contentY + 6; // vertically center with title text
+    for (let i = 0; i < arch.techStackIcons!.length; i++) {
+      ops.push({
+        type: "createImage",
+        tempId: genTempId(),
+        x: iconsX + i * (TECH_ICON_SIZE + TECH_ICON_GAP),
+        y: iconsY,
+        w: TECH_ICON_SIZE,
+        h: TECH_ICON_SIZE,
+        src: `https://cdn.simpleicons.org/${arch.techStackIcons![i]}/ffffff`,
+      });
+    }
+  }
   contentY += 40;
 
   // ── Description ───────────────────────────────────────────────
@@ -225,8 +262,9 @@ export function layoutArchitecture(
     contentY += 28;
   }
 
-  // ── Summary ───────────────────────────────────────────────────
+  // ── Summary (full text, multi-line) ───────────────────────────
   if (arch.summary) {
+    const summaryW = uniformLayerW;
     ops.push({
       type: "createText",
       tempId: genTempId(),
@@ -235,42 +273,11 @@ export function layoutArchitecture(
       text: arch.summary,
       fontSize: 12,
       fill: "#64748b",
-      width: uniformLayerW,
+      width: summaryW,
     });
-    contentY += 20;
-  }
-
-  // ── Tech Stack Icon Row ───────────────────────────────────────
-  if (arch.techStackIcons && arch.techStackIcons.length > 0) {
-    contentY += 16;
-    const iconRowW =
-      arch.techStackIcons.length * (TECH_ICON_SIZE + TECH_ICON_GAP) - TECH_ICON_GAP + 24;
-    ops.push({
-      type: "createShape",
-      tempId: genTempId(),
-      shapeType: "rectangle",
-      x: diagramX,
-      y: contentY,
-      w: iconRowW,
-      h: TECH_ICON_SIZE + 16,
-      fill: "rgba(255,255,255,0.06)",
-      cornerRadius: 10,
-      stroke: "rgba(255,255,255,0.08)",
-      strokeWidth: 1,
-    });
-
-    for (let i = 0; i < arch.techStackIcons.length; i++) {
-      ops.push({
-        type: "createImage",
-        tempId: genTempId(),
-        x: diagramX + 12 + i * (TECH_ICON_SIZE + TECH_ICON_GAP),
-        y: contentY + 8,
-        w: TECH_ICON_SIZE,
-        h: TECH_ICON_SIZE,
-        src: `https://cdn.simpleicons.org/${arch.techStackIcons[i]}/ffffff`,
-      });
-    }
-    contentY += TECH_ICON_SIZE + 16;
+    const estCharsPerLine = Math.floor(summaryW / 6.5);
+    const summaryLines = Math.max(1, Math.ceil(arch.summary.length / estCharsPerLine));
+    contentY += summaryLines * 16 + 8;
   }
 
   contentY += TITLE_GAP;
@@ -290,21 +297,27 @@ export function layoutArchitecture(
       );
       contentY += LAYER_GAP;
     } else {
-      // Multiple layers at same tier: side by side
-      const perLayerW = (uniformLayerW - (group.length - 1) * TIER_GROUP_GAP) / group.length;
+      // Multiple layers at same tier: side by side, width proportional to component count
+      const availableW = uniformLayerW - (group.length - 1) * TIER_GROUP_GAP;
+      const totalCols = group.reduce((sum, l) => sum + l.components.length, 0);
+
       let maxH = 0;
+      let curX = diagramX;
       for (let g = 0; g < group.length; g++) {
-        const layerX = diagramX + g * (perLayerW + TIER_GROUP_GAP);
+        // Each layer gets width proportional to its component count (never wraps)
+        const layerCols = group[g].components.length;
+        const perLayerW = Math.floor(availableW * (layerCols / totalCols));
         const h = emitLayer(
           ops,
           group[g],
-          layerX,
+          curX,
           contentY,
           perLayerW,
           componentTempIds,
           componentPositions
         );
         maxH = Math.max(maxH, h);
+        curX += perLayerW + TIER_GROUP_GAP;
       }
       contentY += maxH + LAYER_GAP;
     }
@@ -328,39 +341,45 @@ export function layoutArchitecture(
       strokeWidth: 1.5,
     });
 
-    // Label with background pill
+    // Label pill — centered on midpoint, opaque background covers the line
     if (conn.label) {
       const fromPos = componentPositions.get(conn.from);
       const toPos = componentPositions.get(conn.to);
       if (fromPos && toPos) {
-        const midX = (fromPos.x + fromPos.w / 2 + toPos.x + toPos.w / 2) / 2;
-        const midY = (fromPos.y + fromPos.h / 2 + toPos.y + toPos.h / 2) / 2;
-        const labelW = Math.max(conn.label.length * 6 + 20, 64);
+        const fcx = fromPos.x + fromPos.w / 2;
+        const fcy = fromPos.y + fromPos.h / 2;
+        const tcx = toPos.x + toPos.w / 2;
+        const tcy = toPos.y + toPos.h / 2;
+        const midX = (fcx + tcx) / 2;
+        const midY = (fcy + tcy) / 2;
 
-        // Pill background
+        const labelW = Math.max(conn.label.length * 6 + 20, 60);
+        const labelH = 20;
+
+        // Opaque pill background (fully covers the connector line underneath)
         ops.push({
           type: "createShape",
           tempId: genTempId(),
           shapeType: "rectangle",
           x: midX - labelW / 2,
-          y: midY - 11,
+          y: midY - labelH / 2,
           w: labelW,
-          h: 22,
-          fill: "rgba(15,15,23,0.9)",
-          cornerRadius: 6,
-          stroke: "rgba(148,163,184,0.15)",
+          h: labelH,
+          fill: "#0f0f17",
+          cornerRadius: 10,
+          stroke: "rgba(148,163,184,0.2)",
           strokeWidth: 1,
         });
 
-        // Label text
+        // Label text — centered in pill
         ops.push({
           type: "createText",
           tempId: genTempId(),
           x: midX - labelW / 2,
-          y: midY - 6,
+          y: midY - 5,
           text: conn.label,
           fontSize: 10,
-          fill: "#94a3b8",
+          fill: "#cbd5e1",
           width: labelW,
         });
       }
@@ -383,8 +402,13 @@ function emitLayer(
   const tierIdx = Math.min(layer.tier, TIER_PALETTES.length - 1);
   const palette = TIER_PALETTES[tierIdx];
   const numComponents = layer.components.length;
-  const cols = Math.min(numComponents, MAX_COMPONENTS_PER_ROW);
-  const rows = Math.ceil(numComponents / MAX_COMPONENTS_PER_ROW);
+  // How many components actually fit in one row given the layer width?
+  const maxFittable = Math.max(
+    1,
+    Math.floor((layerW - LAYER_PAD_X * 2 + COMPONENT_GAP) / (COMPONENT_W + COMPONENT_GAP))
+  );
+  const cols = Math.min(numComponents, Math.max(maxFittable, MAX_COMPONENTS_PER_ROW));
+  const rows = Math.ceil(numComponents / cols);
   const layerH = LAYER_PAD_TOP + rows * COMPONENT_H + (rows - 1) * COMPONENT_GAP + LAYER_PAD_BOTTOM;
 
   // ── Layer background card ───────────────────────────────────
@@ -469,8 +493,8 @@ function emitLayer(
 
   for (let i = 0; i < numComponents; i++) {
     const comp = layer.components[i];
-    const col = i % MAX_COMPONENTS_PER_ROW;
-    const row = Math.floor(i / MAX_COMPONENTS_PER_ROW);
+    const col = i % cols;
+    const row = Math.floor(i / cols);
     const cx = startX + col * (COMPONENT_W + COMPONENT_GAP);
     const cy = layerY + LAYER_PAD_TOP + row * (COMPONENT_H + COMPONENT_GAP);
 
@@ -506,32 +530,17 @@ function emitLayer(
       strokeWidth: 1,
     });
 
-    // Component icon (inline, top-left)
-    if (comp.iconSlug) {
-      ops.push({
-        type: "createImage",
-        tempId: genTempId(),
-        x: cx + 14,
-        y: cy + 14,
-        w: 18,
-        h: 18,
-        src: `https://cdn.simpleicons.org/${comp.iconSlug}/ffffff`,
-      });
-    }
-
-    // Component name
-    const nameX = comp.iconSlug ? cx + 38 : cx + 14;
-    const nameW = comp.iconSlug ? COMPONENT_W - 52 : COMPONENT_W - 28;
+    // Component name (always starts at same position — no icon gap)
     ops.push({
       type: "createText",
       tempId: genTempId(),
-      x: nameX,
+      x: cx + 14,
       y: cy + 16,
       text: comp.name,
       fontSize: 13,
       fontStyle: "bold",
       fill: palette.text,
-      width: nameW,
+      width: COMPONENT_W - 28,
     });
 
     // Description / tech stack
@@ -541,7 +550,7 @@ function emitLayer(
         type: "createText",
         tempId: genTempId(),
         x: cx + 14,
-        y: cy + 42,
+        y: cy + 38,
         text: subText,
         fontSize: 11,
         fill: palette.subtext,
