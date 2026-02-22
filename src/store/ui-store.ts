@@ -17,11 +17,14 @@ interface UIStore {
   viewport: { scale: number; x: number; y: number };
   pointer: { screenX: number; screenY: number; worldX: number; worldY: number };
   connectorSourceSelected: boolean;
+  aiPanelOpen: boolean;
   setActiveTool: (tool: ActiveTool) => void;
   setInteraction: (mode: InteractionMode) => void;
   setViewport: (v: { scale: number; x: number; y: number }) => void;
   setPointer: (p: { screenX: number; screenY: number; worldX: number; worldY: number }) => void;
   setConnectorSourceSelected: (v: boolean) => void;
+  setAIPanelOpen: (open: boolean) => void;
+  toggleAIPanel: () => void;
 }
 
 export const useUIStore = create<UIStore>((set) => ({
@@ -30,9 +33,12 @@ export const useUIStore = create<UIStore>((set) => ({
   viewport: { scale: 1, x: 0, y: 0 },
   pointer: { screenX: 0, screenY: 0, worldX: 0, worldY: 0 },
   connectorSourceSelected: false,
+  aiPanelOpen: false,
   setActiveTool: (activeTool) => set({ activeTool }),
   setInteraction: (interaction) => set({ interaction }),
   setViewport: (viewport) => set({ viewport }),
   setPointer: (pointer) => set({ pointer }),
   setConnectorSourceSelected: (connectorSourceSelected) => set({ connectorSourceSelected }),
+  setAIPanelOpen: (aiPanelOpen) => set({ aiPanelOpen }),
+  toggleAIPanel: () => set((s) => ({ aiPanelOpen: !s.aiPanelOpen })),
 }));

@@ -11,6 +11,9 @@ export type AIOperation =
       color?: string;
       w?: number;
       h?: number;
+      fontFamily?: string;
+      fontStyle?: "normal" | "bold" | "italic" | "bold italic";
+      textDecoration?: "none" | "underline";
     }
   | {
       type: "createShape";
@@ -31,6 +34,9 @@ export type AIOperation =
       fontSize?: number;
       fill?: string;
       width?: number;
+      fontFamily?: string;
+      fontStyle?: "normal" | "bold" | "italic" | "bold italic";
+      textDecoration?: "none" | "underline";
     }
   | {
       type: "createFrame";
@@ -46,11 +52,26 @@ export type AIOperation =
       tempId: string;
       fromId: string;
       toId: string;
-      style?: "line" | "arrow";
+      style?: "line" | "arrow" | "double-arrow";
+      lineStyle?: "solid" | "dashed" | "dotted";
     }
   | { type: "moveObject"; objectId: string; x: number; y: number }
-  | { type: "updateText"; objectId: string; newText: string }
+  | {
+      type: "updateText";
+      objectId: string;
+      newText: string;
+      fontFamily?: string;
+      fontStyle?: "normal" | "bold" | "italic" | "bold italic";
+      textDecoration?: "none" | "underline";
+    }
   | { type: "changeColor"; objectId: string; color: string }
+  | {
+      type: "updateConnector";
+      objectId: string;
+      style?: "line" | "arrow" | "double-arrow";
+      lineStyle?: "solid" | "dashed" | "dotted";
+      strokeWidth?: number;
+    }
   | { type: "deleteObjects"; objectIds: string[] }
   | { type: "resizeObject"; objectId: string; w: number; h: number }
   | {
@@ -128,6 +149,22 @@ export const AI_TOOLS: Anthropic.Messages.Tool[] = [
         },
         width: { type: "number", description: "Width in px (default 260)" },
         height: { type: "number", description: "Height in px (default 120)" },
+        fontFamily: {
+          type: "string",
+          description:
+            "Font family. Options: 'Inter, system-ui, sans-serif' (default), 'Georgia, serif', \"'Courier New', monospace\", 'cursive'",
+        },
+        fontStyle: {
+          type: "string",
+          enum: ["normal", "bold", "italic", "bold italic"],
+          description:
+            "Font style (default: normal). Use 'bold' for bold, 'italic' for italic, 'bold italic' for both.",
+        },
+        textDecoration: {
+          type: "string",
+          enum: ["none", "underline"],
+          description: "Text decoration (default: none)",
+        },
       },
       required: ["text", "x", "y"],
     },
@@ -183,6 +220,22 @@ export const AI_TOOLS: Anthropic.Messages.Tool[] = [
           type: "number",
           description: "Max text width in px. Auto-calculated from text length if omitted.",
         },
+        fontFamily: {
+          type: "string",
+          description:
+            "Font family. Options: 'Inter, system-ui, sans-serif' (default), 'Georgia, serif', \"'Courier New', monospace\", 'cursive'",
+        },
+        fontStyle: {
+          type: "string",
+          enum: ["normal", "bold", "italic", "bold italic"],
+          description:
+            "Font style (default: normal). Use 'bold' for bold, 'italic' for italic, 'bold italic' for both.",
+        },
+        textDecoration: {
+          type: "string",
+          enum: ["none", "underline"],
+          description: "Text decoration (default: none)",
+        },
       },
       required: ["text", "x", "y"],
     },
@@ -197,8 +250,14 @@ export const AI_TOOLS: Anthropic.Messages.Tool[] = [
         toId: { type: "string", description: "Target object ID" },
         style: {
           type: "string",
-          enum: ["line", "arrow"],
-          description: "Connector style (default: arrow)",
+          enum: ["line", "arrow", "double-arrow"],
+          description:
+            "Connector endpoint style (default: arrow). double-arrow has arrowheads on both ends.",
+        },
+        lineStyle: {
+          type: "string",
+          enum: ["solid", "dashed", "dotted"],
+          description: "Line pattern (default: solid)",
         },
       },
       required: ["fromId", "toId"],
@@ -238,6 +297,22 @@ export const AI_TOOLS: Anthropic.Messages.Tool[] = [
       properties: {
         objectId: { type: "string", description: "ID of the object" },
         newText: { type: "string", description: "New text content" },
+        fontFamily: {
+          type: "string",
+          description:
+            "Font family. Options: 'Inter, system-ui, sans-serif', 'Georgia, serif', \"'Courier New', monospace\", 'cursive'",
+        },
+        fontStyle: {
+          type: "string",
+          enum: ["normal", "bold", "italic", "bold italic"],
+          description:
+            "Font style. Use 'bold' for bold, 'italic' for italic, 'bold italic' for both.",
+        },
+        textDecoration: {
+          type: "string",
+          enum: ["none", "underline"],
+          description: "Text decoration",
+        },
       },
       required: ["objectId", "newText"],
     },
@@ -252,6 +327,32 @@ export const AI_TOOLS: Anthropic.Messages.Tool[] = [
         color: { type: "string", description: "New hex color" },
       },
       required: ["objectId", "color"],
+    },
+  },
+  {
+    name: "updateConnector",
+    description:
+      "Update the style of an existing connector. Can change endpoint style, line pattern, and stroke width.",
+    input_schema: {
+      type: "object",
+      properties: {
+        objectId: { type: "string", description: "ID of the connector to update" },
+        style: {
+          type: "string",
+          enum: ["line", "arrow", "double-arrow"],
+          description: "Endpoint style",
+        },
+        lineStyle: {
+          type: "string",
+          enum: ["solid", "dashed", "dotted"],
+          description: "Line pattern",
+        },
+        strokeWidth: {
+          type: "number",
+          description: "Stroke width in px (1=thin, 2=regular, 4=thick)",
+        },
+      },
+      required: ["objectId"],
     },
   },
   {

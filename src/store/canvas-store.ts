@@ -51,7 +51,7 @@ interface CanvasStore {
   addConnector: (
     from: { id: string } | { point: { x: number; y: number } },
     to: { id: string } | { point: { x: number; y: number } },
-    style?: "line" | "arrow"
+    style?: "line" | "arrow" | "double-arrow"
   ) => string;
 
   // ── Mutations ──

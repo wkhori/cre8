@@ -27,7 +27,7 @@ interface ShapeRendererProps {
 
 export default memo(function ShapeRenderer({
   shape,
-  isSelected,
+  isSelected: _isSelected,
   isDark,
   allShapes,
   shapesById,
@@ -133,6 +133,7 @@ export default memo(function ShapeRenderer({
           fontSize={shape.fontSize}
           fontFamily={shape.fontFamily}
           fontStyle={shape.fontStyle ?? "normal"}
+          textDecoration={shape.textDecoration ?? ""}
           fill={textFill}
           width={shape.width}
           align={shape.align ?? "left"}
@@ -146,7 +147,7 @@ export default memo(function ShapeRenderer({
           key={shape.id}
           {...commonProps}
           points={shape.points}
-          stroke={isSelected ? "#3b82f6" : shape.stroke}
+          stroke={shape.stroke}
           strokeWidth={shape.strokeWidth}
           lineCap="round"
           lineJoin="round"
@@ -180,8 +181,9 @@ export default memo(function ShapeRenderer({
             height={availH}
             text={shape.text}
             fontSize={stickyFontSize}
-            fontFamily="system-ui, sans-serif"
+            fontFamily={shape.fontFamily ?? "system-ui, sans-serif"}
             fontStyle={shape.fontStyle ?? "normal"}
+            textDecoration={shape.textDecoration ?? ""}
             fill={stickyTextFill}
             wrap="word"
             perfectDrawEnabled={false}
@@ -223,26 +225,73 @@ export default memo(function ShapeRenderer({
       const pts = allShapes
         ? computeConnectorPoints(shape, allShapes, shapesById, siblingMap)
         : (shape.points ?? [0, 0, 100, 0]);
+      const dashArray =
+        shape.lineStyle === "dashed" ? [12, 6] : shape.lineStyle === "dotted" ? [3, 6] : undefined;
       const connectorProps = {
         ...commonProps,
         // Connectors use absolute world coords in points, not x/y offset
         x: 0,
         y: 0,
         points: pts,
-        stroke: isSelected ? "#3b82f6" : shape.stroke,
+        stroke: shape.stroke,
         strokeWidth: shape.strokeWidth,
         hitStrokeWidth: Math.max(shape.strokeWidth, 12),
         perfectDrawEnabled: false,
+        ...(dashArray ? { dash: dashArray } : {}),
       };
       if (shape.style === "arrow") {
         return (
           <Arrow
             key={shape.id}
             {...connectorProps}
-            fill={isSelected ? "#3b82f6" : shape.stroke}
+            fill={shape.stroke}
             pointerLength={10}
             pointerWidth={8}
           />
+        );
+      }
+      if (shape.style === "double-arrow" && pts.length >= 4) {
+        // Line body + arrowheads at both ends
+        const sx = pts[0],
+          sy = pts[1];
+        const ex = pts[pts.length - 2],
+          ey = pts[pts.length - 1];
+        // Short segments for arrowheads (20px back from each tip)
+        const endDx = ex - pts[pts.length - 4],
+          endDy = ey - pts[pts.length - 3];
+        const endLen = Math.sqrt(endDx * endDx + endDy * endDy) || 1;
+        const startDx = sx - pts[2],
+          startDy = sy - pts[3];
+        const startLen = Math.sqrt(startDx * startDx + startDy * startDy) || 1;
+        const seg = 20;
+        return (
+          <Group key={shape.id}>
+            <Line {...connectorProps} />
+            <Arrow
+              x={0}
+              y={0}
+              points={[ex - (endDx / endLen) * seg, ey - (endDy / endLen) * seg, ex, ey]}
+              stroke={shape.stroke}
+              strokeWidth={shape.strokeWidth}
+              fill={shape.stroke}
+              pointerLength={10}
+              pointerWidth={8}
+              listening={false}
+              perfectDrawEnabled={false}
+            />
+            <Arrow
+              x={0}
+              y={0}
+              points={[sx - (startDx / startLen) * seg, sy - (startDy / startLen) * seg, sx, sy]}
+              stroke={shape.stroke}
+              strokeWidth={shape.strokeWidth}
+              fill={shape.stroke}
+              pointerLength={10}
+              pointerWidth={8}
+              listening={false}
+              perfectDrawEnabled={false}
+            />
+          </Group>
         );
       }
       return <Line key={shape.id} {...connectorProps} />;

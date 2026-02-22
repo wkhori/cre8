@@ -96,9 +96,9 @@ function formatBoardStateFull(shapes: Record<string, unknown>[]): string {
 
     switch (type) {
       case "sticky":
-        return `${base} text="${s.text}" color=${s.color} ${s.w}×${s.h}`;
+        return `${base} text="${s.text}" color=${s.color} ${s.w}×${s.h}${s.fontFamily ? ` font=${s.fontFamily}` : ""}${s.fontStyle && s.fontStyle !== "normal" ? ` fontStyle=${s.fontStyle}` : ""}${s.textDecoration === "underline" ? " underline" : ""}`;
       case "text":
-        return `${base} text="${s.text}"`;
+        return `${base} text="${s.text}"${s.fontFamily ? ` font=${s.fontFamily}` : ""}${s.fontStyle && s.fontStyle !== "normal" ? ` fontStyle=${s.fontStyle}` : ""}${s.textDecoration === "underline" ? " underline" : ""}`;
       case "frame":
         return `${base} title="${s.title}" ${s.w}×${s.h}`;
       case "rect":
@@ -106,7 +106,7 @@ function formatBoardStateFull(shapes: Record<string, unknown>[]): string {
       case "circle":
         return `${base} ${(s.radiusX as number) * 2}×${(s.radiusY as number) * 2} fill=${s.fill}`;
       case "connector":
-        return `${base} ${s.fromId} → ${s.toId} (${s.style})`;
+        return `${base} ${s.fromId} → ${s.toId} style=${s.style} lineStyle=${s.lineStyle ?? "solid"} strokeWidth=${s.strokeWidth ?? 2}`;
       case "line":
         return `${base} stroke=${s.stroke}`;
       default:
@@ -137,6 +137,9 @@ function simulateToolCall(
         color: toolInput.color as string | undefined,
         w: toolInput.width as number | undefined,
         h: toolInput.height as number | undefined,
+        fontFamily: toolInput.fontFamily as string | undefined,
+        fontStyle: toolInput.fontStyle as "normal" | "bold" | "italic" | "bold italic" | undefined,
+        textDecoration: toolInput.textDecoration as "none" | "underline" | undefined,
       };
       tempIdMap.set(tempId, tempId);
       return {
@@ -193,6 +196,9 @@ function simulateToolCall(
         fontSize: toolInput.fontSize as number | undefined,
         fill: toolInput.fill as string | undefined,
         width: toolInput.width as number | undefined,
+        fontFamily: toolInput.fontFamily as string | undefined,
+        fontStyle: toolInput.fontStyle as "normal" | "bold" | "italic" | "bold italic" | undefined,
+        textDecoration: toolInput.textDecoration as "none" | "underline" | undefined,
       };
       tempIdMap.set(tempId, tempId);
       return {
@@ -208,7 +214,8 @@ function simulateToolCall(
         tempId,
         fromId: toolInput.fromId as string,
         toId: toolInput.toId as string,
-        style: toolInput.style as "line" | "arrow" | undefined,
+        style: toolInput.style as "line" | "arrow" | "double-arrow" | undefined,
+        lineStyle: toolInput.lineStyle as "solid" | "dashed" | "dotted" | undefined,
       };
       tempIdMap.set(tempId, tempId);
       return {
@@ -248,6 +255,9 @@ function simulateToolCall(
         type: "updateText",
         objectId: toolInput.objectId as string,
         newText: toolInput.newText as string,
+        fontFamily: toolInput.fontFamily as string | undefined,
+        fontStyle: toolInput.fontStyle as "normal" | "bold" | "italic" | "bold italic" | undefined,
+        textDecoration: toolInput.textDecoration as "none" | "underline" | undefined,
       };
       return {
         operation: op,
@@ -260,6 +270,20 @@ function simulateToolCall(
         type: "changeColor",
         objectId: toolInput.objectId as string,
         color: toolInput.color as string,
+      };
+      return {
+        operation: op,
+        result: JSON.stringify({ success: true, objectId: toolInput.objectId }),
+      };
+    }
+
+    case "updateConnector": {
+      const op: AIOperation = {
+        type: "updateConnector",
+        objectId: toolInput.objectId as string,
+        style: toolInput.style as "line" | "arrow" | "double-arrow" | undefined,
+        lineStyle: toolInput.lineStyle as "solid" | "dashed" | "dotted" | undefined,
+        strokeWidth: toolInput.strokeWidth as number | undefined,
       };
       return {
         operation: op,
@@ -877,7 +901,6 @@ export async function POST(request: NextRequest) {
 
       // Execute each tool call and collect operations
       const toolResults: Anthropic.Messages.ToolResultBlockParam[] = [];
-      let calledGetBoardState = false;
 
       for (const toolBlock of toolUseBlocks) {
         const { operation, result, extraOps } = simulateToolCall(
@@ -893,24 +916,12 @@ export async function POST(request: NextRequest) {
         if (extraOps) {
           operations.push(...extraOps);
         }
-        if (toolBlock.name === "getBoardState") {
-          calledGetBoardState = true;
-        }
 
         toolResults.push({
           type: "tool_result",
           tool_use_id: toolBlock.id,
           content: result,
         });
-      }
-
-      // Only continue the loop if Claude called getBoardState (needs data to decide next action).
-      // Otherwise, all create/move/delete ops are done — no need for a summary round.
-      if (!calledGetBoardState) {
-        if (!finalText) {
-          finalText = `Created ${operations.length} objects on the board.`;
-        }
-        break;
       }
 
       messages = [
