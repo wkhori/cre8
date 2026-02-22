@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
+import { tmpdir } from "os";
 import { join } from "path";
-import { readFile, rm } from "fs/promises";
+import { readFile, mkdtemp, rm } from "fs/promises";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { firebaseDb } from "@/lib/firebase-client";
 import { layoutArchitecture } from "@/lib/architecture-layout";
@@ -65,15 +66,18 @@ const RequestSchema = z.object({
 });
 
 async function packRepository(repoUrl: string): Promise<string> {
-  const { runCli } = await import("repomix");
+  const { runCli, setLogLevel } = await import("repomix");
 
-  const tempDir = await mkdtemp(join(tmpdir(), "cre8-repo-"));
-  const outputFile = join(tempDir, "output.txt");
+  // Suppress repomix console output (SILENT = -1)
+  setLogLevel(-1 as Parameters<typeof setLogLevel>[0]);
+
+  const tempDir = await mkdtemp(join(tmpdir(), "cre8-pack-"));
+  const outFile = join(tempDir, "output.txt");
 
   try {
     await runCli(["."], tempDir, {
       remote: repoUrl,
-      output: outputFile,
+      output: outFile,
       style: "plain",
       compress: true,
       quiet: true,
@@ -84,7 +88,7 @@ async function packRepository(repoUrl: string): Promise<string> {
       noFileSummary: true,
     } as Parameters<typeof runCli>[2]);
 
-    const content = await readFile(outputFile, "utf-8");
+    const content = await readFile(outFile, "utf-8");
 
     if (content.length > MAX_PACKED_CHARS) {
       return (
@@ -257,24 +261,62 @@ export async function POST(request: NextRequest) {
         }
 
         // ── Pack repository ──────────────────────────────────────
-        sendEvent(controller, { phase: "packing", message: "Cloning & packing repository..." });
+        sendEvent(controller, { phase: "packing", message: "Fetching repository..." });
 
         const packSpan = trace?.span({ name: "pack-repository" });
         let packed: string;
         let packMethod = "repomix";
+        let repomixErrorMsg: string | null = null;
+
+        // Try repomix first
+        const repomixSpan = trace?.span({ name: "repomix-attempt" });
         try {
+          const t0 = Date.now();
           packed = await packRepository(repoUrl);
+          repomixSpan?.end({
+            output: {
+              success: true,
+              chars: packed.length,
+              durationMs: Date.now() - t0,
+            },
+          });
         } catch (repomixError) {
-          console.warn("Repomix failed, falling back to GitHub API:", repomixError);
+          repomixErrorMsg =
+            repomixError instanceof Error
+              ? `${repomixError.name}: ${repomixError.message}`
+              : String(repomixError);
+          console.error("[analyze-repo] repomix failed:", repomixErrorMsg);
+          repomixSpan?.end({ output: { success: false, error: repomixErrorMsg } });
+
+          // Fallback to GitHub API
           packMethod = "github-api";
+          const fallbackSpan = trace?.span({ name: "github-api-fallback" });
+          sendEvent(controller, {
+            phase: "packing",
+            message: "Repomix failed, using GitHub API fallback...",
+          });
           try {
+            const t0 = Date.now();
             packed = await packRepositoryFallback(repoUrl);
+            fallbackSpan?.end({
+              output: {
+                success: true,
+                chars: packed.length,
+                durationMs: Date.now() - t0,
+              },
+            });
           } catch (fallbackError) {
             const msg =
               fallbackError instanceof Error
                 ? fallbackError.message
                 : "Could not access repository.";
-            packSpan?.end({ output: { error: msg } });
+            fallbackSpan?.end({ output: { success: false, error: msg } });
+            packSpan?.end({
+              output: {
+                error: msg,
+                repomixError: repomixErrorMsg,
+              },
+            });
             sendEvent(controller, {
               phase: "complete",
               data: { success: false, error: msg, operations: [], message: "" },
@@ -282,7 +324,13 @@ export async function POST(request: NextRequest) {
             return;
           }
         }
-        packSpan?.end({ output: { method: packMethod, chars: packed.length } });
+        packSpan?.end({
+          output: {
+            method: packMethod,
+            chars: packed.length,
+            ...(repomixErrorMsg ? { repomixError: repomixErrorMsg } : {}),
+          },
+        });
 
         // ── Claude analysis ──────────────────────────────────────
         sendEvent(controller, { phase: "analyzing", message: "AI is analyzing architecture..." });
