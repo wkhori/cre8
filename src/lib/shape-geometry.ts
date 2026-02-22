@@ -226,19 +226,19 @@ export function computeConnectorPoints(
   const mode = connector.routingMode ?? "straight";
 
   if (mode === "curved") {
-    // Quadratic bezier: compute a control point offset perpendicular to the midpoint
+    // Waypoint for tension: offset perpendicular to the midpoint
     const midX = (startPt.x + endPt.x) / 2;
     const midY = (startPt.y + endPt.y) / 2;
     const dx = endPt.x - startPt.x;
     const dy = endPt.y - startPt.y;
     const len = Math.sqrt(dx * dx + dy * dy) || 1;
-    // Curvature scales with distance, capped at 60px
-    const curvature = Math.min(len * 0.25, 60);
+    // Use stored offset or auto-compute (capped at 40px, tension amplifies the visual curve)
+    const curvature = connector.curveOffset ?? Math.min(len * 0.15, 40);
     const px = -dy / len;
     const py = dx / len;
-    const cx = midX + px * curvature;
-    const cy = midY + py * curvature;
-    return [startPt.x, startPt.y, cx, cy, endPt.x, endPt.y];
+    const wx = midX + px * curvature;
+    const wy = midY + py * curvature;
+    return [startPt.x, startPt.y, wx, wy, endPt.x, endPt.y];
   }
 
   if (mode === "elbowed") {
@@ -246,13 +246,15 @@ export function computeConnectorPoints(
     const dx = endPt.x - startPt.x;
     const dy = endPt.y - startPt.y;
 
+    const ratio = connector.elbowMidRatio ?? 0.5;
+
     if (Math.abs(dy) > Math.abs(dx)) {
       // Primarily vertical: go down/up to midpoint Y, then horizontal, then finish
-      const midY = (startPt.y + endPt.y) / 2;
+      const midY = startPt.y + dy * ratio;
       return [startPt.x, startPt.y, startPt.x, midY, endPt.x, midY, endPt.x, endPt.y];
     } else {
       // Primarily horizontal: go right/left to midpoint X, then vertical, then finish
-      const midX = (startPt.x + endPt.x) / 2;
+      const midX = startPt.x + dx * ratio;
       return [startPt.x, startPt.y, midX, startPt.y, midX, endPt.y, endPt.x, endPt.y];
     }
   }

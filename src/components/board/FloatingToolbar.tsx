@@ -165,6 +165,9 @@ export default function FloatingToolbar() {
     ? (selectedConnectors[0].lineStyle ?? "solid")
     : "solid";
   const currentStrokeWidth = hasSelectedConnectors ? selectedConnectors[0].strokeWidth : 2;
+  const currentRoutingMode = hasSelectedConnectors
+    ? (selectedConnectors[0].routingMode ?? "straight")
+    : "straight";
 
   return (
     <div className="pointer-events-none absolute inset-0 z-30">
@@ -197,6 +200,7 @@ export default function FloatingToolbar() {
             currentEndpoint={currentEndpoint}
             currentLineStyle={currentLineStyle}
             currentStrokeWidth={currentStrokeWidth}
+            currentRoutingMode={currentRoutingMode}
           />
         )}
 
@@ -397,16 +401,69 @@ const ENDPOINTS = [
   { value: "double-arrow" as const, label: "Double Arrow", Icon: ArrowLeftRight },
 ] as const;
 
+const ROUTING_MODES = [
+  {
+    value: "straight" as const,
+    label: "Straight",
+    svg: (
+      <svg width="24" height="16" viewBox="0 0 24 16" className="shrink-0">
+        <line
+          x1="2"
+          y1="8"
+          x2="22"
+          y2="8"
+          className="stroke-current text-zinc-600 dark:text-zinc-300"
+          strokeWidth="2"
+          strokeLinecap="round"
+        />
+      </svg>
+    ),
+  },
+  {
+    value: "curved" as const,
+    label: "Curved",
+    svg: (
+      <svg width="24" height="16" viewBox="0 0 24 16" className="shrink-0">
+        <path
+          d="M2 14 Q12 -2 22 14"
+          fill="none"
+          className="stroke-current text-zinc-600 dark:text-zinc-300"
+          strokeWidth="2"
+          strokeLinecap="round"
+        />
+      </svg>
+    ),
+  },
+  {
+    value: "elbowed" as const,
+    label: "Elbowed",
+    svg: (
+      <svg width="24" height="16" viewBox="0 0 24 16" className="shrink-0">
+        <path
+          d="M2 14 L2 8 L22 8 L22 2"
+          fill="none"
+          className="stroke-current text-zinc-600 dark:text-zinc-300"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    ),
+  },
+] as const;
+
 function ConnectorControls({
   selectedConnectors,
   currentEndpoint,
   currentLineStyle,
   currentStrokeWidth,
+  currentRoutingMode,
 }: {
   selectedConnectors: ConnectorShape[];
   currentEndpoint: "line" | "arrow" | "double-arrow";
   currentLineStyle: string;
   currentStrokeWidth: number;
+  currentRoutingMode: "straight" | "curved" | "elbowed";
 }) {
   const [open, setOpen] = useState(false);
 
@@ -513,6 +570,27 @@ function ConnectorControls({
               />
             </div>
             {label}
+          </button>
+        ))}
+
+        <Separator className="my-1.5" />
+
+        {/* Routing mode section */}
+        <p className="px-2 py-1 text-[10px] font-medium uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+          Route
+        </p>
+        {ROUTING_MODES.map((rm) => (
+          <button
+            key={rm.value}
+            onClick={() => applyPatch({ routingMode: rm.value } as Partial<Shape>)}
+            className={cn(
+              "flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors",
+              "hover:bg-zinc-100 dark:hover:bg-zinc-800",
+              currentRoutingMode === rm.value && "bg-zinc-100 font-medium dark:bg-zinc-800"
+            )}
+          >
+            {rm.svg}
+            {rm.label}
           </button>
         ))}
       </PopoverContent>

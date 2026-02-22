@@ -10,7 +10,6 @@ const LAYER_PAD_TOP = 50;
 const LAYER_PAD_BOTTOM = 30;
 const LAYER_GAP = 80;
 const TITLE_GAP = 20;
-const ICON_SIZE = 28;
 const TECH_ICON_SIZE = 24;
 const TECH_ICON_GAP = 10;
 const MAX_COMPONENTS_PER_ROW = 6;
@@ -41,8 +40,8 @@ function genTempId(): string {
 
 /**
  * Convert an ArchitectureAnalysis into positioned AIOperation[].
- * Produces: title, description, tech stack icon row, summary panel,
- * layer frames with component boxes + icons, and labeled connectors.
+ * Produces: title, description, tech stack icon row,
+ * layer frames with per-layer icon rows + component boxes, and labeled connectors.
  */
 export function layoutArchitecture(
   arch: ArchitectureAnalysis,
@@ -67,9 +66,7 @@ export function layoutArchitecture(
     500
   );
 
-  // Determine if we have a summary panel (shifts layers right)
-  const hasSummary = !!arch.summary;
-  const diagramX = hasSummary ? baseX + SUMMARY_W + SUMMARY_GAP : baseX;
+  const diagramX = baseX;
 
   // ── Title ───────────────────────────────────────────────────────
   ops.push({
@@ -133,21 +130,6 @@ export function layoutArchitecture(
 
   contentY += TITLE_GAP;
 
-  // ── Summary Panel (left side) ───────────────────────────────────
-  if (hasSummary) {
-    const summaryH = 300;
-    ops.push({
-      type: "createStickyNote",
-      tempId: genTempId(),
-      x: baseX,
-      y: contentY,
-      w: SUMMARY_W,
-      h: summaryH,
-      text: arch.summary!,
-      color: "#27272a",
-    });
-  }
-
   // ── Layers ──────────────────────────────────────────────────────
   for (const layer of sortedLayers) {
     const tierIdx = Math.min(layer.tier, TIER_COLORS.length - 1);
@@ -199,34 +181,17 @@ export function layoutArchitecture(
         fill: compFill,
       });
 
-      // Icon
-      const hasIcon = !!comp.iconSlug;
-      const textStartX = hasIcon ? cx + ICON_SIZE + 14 : cx + 10;
-      const textWidth = hasIcon ? COMPONENT_W - ICON_SIZE - 24 : COMPONENT_W - 20;
-
-      if (hasIcon) {
-        ops.push({
-          type: "createImage",
-          tempId: genTempId(),
-          x: cx + 10,
-          y: cy + (COMPONENT_H - ICON_SIZE) / 2,
-          w: ICON_SIZE,
-          h: ICON_SIZE,
-          src: `https://cdn.simpleicons.org/${comp.iconSlug}/ffffff`,
-        });
-      }
-
       // Component name
       ops.push({
         type: "createText",
         tempId: genTempId(),
-        x: textStartX,
+        x: cx + 10,
         y: cy + 14,
         text: comp.name,
         fontSize: 13,
         fontStyle: "bold",
         fill: tierColor.text,
-        width: textWidth,
+        width: COMPONENT_W - 20,
       });
 
       // Description / tech stack
@@ -235,12 +200,49 @@ export function layoutArchitecture(
         ops.push({
           type: "createText",
           tempId: genTempId(),
-          x: textStartX,
+          x: cx + 10,
           y: cy + 34,
           text: subText,
           fontSize: 11,
           fill: "rgba(255,255,255,0.75)",
-          width: textWidth,
+          width: COMPONENT_W - 20,
+        });
+      }
+    }
+
+    // Per-layer icon row in top-right corner of the frame
+    const layerIcons = layer.components
+      .map((c) => c.iconSlug)
+      .filter((slug): slug is string => !!slug);
+    const uniqueIcons = [...new Set(layerIcons)];
+    if (uniqueIcons.length > 0) {
+      const iconRowW = uniqueIcons.length * (TECH_ICON_SIZE + TECH_ICON_GAP) - TECH_ICON_GAP + 16;
+      const iconRowH = TECH_ICON_SIZE + 12;
+      const iconRowX = diagramX + uniformLayerW - iconRowW - 10;
+      const iconRowY = contentY + 8;
+
+      // Dark background rect
+      ops.push({
+        type: "createShape",
+        tempId: genTempId(),
+        shapeType: "rectangle",
+        x: iconRowX,
+        y: iconRowY,
+        w: iconRowW,
+        h: iconRowH,
+        fill: "#27272a",
+      });
+
+      // Icon images
+      for (let i = 0; i < uniqueIcons.length; i++) {
+        ops.push({
+          type: "createImage",
+          tempId: genTempId(),
+          x: iconRowX + 8 + i * (TECH_ICON_SIZE + TECH_ICON_GAP),
+          y: iconRowY + 6,
+          w: TECH_ICON_SIZE,
+          h: TECH_ICON_SIZE,
+          src: `https://cdn.simpleicons.org/${uniqueIcons[i]}/ffffff`,
         });
       }
     }

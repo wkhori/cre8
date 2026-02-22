@@ -51,7 +51,8 @@ interface CanvasStore {
   addConnector: (
     from: { id: string } | { point: { x: number; y: number } },
     to: { id: string } | { point: { x: number; y: number } },
-    style?: "line" | "arrow" | "double-arrow"
+    style?: "line" | "arrow" | "double-arrow",
+    routingMode?: "straight" | "curved" | "elbowed"
   ) => string;
 
   // ── Mutations ──
@@ -313,7 +314,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
     return frameId;
   },
 
-  addConnector: (from, to, style = "arrow") => {
+  addConnector: (from, to, style = "arrow", routingMode?) => {
     const state = get();
     state.pushHistory();
     const shape: ConnectorShape = {
@@ -327,6 +328,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
       stroke: "#6b7280",
       strokeWidth: 2,
       ...baseProps(state.shapes),
+      ...(routingMode ? { routingMode } : {}),
     };
     set({ shapes: [...state.shapes, shape], selectedIds: [shape.id] });
     return shape.id;

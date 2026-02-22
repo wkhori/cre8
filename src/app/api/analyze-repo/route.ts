@@ -319,7 +319,6 @@ export async function POST(request: NextRequest) {
                 durationMs,
               },
             });
-            controller.close();
             return;
           }
         }
@@ -347,7 +346,6 @@ export async function POST(request: NextRequest) {
               phase: "complete",
               data: { success: false, error: msg, operations: [], message: "" },
             });
-            controller.close();
             return;
           }
         }
@@ -392,7 +390,6 @@ export async function POST(request: NextRequest) {
               message: "",
             },
           });
-          controller.close();
           return;
         }
 
@@ -415,7 +412,6 @@ export async function POST(request: NextRequest) {
               message: "",
             },
           });
-          controller.close();
           return;
         }
 
@@ -430,7 +426,6 @@ export async function POST(request: NextRequest) {
               message: "",
             },
           });
-          controller.close();
           return;
         }
 

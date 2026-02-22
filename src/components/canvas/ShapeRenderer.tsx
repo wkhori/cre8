@@ -279,10 +279,10 @@ export default memo(function ShapeRenderer({
         hitStrokeWidth: Math.max(shape.strokeWidth, 12),
         perfectDrawEnabled: false,
         ...(dashArray ? { dash: dashArray } : {}),
-        // Curved: points include bezier control points
-        ...(routing === "curved" ? { bezier: true } : {}),
-        // Elbowed: smooth the right-angle corners
-        ...(routing === "elbowed" ? { tension: 0.4 } : {}),
+        // Curved: tension makes Arrow follow curve tangent for correct arrowhead direction
+        ...(routing === "curved" ? { tension: 0.5 } : {}),
+        // Elbowed: subtler corner smoothing
+        ...(routing === "elbowed" ? { tension: 0.2 } : {}),
       };
       if (shape.style === "arrow") {
         return (

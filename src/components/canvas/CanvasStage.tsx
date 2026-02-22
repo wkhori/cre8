@@ -6,7 +6,7 @@ import type Konva from "konva";
 import type { Shape, ConnectorShape } from "@/lib/types";
 import { useCanvasStore } from "@/store/canvas-store";
 import { useUIStore } from "@/store/ui-store";
-import { getShapeBounds, connectorPairKey } from "@/lib/shape-geometry";
+import { getShapeBounds, connectorPairKey, computeConnectorPoints } from "@/lib/shape-geometry";
 import ShapeRenderer from "./ShapeRenderer";
 import DotGrid from "./DotGrid";
 import CursorsLayer from "./CursorsLayer";
@@ -158,6 +158,55 @@ export default function CanvasStage({
       });
     }
 
+    // Apply control point drag override for live curve/elbow preview
+    if (connectorEP.controlPointDrag) {
+      const cpd = connectorEP.controlPointDrag;
+      base = base.map((s) => {
+        if (s.id !== cpd.connectorId || s.type !== "connector") return s;
+        const c = s as ConnectorShape;
+        const routing = c.routingMode ?? "straight";
+        if (routing === "curved") {
+          const pts = computeConnectorPoints(c, base);
+          if (pts.length >= 6) {
+            const sx = pts[0],
+              sy = pts[1],
+              ex = pts[4],
+              ey = pts[5];
+            const midX = (sx + ex) / 2,
+              midY = (sy + ey) / 2;
+            const dx = ex - sx,
+              dy = ey - sy;
+            const len = Math.sqrt(dx * dx + dy * dy) || 1;
+            const px = -dy / len,
+              py = dx / len;
+            const offset = (cpd.x - midX) * px + (cpd.y - midY) * py;
+            return { ...s, curveOffset: offset } as Shape;
+          }
+        } else if (routing === "elbowed") {
+          const pts = computeConnectorPoints(
+            { ...c, elbowMidRatio: undefined } as ConnectorShape,
+            base
+          );
+          if (pts.length >= 8) {
+            const sx = pts[0],
+              sy = pts[1],
+              ex = pts[6],
+              ey = pts[7];
+            const dx = ex - sx,
+              dy = ey - sy;
+            let ratio = 0.5;
+            if (Math.abs(dy) > Math.abs(dx)) {
+              ratio = dy !== 0 ? (cpd.y - sy) / dy : 0.5;
+            } else {
+              ratio = dx !== 0 ? (cpd.x - sx) / dx : 0.5;
+            }
+            return { ...s, elbowMidRatio: Math.max(0.1, Math.min(0.9, ratio)) } as Shape;
+          }
+        }
+        return s;
+      });
+    }
+
     if (connectorIds.size === 0) return base;
 
     // Apply local drag positions for connector tracking
@@ -170,7 +219,13 @@ export default function CanvasStage({
       return s;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shapes, connectorIds.size, drag.dragEpoch, connectorEP.endpointDrag]);
+  }, [
+    shapes,
+    connectorIds.size,
+    drag.dragEpoch,
+    connectorEP.endpointDrag,
+    connectorEP.controlPointDrag,
+  ]);
 
   // Connector point resolution must use drag-aware positions while dragging.
   // Reuse the base map when no drag/endpoint override is active.
@@ -396,7 +451,7 @@ export default function CanvasStage({
           {interaction !== "dragging" &&
             connectorEP.selectedConnectorEndpoints.map((ep) => (
               <Circle
-                key={`${ep.connectorId}-${ep.end}`}
+                key={`${ep.connectorId}-${ep.end}-${connectorEP.endpointDragEpoch}`}
                 x={ep.x}
                 y={ep.y}
                 radius={6 / viewport.viewportRef.current.scale}
@@ -410,6 +465,36 @@ export default function CanvasStage({
                 }}
                 onDragEnd={(e) => {
                   connectorEP.handleEndpointDragEnd(ep.connectorId, ep.end, e);
+                }}
+                onMouseEnter={(e) => {
+                  const container = e.target.getStage()?.container();
+                  if (container) container.style.cursor = "grab";
+                }}
+                onMouseLeave={(e) => {
+                  const container = e.target.getStage()?.container();
+                  if (container) container.style.cursor = cursorStyle;
+                }}
+              />
+            ))}
+
+          {/* Draggable control-point handles for curved/elbowed connectors */}
+          {interaction !== "dragging" &&
+            connectorEP.selectedConnectorControlPoints.map((cp) => (
+              <Circle
+                key={`cp-${cp.connectorId}-${cp.index}-${connectorEP.endpointDragEpoch}`}
+                x={cp.x}
+                y={cp.y}
+                radius={5 / viewport.viewportRef.current.scale}
+                fill="#3b82f6"
+                stroke="#fff"
+                strokeWidth={2 / viewport.viewportRef.current.scale}
+                draggable
+                perfectDrawEnabled={false}
+                onDragMove={(e) => {
+                  connectorEP.handleControlPointDragMove(cp.connectorId, cp.index, e);
+                }}
+                onDragEnd={(e) => {
+                  connectorEP.handleControlPointDragEnd(cp.connectorId, cp.index, e);
                 }}
                 onMouseEnter={(e) => {
                   const container = e.target.getStage()?.container();
