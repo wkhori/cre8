@@ -417,6 +417,7 @@ export default function CanvasStage({
               drawingBounds={placement.drawingBounds}
               stageRef={stageRef}
               viewportRef={viewport.viewportRef}
+              isDark={isDark}
             />
           )}
 

@@ -5,7 +5,8 @@ import { Rect, Ellipse, Text, Line, Group, Arrow } from "react-konva";
 import type Konva from "konva";
 import type { Shape } from "@/lib/types";
 import { getShapeBounds, computeConnectorPoints } from "@/lib/shape-geometry";
-import { computeStickyFontSize } from "@/lib/sticky-text";
+import { computeStickyFontSize, STICKY_PAD_X, STICKY_PAD_Y } from "@/lib/sticky-text";
+import { isLightColor } from "@/lib/colors";
 
 interface ShapeRendererProps {
   shape: Shape;
@@ -154,16 +155,15 @@ export default memo(function ShapeRenderer({
       );
 
     case "sticky": {
-      const padX = 12;
-      const padY = 12;
-      const availW = shape.w - padX * 2;
-      const availH = shape.h - padY * 2;
+      const availW = shape.w - STICKY_PAD_X * 2;
+      const availH = shape.h - STICKY_PAD_Y * 2;
       const stickyFontSize = computeStickyFontSize(
         shape.text,
         availW,
         availH,
         shape.fontSize ?? 16
       );
+      const stickyTextFill = isLightColor(shape.color) ? "#18181b" : "#fafafa";
       return wrapWithHoverRing(
         <Group key={shape.id} {...commonProps}>
           <Rect
@@ -174,15 +174,15 @@ export default memo(function ShapeRenderer({
             perfectDrawEnabled={false}
           />
           <Text
-            x={padX}
-            y={padY}
+            x={STICKY_PAD_X}
+            y={STICKY_PAD_Y}
             width={availW}
             height={availH}
             text={shape.text}
             fontSize={stickyFontSize}
             fontFamily="system-ui, sans-serif"
             fontStyle={shape.fontStyle ?? "normal"}
-            fill="#18181b"
+            fill={stickyTextFill}
             wrap="word"
             perfectDrawEnabled={false}
           />
@@ -190,14 +190,17 @@ export default memo(function ShapeRenderer({
       );
     }
 
-    case "frame":
+    case "frame": {
+      const frameFill = isDark ? "rgba(255,255,255,0.08)" : shape.fill;
+      const frameStroke = isDark ? "#71717a" : shape.stroke;
+      const frameTitleFill = isDark ? "#a1a1aa" : "#71717a";
       return wrapWithHoverRing(
         <Group key={shape.id} {...commonProps}>
           <Rect
             width={shape.w}
             height={shape.h}
-            fill={shape.fill}
-            stroke={shape.stroke}
+            fill={frameFill}
+            stroke={frameStroke}
             strokeWidth={1}
             dash={[6, 4]}
             cornerRadius={4}
@@ -209,11 +212,12 @@ export default memo(function ShapeRenderer({
             text={shape.title}
             fontSize={13}
             fontFamily="system-ui, sans-serif"
-            fill="#71717a"
+            fill={frameTitleFill}
             perfectDrawEnabled={false}
           />
         </Group>
       );
+    }
 
     case "connector": {
       const pts = allShapes
