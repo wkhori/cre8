@@ -10,6 +10,7 @@ interface GhostPreviewProps {
   drawingBounds: { x: number; y: number; w: number; h: number } | null;
   stageRef: React.RefObject<Konva.Stage | null>;
   viewportRef: React.RefObject<{ x: number; y: number; scale: number }>;
+  isDark?: boolean;
 }
 
 export default function GhostPreview({
@@ -17,6 +18,7 @@ export default function GhostPreview({
   drawingBounds,
   stageRef,
   viewportRef,
+  isDark,
 }: GhostPreviewProps) {
   const groupRef = useRef<Konva.Group | null>(null);
   const visibleRef = useRef(false);
@@ -112,8 +114,8 @@ export default function GhostPreview({
         y={drawingBounds.y}
         width={drawingBounds.w}
         height={drawingBounds.h}
-        fill="rgba(0,0,0,0.03)"
-        stroke="#a1a1aa"
+        fill={isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.03)"}
+        stroke={isDark ? "#71717a" : "#a1a1aa"}
         strokeWidth={1}
         dash={[6, 4]}
         opacity={0.7}

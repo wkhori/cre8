@@ -1,11 +1,9 @@
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+/* eslint-disable @typescript-eslint/no-explicit-any */
 export type Throttled<T extends (...args: any[]) => void> = T & { cancel: () => void };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function throttle<T extends (...args: any[]) => void>(fn: T, ms: number): Throttled<T> {
   let last = 0;
   let timer: ReturnType<typeof setTimeout> | null = null;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let lastArgs: any[] | null = null;
 
   const flush = () => {
@@ -25,7 +23,6 @@ export function throttle<T extends (...args: any[]) => void>(fn: T, ms: number):
     lastArgs = null;
   };
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const throttled = ((...args: any[]) => {
     lastArgs = args;
     const now = Date.now();

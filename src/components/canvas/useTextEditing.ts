@@ -5,7 +5,8 @@ import type Konva from "konva";
 import type { Shape } from "@/lib/types";
 import { useCanvasStore } from "@/store/canvas-store";
 import { useUIStore } from "@/store/ui-store";
-import { computeStickyFontSize } from "@/lib/sticky-text";
+import { computeStickyFontSize, STICKY_PAD_X, STICKY_PAD_Y } from "@/lib/sticky-text";
+import { isLightColor } from "@/lib/colors";
 
 export function useTextEditing(stageRef: React.RefObject<Konva.Stage | null>, shapes: Shape[]) {
   const [editingTextId, setEditingTextId] = useState<string | null>(null);
@@ -180,19 +181,17 @@ export function useTextEditing(stageRef: React.RefObject<Konva.Stage | null>, sh
         resize: "none" as const,
         padding: 0,
         margin: 0,
-        lineHeight: 1,
+        lineHeight: 1.2,
         overflow: "hidden" as const,
         zIndex: 100,
       };
     }
 
     if (shape.type === "sticky") {
-      const padX = 12;
-      const padY = 12;
-      const x = (shape.x + padX) * viewport.scale + viewport.x;
-      const y = (shape.y + padY) * viewport.scale + viewport.y;
-      const availW = shape.w - padX * 2;
-      const availH = shape.h - padY * 2;
+      const x = (shape.x + STICKY_PAD_X) * viewport.scale + viewport.x;
+      const y = (shape.y + STICKY_PAD_Y) * viewport.scale + viewport.y;
+      const availW = shape.w - STICKY_PAD_X * 2;
+      const availH = shape.h - STICKY_PAD_Y * 2;
       const width = availW * viewport.scale;
       const height = availH * viewport.scale;
       const baseFontSize = computeStickyFontSize(
@@ -203,6 +202,7 @@ export function useTextEditing(stageRef: React.RefObject<Konva.Stage | null>, sh
       );
       const fontSize = baseFontSize * viewport.scale;
       const sfs = shape.fontStyle ?? "normal";
+      const textColor = isLightColor(shape.color) ? "#18181b" : "#fafafa";
       return {
         position: "absolute" as const,
         left: x,
@@ -213,7 +213,7 @@ export function useTextEditing(stageRef: React.RefObject<Konva.Stage | null>, sh
         fontFamily: "system-ui, sans-serif",
         fontWeight: sfs.includes("bold") ? "bold" : ("normal" as const),
         fontStyle: sfs.includes("italic") ? "italic" : ("normal" as const),
-        color: "#18181b",
+        color: textColor,
         border: "none",
         borderRadius: 0,
         background: "transparent",
@@ -223,7 +223,8 @@ export function useTextEditing(stageRef: React.RefObject<Konva.Stage | null>, sh
         padding: 0,
         margin: 0,
         lineHeight: 1.4,
-        overflow: "hidden" as const,
+        overflowY: "auto" as const,
+        overflowX: "hidden" as const,
         zIndex: 100,
         wordBreak: "break-word" as const,
       };

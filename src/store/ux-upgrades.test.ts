@@ -294,18 +294,6 @@ describe("placement tool states", () => {
       expect(useUIStore.getState().activeTool).toBe(tool);
     }
   });
-
-  it("placement tools correctly identified by startsWith", () => {
-    const placementTools = ["place-rect", "place-circle", "place-text", "place-sticky"] as const;
-
-    for (const tool of placementTools) {
-      expect(tool.startsWith("place-")).toBe(true);
-    }
-
-    expect("draw-frame".startsWith("place-")).toBe(false);
-    expect("pointer".startsWith("place-")).toBe(false);
-    expect("connector".startsWith("place-")).toBe(false);
-  });
 });
 
 // ═══════════════════════════════════════════════════════════════════════

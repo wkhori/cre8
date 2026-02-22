@@ -1,3 +1,7 @@
+/** Shared sticky note padding (used in ShapeRenderer + useTextEditing) */
+export const STICKY_PAD_X = 12;
+export const STICKY_PAD_Y = 12;
+
 /**
  * Compute fontSize that fits text within given bounds.
  * Uses character-width estimation (no DOM measurement).

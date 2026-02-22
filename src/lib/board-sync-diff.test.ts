@@ -54,4 +54,33 @@ describe("diffShapeWrites", () => {
     const result = diffShapeWrites([rect], [rect]);
     expect(result).toEqual({ added: [], deleted: [], modified: [] });
   });
+
+  it("captures parentId clearing (string → undefined) in patch", () => {
+    const prev = { ...makeRect("r1"), parentId: "frame1" };
+    const curr = { ...makeRect("r1"), parentId: undefined };
+
+    const result = diffShapeWrites([prev], [curr]);
+    expect(result.modified).toHaveLength(1);
+    expect(result.modified[0].id).toBe("r1");
+    expect(result.modified[0].patch).toHaveProperty("parentId");
+    expect(result.modified[0].patch.parentId).toBeUndefined();
+  });
+
+  it("captures parentId assignment (undefined → string) in patch", () => {
+    const prev = { ...makeRect("r1"), parentId: undefined };
+    const curr = { ...makeRect("r1"), parentId: "frame1" };
+
+    const result = diffShapeWrites([prev], [curr]);
+    expect(result.modified).toHaveLength(1);
+    expect(result.modified[0].patch.parentId).toBe("frame1");
+  });
+
+  it("no diff when parentId stays undefined on both sides", () => {
+    const prev = { ...makeRect("r1"), parentId: undefined };
+    // New object reference but same values
+    const curr = { ...makeRect("r1"), parentId: undefined };
+
+    const result = diffShapeWrites([prev], [curr]);
+    expect(result.modified).toEqual([]);
+  });
 });
