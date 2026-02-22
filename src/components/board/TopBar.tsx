@@ -72,7 +72,7 @@ function InlineBoardName({
           }
           e.stopPropagation();
         }}
-        className="h-6 w-40 rounded border border-zinc-300 bg-transparent px-1.5 text-sm font-medium text-zinc-900 outline-none focus:border-zinc-500 dark:border-zinc-600 dark:text-zinc-100 dark:focus:border-zinc-400"
+        className="h-6 w-60 rounded border border-zinc-300 bg-transparent px-1.5 text-sm font-medium text-zinc-900 outline-none focus:border-zinc-500 dark:border-zinc-600 dark:text-zinc-100 dark:focus:border-zinc-400"
       />
     );
   }
@@ -87,7 +87,7 @@ function InlineBoardName({
       className="group/name flex items-center gap-1 rounded px-1 py-0.5 text-sm font-medium text-zinc-900 hover:bg-zinc-100 dark:text-zinc-100 dark:hover:bg-zinc-800"
       title="Click to rename"
     >
-      <span className="max-w-40 truncate">{name}</span>
+      <span className="max-w-60 truncate">{name}</span>
       <Pencil className="size-3 opacity-0 group-hover/name:opacity-50" />
     </button>
   );
@@ -134,7 +134,7 @@ export default function TopBar({
   return (
     <header className="sticky top-0 z-40 flex h-11 shrink-0 items-center border-b border-zinc-200/80 bg-white/90 px-3 backdrop-blur-lg dark:border-zinc-800/80 dark:bg-zinc-950/90">
       {/* Left: Back + Logo + Board name */}
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-2">
         <Button
           size="icon-xs"
           variant="ghost"
