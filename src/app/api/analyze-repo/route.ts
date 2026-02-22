@@ -347,7 +347,13 @@ export async function POST(request: NextRequest) {
         const stream = anthropic.messages.stream({
           model: AI_MODEL,
           max_tokens: 4096,
-          system: ANALYSIS_PROMPT,
+          system: [
+            {
+              type: "text" as const,
+              text: ANALYSIS_PROMPT,
+              cache_control: { type: "ephemeral" as const },
+            },
+          ],
           messages: [
             {
               role: "user",
