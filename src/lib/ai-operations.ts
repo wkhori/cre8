@@ -58,6 +58,7 @@ export function executeAIOperations(operations: AIOperation[]): Map<string, stri
           opacity: 1,
           zIndex: baseZIndex++,
           ...(op.fontFamily ? { fontFamily: op.fontFamily } : {}),
+          ...(op.fontStyle ? { fontStyle: op.fontStyle } : {}),
           ...(op.textDecoration ? { textDecoration: op.textDecoration } : {}),
         } as StickyNoteShape);
         break;
@@ -138,6 +139,7 @@ export function executeAIOperations(operations: AIOperation[]): Map<string, stri
           rotation: 0,
           opacity: 1,
           zIndex: baseZIndex++,
+          ...(op.fontStyle ? { fontStyle: op.fontStyle } : {}),
           ...(op.textDecoration ? { textDecoration: op.textDecoration } : {}),
         } as TextShape);
         break;
@@ -195,9 +197,20 @@ export function executeAIOperations(operations: AIOperation[]): Map<string, stri
           (textPatch as Record<string, unknown>).text = op.newText;
         }
         if (op.fontFamily) (textPatch as Record<string, unknown>).fontFamily = op.fontFamily;
+        if (op.fontStyle) (textPatch as Record<string, unknown>).fontStyle = op.fontStyle;
         if (op.textDecoration)
           (textPatch as Record<string, unknown>).textDecoration = op.textDecoration;
         updates.push({ id: realId, patch: textPatch });
+        break;
+      }
+
+      case "updateConnector": {
+        const realId = tempIdMap.get(op.objectId) ?? op.objectId;
+        const patch: Partial<Shape> = {};
+        if (op.style) (patch as Record<string, unknown>).style = op.style;
+        if (op.lineStyle) (patch as Record<string, unknown>).lineStyle = op.lineStyle;
+        if (op.strokeWidth) (patch as Record<string, unknown>).strokeWidth = op.strokeWidth;
+        updates.push({ id: realId, patch });
         break;
       }
 

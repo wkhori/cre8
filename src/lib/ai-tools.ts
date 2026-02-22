@@ -12,6 +12,7 @@ export type AIOperation =
       w?: number;
       h?: number;
       fontFamily?: string;
+      fontStyle?: "normal" | "bold" | "italic" | "bold italic";
       textDecoration?: "none" | "underline";
     }
   | {
@@ -34,6 +35,7 @@ export type AIOperation =
       fill?: string;
       width?: number;
       fontFamily?: string;
+      fontStyle?: "normal" | "bold" | "italic" | "bold italic";
       textDecoration?: "none" | "underline";
     }
   | {
@@ -59,9 +61,17 @@ export type AIOperation =
       objectId: string;
       newText: string;
       fontFamily?: string;
+      fontStyle?: "normal" | "bold" | "italic" | "bold italic";
       textDecoration?: "none" | "underline";
     }
   | { type: "changeColor"; objectId: string; color: string }
+  | {
+      type: "updateConnector";
+      objectId: string;
+      style?: "line" | "arrow" | "double-arrow";
+      lineStyle?: "solid" | "dashed" | "dotted";
+      strokeWidth?: number;
+    }
   | { type: "deleteObjects"; objectIds: string[] }
   | { type: "resizeObject"; objectId: string; w: number; h: number }
   | {
@@ -144,6 +154,12 @@ export const AI_TOOLS: Anthropic.Messages.Tool[] = [
           description:
             "Font family. Options: 'Inter, system-ui, sans-serif' (default), 'Georgia, serif', \"'Courier New', monospace\", 'cursive'",
         },
+        fontStyle: {
+          type: "string",
+          enum: ["normal", "bold", "italic", "bold italic"],
+          description:
+            "Font style (default: normal). Use 'bold' for bold, 'italic' for italic, 'bold italic' for both.",
+        },
         textDecoration: {
           type: "string",
           enum: ["none", "underline"],
@@ -208,6 +224,12 @@ export const AI_TOOLS: Anthropic.Messages.Tool[] = [
           type: "string",
           description:
             "Font family. Options: 'Inter, system-ui, sans-serif' (default), 'Georgia, serif', \"'Courier New', monospace\", 'cursive'",
+        },
+        fontStyle: {
+          type: "string",
+          enum: ["normal", "bold", "italic", "bold italic"],
+          description:
+            "Font style (default: normal). Use 'bold' for bold, 'italic' for italic, 'bold italic' for both.",
         },
         textDecoration: {
           type: "string",
@@ -280,6 +302,12 @@ export const AI_TOOLS: Anthropic.Messages.Tool[] = [
           description:
             "Font family. Options: 'Inter, system-ui, sans-serif', 'Georgia, serif', \"'Courier New', monospace\", 'cursive'",
         },
+        fontStyle: {
+          type: "string",
+          enum: ["normal", "bold", "italic", "bold italic"],
+          description:
+            "Font style. Use 'bold' for bold, 'italic' for italic, 'bold italic' for both.",
+        },
         textDecoration: {
           type: "string",
           enum: ["none", "underline"],
@@ -299,6 +327,32 @@ export const AI_TOOLS: Anthropic.Messages.Tool[] = [
         color: { type: "string", description: "New hex color" },
       },
       required: ["objectId", "color"],
+    },
+  },
+  {
+    name: "updateConnector",
+    description:
+      "Update the style of an existing connector. Can change endpoint style, line pattern, and stroke width.",
+    input_schema: {
+      type: "object",
+      properties: {
+        objectId: { type: "string", description: "ID of the connector to update" },
+        style: {
+          type: "string",
+          enum: ["line", "arrow", "double-arrow"],
+          description: "Endpoint style",
+        },
+        lineStyle: {
+          type: "string",
+          enum: ["solid", "dashed", "dotted"],
+          description: "Line pattern",
+        },
+        strokeWidth: {
+          type: "number",
+          description: "Stroke width in px (1=thin, 2=regular, 4=thick)",
+        },
+      },
+      required: ["objectId"],
     },
   },
   {

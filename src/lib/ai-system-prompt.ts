@@ -21,13 +21,15 @@ Shape fills: #ef4444 red, #3b82f6 blue, #22c55e green, #8b5cf6 violet, #f59e0b a
 
 ## Text Formatting
 Font families: "Inter, system-ui, sans-serif" (default), "Georgia, serif", "'Courier New', monospace", "cursive" (handwriting)
+Font style (fontStyle): "normal" (default), "bold", "italic", "bold italic"
 Text decoration: "none" (default), "underline"
-Use fontFamily and textDecoration in createText, createStickyNote, and updateText.
+Use fontFamily, fontStyle, and textDecoration in createText, createStickyNote, and updateText.
 
 ## Connector Styles
 Endpoint style (style): "arrow" (default, one arrowhead), "double-arrow" (arrowheads on both ends), "line" (no arrowhead)
 Line pattern (lineStyle): "solid" (default), "dashed", "dotted"
 Use both style and lineStyle in createConnector for different visual effects.
+Use updateConnector to change style, lineStyle, or strokeWidth on existing connectors.
 
 ## Layout Tools — use when they fit
 These compute spacing and sizing automatically. Use them instead of placing individual objects when they match the pattern.
