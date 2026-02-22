@@ -14,7 +14,7 @@ const TIER_GROUP_GAP = 24;
 const TITLE_GAP = 24;
 const TECH_ICON_SIZE = 24;
 const TECH_ICON_GAP = 12;
-const MAX_COMPONENTS_PER_ROW = 5;
+const MAX_COMPONENTS_PER_ROW = 6;
 const HEADER_BAND_H = 36;
 const HEADER_CORNER_R = 12;
 const SHADOW_DX = 4;
@@ -211,9 +211,10 @@ export function layoutArchitecture(
   });
 
   // ── Title row (title left, tech icons right) ─────────────────
-  const hasIcons = arch.techStackIcons && arch.techStackIcons.length > 0;
+  const validTechIcons = arch.techStackIcons ?? [];
+  const hasIcons = validTechIcons.length > 0;
   const iconsTotalW = hasIcons
-    ? arch.techStackIcons!.length * (TECH_ICON_SIZE + TECH_ICON_GAP) - TECH_ICON_GAP
+    ? validTechIcons.length * (TECH_ICON_SIZE + TECH_ICON_GAP) - TECH_ICON_GAP
     : 0;
   const titleTextW = hasIcons ? uniformLayerW - iconsTotalW - 24 : uniformLayerW;
 
@@ -233,7 +234,7 @@ export function layoutArchitecture(
   if (hasIcons) {
     const iconsX = diagramX + uniformLayerW - iconsTotalW;
     const iconsY = contentY + 6; // vertically center with title text
-    for (let i = 0; i < arch.techStackIcons!.length; i++) {
+    for (let i = 0; i < validTechIcons.length; i++) {
       ops.push({
         type: "createImage",
         tempId: genTempId(),
@@ -241,7 +242,7 @@ export function layoutArchitecture(
         y: iconsY,
         w: TECH_ICON_SIZE,
         h: TECH_ICON_SIZE,
-        src: `https://cdn.simpleicons.org/${arch.techStackIcons![i]}/ffffff`,
+        src: `https://cdn.simpleicons.org/${validTechIcons[i]}/ffffff`,
       });
     }
   }

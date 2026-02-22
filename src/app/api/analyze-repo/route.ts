@@ -9,12 +9,18 @@ import { firebaseDb } from "@/lib/firebase-client";
 import { layoutArchitecture } from "@/lib/architecture-layout";
 import { getLangfuse } from "@/lib/langfuse";
 import type { ArchitectureAnalysis } from "@/lib/architecture-types";
+import {
+  AI_MODEL,
+  MAX_PACKED_CHARS,
+  CACHE_TTL_MS,
+  ANALYSIS_PROMPT,
+  ARCH_INCLUDE,
+  ARCH_IGNORE,
+  sanitizeIconSlugs,
+} from "@/lib/architecture-config";
 
 export const maxDuration = 60;
 
-const AI_MODEL = "claude-sonnet-4-6";
-const MAX_PACKED_CHARS = 150_000;
-const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
 const CACHE_DISABLED = process.env.DISABLE_ARCH_CACHE === "true";
 
 // ── Firestore cache helpers (keyed by owner_repo:sha) ───────────────
@@ -59,72 +65,6 @@ const RequestSchema = z.object({
   viewportCenter: z.object({ x: z.number(), y: z.number() }).optional(),
 });
 
-// ── Icon slug instruction for Claude ─────────────────────────────────
-const ICON_SLUG_REFERENCE = `Use Simple Icons slugs (simpleicons.org) for iconSlug/techStackIcons. Common mappings: Next.js="nextdotjs", Node.js="nodedotjs", Vue.js="vuedotjs", C++="cplusplus", C#="csharp", AWS="amazonwebservices". Most others match the lowercase name.`;
-
-// ── Architecture analysis prompt ────────────────────────────────────
-const ANALYSIS_PROMPT = `You are a senior software architect. Analyze the following codebase and produce a structured architecture description as JSON.
-
-ANALYSIS RULES:
-- Identify 2-5 logical layers or groups. They do NOT have to be traditional client/server tiers.
-  - If the project has distinct feature modules, group by feature area instead.
-  - If it's a monolith, group by concern (UI, state, data, services, utilities).
-  - If it has separate packages/workspaces, group by package.
-- Assign tier numbers (0 = top/client-facing, higher = deeper). Use the same tier number for groups that sit side-by-side at the same level.
-- Identify 2-7 major components per layer (max ~25 total across all layers).
-- Each component should map to a real module, service, or package in the codebase.
-- For each component, provide an iconSlug from Simple Icons if a well-known technology is used.
-- Identify 5-12 key connections showing data flow between components. Add a short label describing the relationship.
-- Provide a 3-5 sentence "summary" explaining what the project does, its key architectural decisions, and notable patterns.
-- Provide "techStackIcons": an array of 4-8 Simple Icons slugs for the project's main technologies.
-
-${ICON_SLUG_REFERENCE}
-
-OUTPUT FORMAT — Return ONLY valid JSON, no markdown fences, no explanation:
-{
-  "title": "Project Name — Architecture",
-  "description": "One-line summary of what this project does",
-  "summary": "3-5 sentence architectural overview. Describe the project purpose, key architectural patterns, data flow approach, and notable design decisions.",
-  "techStackIcons": ["react", "typescript", "firebase", "tailwindcss"],
-  "layers": [
-    {
-      "name": "Layer or Group Name",
-      "tier": 0,
-      "components": [
-        {
-          "id": "unique-kebab-id",
-          "name": "Display Name",
-          "description": "What this component does (8 words max)",
-          "techStack": "Key tech (e.g. Next.js, React)",
-          "iconSlug": "nextdotjs"
-        }
-      ]
-    }
-  ],
-  "connections": [
-    {
-      "from": "component-id-a",
-      "to": "component-id-b",
-      "label": "REST API",
-      "style": "arrow",
-      "lineStyle": "solid"
-    }
-  ]
-}
-
-CONNECTION RULES:
-- "arrow" for directed data flow, "double-arrow" for bidirectional, "line" for loose coupling
-- "dashed" lineStyle for async/event-driven, "dotted" for optional, "solid" for synchronous
-- Every "from" and "to" must reference a valid component "id"
-- Always include a short "label" describing the connection (e.g. "REST API", "imports", "subscribes", "WebSocket", "queries")
-- Keep connections to the most important 5-12 relationships
-
-LAYOUT HINTS:
-- Not every architecture is a top-down waterfall. Feel free to use the same tier number for groups that are peers/siblings.
-- Group related infrastructure together (e.g. "Data / Infrastructure" layer for DB + cache + auth).
-- If the project has a clear feature-based structure, reflect that in the grouping.`;
-
-// ── Pack repository with repomix ────────────────────────────────────
 async function packRepository(repoUrl: string): Promise<string> {
   const { runCli } = await import("repomix");
 
@@ -138,6 +78,11 @@ async function packRepository(repoUrl: string): Promise<string> {
       style: "plain",
       compress: true,
       quiet: true,
+      include: ARCH_INCLUDE,
+      ignore: ARCH_IGNORE,
+      removeComments: true,
+      removeEmptyLines: true,
+      noFileSummary: true,
     } as Parameters<typeof runCli>[2]);
 
     const content = await readFile(outputFile, "utf-8");
@@ -417,6 +362,9 @@ export async function POST(request: NextRequest) {
           });
           return;
         }
+
+        // ── Validate icon slugs (strip bad ones to prevent invisible gaps) ──
+        await sanitizeIconSlugs(architecture);
 
         // ── Store in cache ───────────────────────────────────────
         if (cacheKey) {
