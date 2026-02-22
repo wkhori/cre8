@@ -218,6 +218,19 @@ export async function duplicateBoard(
   return newBoard;
 }
 
+/** Bump the board document's updatedAt timestamp (throttled per board). */
+const _boardTsLastTouched = new Map<string, number>();
+const BOARD_TS_THROTTLE_MS = 30_000;
+
+export function touchBoardTimestamp(boardId: string): void {
+  const now = Date.now();
+  const last = _boardTsLastTouched.get(boardId) ?? 0;
+  if (now - last < BOARD_TS_THROTTLE_MS) return;
+  _boardTsLastTouched.set(boardId, now);
+  const boardRef = doc(firebaseDb, "boards", boardId);
+  updateDoc(boardRef, { updatedAt: serverTimestamp() }).catch(() => {});
+}
+
 export async function toggleFavorite(
   boardId: string,
   uid: string,

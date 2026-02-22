@@ -15,6 +15,7 @@ import {
   updateBoard,
   createLiveDragBroadcaster,
   subscribeLiveDrags,
+  touchBoardTimestamp,
   type BoardObjectChange,
 } from "@/lib/sync";
 import { joinBoard, createCursorBroadcaster } from "@/lib/presence";
@@ -408,6 +409,7 @@ export default function BoardPage() {
         if (added.length > 0) await createObjects(boardId, added, user.uid);
         if (deleted.length > 0) await deleteObjects(boardId, deleted);
         if (modified.length > 0) await updateObjects(boardId, modified, user.uid);
+        touchBoardTimestamp(boardId);
       });
     });
 
