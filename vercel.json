@@ -1,0 +1,8 @@
+{
+  "functions": {
+    "src/app/api/analyze-repo/route.ts": {
+      "memory": 3009,
+      "maxDuration": 60
+    }
+  }
+}
