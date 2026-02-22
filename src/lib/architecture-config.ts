@@ -239,7 +239,7 @@ export async function sanitizeIconSlugs(architecture: ArchitectureAnalysis): Pro
   for (const layer of architecture.layers) {
     for (const comp of layer.components) {
       if (comp.iconSlug && !validSlugs.has(comp.iconSlug)) {
-        comp.iconSlug = undefined;
+        delete comp.iconSlug;
       }
     }
   }

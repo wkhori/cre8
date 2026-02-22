@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
-import { tmpdir } from "os";
 import { join } from "path";
-import { readFile, mkdtemp, rm } from "fs/promises";
+import { readFile, rm } from "fs/promises";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { firebaseDb } from "@/lib/firebase-client";
 import { layoutArchitecture } from "@/lib/architecture-layout";

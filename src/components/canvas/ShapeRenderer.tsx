@@ -11,20 +11,61 @@ import { isLightColor } from "@/lib/colors";
 function useLoadImage(src: string | undefined) {
   const [image, setImage] = useState<HTMLImageElement | null>(null);
   const imgRef = useRef<HTMLImageElement | null>(null);
+  const blobUrlRef = useRef<string | null>(null);
   useEffect(() => {
     if (!src) {
       setImage(null);
       return;
     }
-    const img = new window.Image();
-    img.crossOrigin = "anonymous";
-    img.onload = () => setImage(img);
-    img.onerror = () => setImage(null);
-    img.src = src;
-    imgRef.current = img;
+    let cancelled = false;
+
+    // SVGs without explicit width/height (like Simple Icons CDN) can render
+    // as 0×0 in some environments. Fetch the SVG, inject dimensions, and
+    // load from a blob URL instead.
+    const isSvgUrl = src.includes("simpleicons.org") || src.endsWith(".svg");
+
+    if (isSvgUrl) {
+      fetch(src)
+        .then((res) => res.text())
+        .then((svgText) => {
+          if (cancelled) return;
+          // Inject width/height if missing
+          const patched = svgText.replace(/^<svg\b/, '<svg width="128" height="128"');
+          const blob = new Blob([patched], { type: "image/svg+xml" });
+          const url = URL.createObjectURL(blob);
+          blobUrlRef.current = url;
+          const img = new window.Image();
+          img.onload = () => {
+            if (!cancelled) setImage(img);
+          };
+          img.onerror = () => {
+            if (!cancelled) setImage(null);
+          };
+          img.src = url;
+          imgRef.current = img;
+        })
+        .catch(() => {
+          if (!cancelled) setImage(null);
+        });
+    } else {
+      const img = new window.Image();
+      img.crossOrigin = "anonymous";
+      img.onload = () => {
+        if (!cancelled) setImage(img);
+      };
+      img.onerror = () => {
+        if (!cancelled) setImage(null);
+      };
+      img.src = src;
+      imgRef.current = img;
+    }
+
     return () => {
-      img.onload = null;
-      img.onerror = null;
+      cancelled = true;
+      if (blobUrlRef.current) {
+        URL.revokeObjectURL(blobUrlRef.current);
+        blobUrlRef.current = null;
+      }
     };
   }, [src]);
   return image;
