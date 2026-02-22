@@ -371,7 +371,7 @@ function MessageBubble({ message }: { message: ChatMessage }) {
     return (
       <div className="flex justify-end">
         <div className="max-w-[85%] rounded-2xl rounded-br-md bg-violet-600 px-3.5 py-2 text-sm text-white shadow-sm">
-          <p className="whitespace-pre-wrap">{message.content}</p>
+          <p className="whitespace-pre-wrap wrap-break-word">{message.content}</p>
         </div>
       </div>
     );
@@ -384,7 +384,9 @@ function MessageBubble({ message }: { message: ChatMessage }) {
       </div>
       <div className="min-w-0 flex-1">
         <div className="rounded-2xl rounded-tl-md bg-zinc-100 px-3.5 py-2 text-sm text-zinc-800 shadow-sm dark:bg-zinc-800 dark:text-zinc-200">
-          <p className="whitespace-pre-wrap">{renderInlineMarkdown(message.content)}</p>
+          <p className="whitespace-pre-wrap wrap-break-word">
+            {renderInlineMarkdown(message.content)}
+          </p>
         </div>
         {message.operationCount != null && message.operationCount > 0 && (
           <div className="mt-1 ml-1 flex items-center gap-1 text-[10px] font-medium text-violet-500/80">
