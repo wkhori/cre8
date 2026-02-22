@@ -24,21 +24,13 @@ function useLoadImage(src: string | undefined) {
     const isSvgUrl = src.includes("simpleicons.org") || src.endsWith(".svg");
 
     if (isSvgUrl) {
-      console.log("[useLoadImage] fetching SVG:", src);
       fetch(src)
         .then((res) => {
-          console.log("[useLoadImage] fetch status:", res.status, src);
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
           return res.text();
         })
         .then((svgText) => {
           if (cancelled) return;
-          console.log(
-            "[useLoadImage] SVG text length:",
-            svgText.length,
-            "starts with:",
-            svgText.slice(0, 80)
-          );
           // Ensure the SVG has width/height attributes
           let patched = svgText;
           if (!svgText.includes('width="') && !svgText.includes("width='")) {
@@ -47,24 +39,15 @@ function useLoadImage(src: string | undefined) {
           const dataUri = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(patched)}`;
           const img = new window.Image();
           img.onload = () => {
-            console.log(
-              "[useLoadImage] image loaded OK:",
-              src,
-              img.naturalWidth,
-              "x",
-              img.naturalHeight
-            );
             if (!cancelled) setImage(img);
           };
-          img.onerror = (err) => {
-            console.error("[useLoadImage] image.onerror:", src, err);
+          img.onerror = () => {
             if (!cancelled) setImage(null);
           };
           img.src = dataUri;
           imgRef.current = img;
         })
-        .catch((err) => {
-          console.error("[useLoadImage] fetch failed:", src, err);
+        .catch(() => {
           if (!cancelled) setImage(null);
         });
     } else {

@@ -332,7 +332,10 @@ export async function POST(request: NextRequest) {
         });
 
         // ── Claude analysis ──────────────────────────────────────
-        sendEvent(controller, { phase: "analyzing", message: "AI is analyzing architecture..." });
+        sendEvent(controller, {
+          phase: "analyzing",
+          message: "AI is analyzing architecture...\n(starting analysis)",
+        });
 
         const generation = trace?.generation({
           name: "architecture-analysis",
@@ -354,24 +357,35 @@ export async function POST(request: NextRequest) {
         });
 
         let streamedChars = 0;
-        let lastProgressAt = Date.now();
+        const analysisStartedAt = Date.now();
+        let lastProgressAt = 0;
+        let lastProgressMsg = "";
+
+        const emitAnalyzingProgress = (force = false) => {
+          const now = Date.now();
+          if (!force && now - lastProgressAt < 1200) return;
+
+          const elapsedSec = Math.floor((now - analysisStartedAt) / 1000);
+          const progressDetail =
+            streamedChars > 0
+              ? `(${streamedChars} chars generated)`
+              : `(working... ${elapsedSec}s elapsed)`;
+
+          const message = `AI is analyzing architecture...\n${progressDetail}`;
+          if (!force && message === lastProgressMsg) return;
+
+          lastProgressAt = now;
+          lastProgressMsg = message;
+          sendEvent(controller, { phase: "analyzing", message });
+        };
+
         const progressTicker = setInterval(() => {
-          sendEvent(controller, {
-            phase: "analyzing",
-            message: "AI is still analyzing architecture...",
-          });
+          emitAnalyzingProgress();
         }, 2500);
-        progressTicker.unref?.();
 
         stream.on("text", (delta) => {
           streamedChars += delta.length;
-          const now = Date.now();
-          if (now - lastProgressAt < 1500) return;
-          lastProgressAt = now;
-          sendEvent(controller, {
-            phase: "analyzing",
-            message: `AI is analyzing architecture... (${streamedChars} chars streamed)`,
-          });
+          emitAnalyzingProgress();
         });
 
         const response = await stream.finalMessage().finally(() => {

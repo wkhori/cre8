@@ -1,11 +1,9 @@
 // ── Architecture analysis configuration ──────────────────────────────
 // Constants and helpers for the repo→architecture-diagram pipeline.
 
-import type { ArchitectureAnalysis } from "@/lib/architecture-types";
-
 export const AI_MODEL = "claude-sonnet-4-6";
 export const MAX_PACKED_CHARS = 60_000;
-export const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+export const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 // ── Icon slug instruction for Claude ─────────────────────────────────
 const ICON_SLUG_REFERENCE = `Use Simple Icons slugs (simpleicons.org) for iconSlug/techStackIcons. ONLY use slugs you are confident exist — omit iconSlug entirely if unsure. Common mappings: Next.js="nextdotjs", Node.js="nodedotjs", Vue.js="vuedotjs", Nuxt.js="nuxtdotjs", C++="cplusplus", C#="csharp", AWS="amazonwebservices", GitHub="github", VS Code="visualstudiocode", Prettier="prettier", ESLint="eslint". Most others match the lowercase brand name with no spaces. If the technology doesn't have a well-known icon, leave iconSlug out.`;
@@ -204,43 +202,3 @@ export const ARCH_IGNORE = [
   "**/Cargo.lock",
   "**/go.sum",
 ].join(",");
-
-// ── Icon slug validation ─────────────────────────────────────────────
-// HEAD-checks each slug against the Simple Icons CDN and strips invalid ones.
-
-async function filterValidIconSlugs(slugs: string[]): Promise<Set<string>> {
-  if (slugs.length === 0) return new Set();
-  const unique = [...new Set(slugs)];
-  const results = await Promise.all(
-    unique.map(async (slug) => {
-      try {
-        const res = await fetch(`https://cdn.simpleicons.org/${slug}/ffffff`, {
-          method: "HEAD",
-        });
-        return res.ok ? slug : null;
-      } catch {
-        return null;
-      }
-    })
-  );
-  return new Set(results.filter((s): s is string => s !== null));
-}
-
-export async function sanitizeIconSlugs(architecture: ArchitectureAnalysis): Promise<void> {
-  const allSlugs = [
-    ...(architecture.techStackIcons ?? []),
-    ...architecture.layers.flatMap((l) => l.components.map((c) => c.iconSlug).filter(Boolean)),
-  ] as string[];
-  const validSlugs = await filterValidIconSlugs(allSlugs);
-
-  if (architecture.techStackIcons) {
-    architecture.techStackIcons = architecture.techStackIcons.filter((s) => validSlugs.has(s));
-  }
-  for (const layer of architecture.layers) {
-    for (const comp of layer.components) {
-      if (comp.iconSlug && !validSlugs.has(comp.iconSlug)) {
-        delete comp.iconSlug;
-      }
-    }
-  }
-}

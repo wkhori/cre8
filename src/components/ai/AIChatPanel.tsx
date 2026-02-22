@@ -252,7 +252,7 @@ export default function AIChatPanel({ boardId, uid, open }: AIChatPanelProps) {
                 </div>
                 <div className="flex items-center gap-2 pt-1 text-xs text-zinc-500">
                   <Loader2 className="size-3 animate-spin" />
-                  <span>{statusMessage || "Working on it..."}</span>
+                  <span className="whitespace-pre-line">{statusMessage || "Working on it..."}</span>
                 </div>
               </div>
             )}
