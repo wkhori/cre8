@@ -25,7 +25,7 @@ import { generateId } from "@/lib/id";
 import { throttle } from "@/lib/throttle";
 import { filterLiveDragData } from "@/lib/live-drag-filter";
 
-const FIRESTORE_BATCH_WRITE_LIMIT = 499;
+const FIRESTORE_BATCH_WRITE_LIMIT = 500;
 
 // ── Board document ────────────────────────────────────────────────────
 
@@ -79,6 +79,20 @@ export async function getOrCreateBoard(boardId: string, owner: BoardOwner): Prom
 
 // ── Board CRUD ───────────────────────────────────────────────────────
 
+function docToBoardDoc(d: import("firebase/firestore").QueryDocumentSnapshot): BoardDoc {
+  const data = d.data();
+  return {
+    id: d.id,
+    name: data.name ?? "Untitled Board",
+    ownerId: data.ownerId,
+    ownerName: data.ownerName ?? "Unknown",
+    ownerPhotoURL: data.ownerPhotoURL ?? null,
+    favoriteOf: data.favoriteOf ?? [],
+    createdAt: data.createdAt,
+    updatedAt: data.updatedAt,
+  };
+}
+
 export async function listUserBoards(uid: string): Promise<BoardDoc[]> {
   const q = query(
     collection(firebaseDb, "boards"),
@@ -86,16 +100,7 @@ export async function listUserBoards(uid: string): Promise<BoardDoc[]> {
     orderBy("updatedAt", "desc")
   );
   const snapshot = await getDocs(q);
-  return snapshot.docs.map((d) => ({
-    id: d.id,
-    name: d.data().name ?? "Untitled Board",
-    ownerId: d.data().ownerId,
-    ownerName: d.data().ownerName ?? "Unknown",
-    ownerPhotoURL: d.data().ownerPhotoURL ?? null,
-    favoriteOf: d.data().favoriteOf ?? [],
-    createdAt: d.data().createdAt,
-    updatedAt: d.data().updatedAt,
-  }));
+  return snapshot.docs.map(docToBoardDoc);
 }
 
 export async function listFavoritedBoards(uid: string): Promise<BoardDoc[]> {
@@ -105,16 +110,7 @@ export async function listFavoritedBoards(uid: string): Promise<BoardDoc[]> {
     orderBy("updatedAt", "desc")
   );
   const snapshot = await getDocs(q);
-  return snapshot.docs.map((d) => ({
-    id: d.id,
-    name: d.data().name ?? "Untitled Board",
-    ownerId: d.data().ownerId,
-    ownerName: d.data().ownerName ?? "Unknown",
-    ownerPhotoURL: d.data().ownerPhotoURL ?? null,
-    favoriteOf: d.data().favoriteOf ?? [],
-    createdAt: d.data().createdAt,
-    updatedAt: d.data().updatedAt,
-  }));
+  return snapshot.docs.map(docToBoardDoc);
 }
 
 export async function createBoard(name: string, owner: BoardOwner): Promise<BoardDoc> {
@@ -150,12 +146,10 @@ export async function deleteBoard(boardId: string): Promise<void> {
   const snapshot = await getDocs(objectsRef);
 
   if (snapshot.size > 0) {
-    // Firestore batch limit is 500 writes
-    const batchSize = 500;
     const docs = snapshot.docs;
-    for (let i = 0; i < docs.length; i += batchSize) {
+    for (let i = 0; i < docs.length; i += FIRESTORE_BATCH_WRITE_LIMIT) {
       const batch = writeBatch(firebaseDb);
-      const chunk = docs.slice(i, i + batchSize);
+      const chunk = docs.slice(i, i + FIRESTORE_BATCH_WRITE_LIMIT);
       for (const d of chunk) {
         batch.delete(d.ref);
       }
@@ -191,11 +185,10 @@ export async function duplicateBoard(
       idMap.set(d.id, generateId());
     }
 
-    const batchSize = 500;
     const docs = snapshot.docs;
-    for (let i = 0; i < docs.length; i += batchSize) {
+    for (let i = 0; i < docs.length; i += FIRESTORE_BATCH_WRITE_LIMIT) {
       const batch = writeBatch(firebaseDb);
-      const chunk = docs.slice(i, i + batchSize);
+      const chunk = docs.slice(i, i + FIRESTORE_BATCH_WRITE_LIMIT);
       for (const d of chunk) {
         const newId = idMap.get(d.id)!;
         const newObjRef = doc(firebaseDb, "boards", newBoard.id, "objects", newId);
