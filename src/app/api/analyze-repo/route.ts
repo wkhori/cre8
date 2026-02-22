@@ -16,7 +16,6 @@ import {
   ANALYSIS_PROMPT,
   ARCH_INCLUDE,
   ARCH_IGNORE,
-  sanitizeIconSlugs,
 } from "@/lib/architecture-config";
 
 export const maxDuration = 60;
@@ -342,7 +341,7 @@ export async function POST(request: NextRequest) {
         });
 
         const anthropic = new Anthropic();
-        const response = await anthropic.messages.create({
+        const stream = anthropic.messages.stream({
           model: AI_MODEL,
           max_tokens: 4096,
           system: ANALYSIS_PROMPT,
@@ -352,6 +351,31 @@ export async function POST(request: NextRequest) {
               content: `Analyze this codebase and produce the architecture JSON:\n\n${packed}`,
             },
           ],
+        });
+
+        let streamedChars = 0;
+        let lastProgressAt = Date.now();
+        const progressTicker = setInterval(() => {
+          sendEvent(controller, {
+            phase: "analyzing",
+            message: "AI is still analyzing architecture...",
+          });
+        }, 2500);
+        progressTicker.unref?.();
+
+        stream.on("text", (delta) => {
+          streamedChars += delta.length;
+          const now = Date.now();
+          if (now - lastProgressAt < 1500) return;
+          lastProgressAt = now;
+          sendEvent(controller, {
+            phase: "analyzing",
+            message: `AI is analyzing architecture... (${streamedChars} chars streamed)`,
+          });
+        });
+
+        const response = await stream.finalMessage().finally(() => {
+          clearInterval(progressTicker);
         });
 
         generation?.end({
@@ -410,25 +434,10 @@ export async function POST(request: NextRequest) {
           return;
         }
 
-        // ── Log icon data before sanitization ──
-        const preSanitizeIcons = {
-          techStackIcons: architecture.techStackIcons,
-          componentIcons: architecture.layers.flatMap((l) =>
-            l.components.filter((c) => c.iconSlug).map((c) => ({ id: c.id, iconSlug: c.iconSlug }))
-          ),
-        };
-        console.log("[analyze-repo] icons BEFORE sanitize:", JSON.stringify(preSanitizeIcons));
-
-        // ── Validate icon slugs (strip bad ones to prevent invisible gaps) ──
-        await sanitizeIconSlugs(architecture);
-
-        const postSanitizeIcons = {
-          techStackIcons: architecture.techStackIcons,
-          componentIcons: architecture.layers.flatMap((l) =>
-            l.components.filter((c) => c.iconSlug).map((c) => ({ id: c.id, iconSlug: c.iconSlug }))
-          ),
-        };
-        console.log("[analyze-repo] icons AFTER sanitize:", JSON.stringify(postSanitizeIcons));
+        // Icon slug sanitization removed — HEAD requests to cdn.simpleicons.org
+        // fail on Vercel serverless, stripping all valid icons. Claude's prompt
+        // already constrains slugs to known-good values. If a slug is wrong,
+        // the client-side useLoadImage gracefully shows nothing.
 
         // ── Store in cache ───────────────────────────────────────
         if (cacheKey) {
