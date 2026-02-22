@@ -381,6 +381,7 @@ export function layoutArchitecture(
           fontSize: 10,
           fill: "#cbd5e1",
           width: labelW,
+          align: "center",
         });
       }
     }
