@@ -76,10 +76,6 @@ export default function BoardsPage() {
       ]);
       const owned = results[0].status === "fulfilled" ? results[0].value : [];
       const favorited = results[1].status === "fulfilled" ? results[1].value : [];
-      if (results[0].status === "rejected")
-        console.warn("listUserBoards failed:", results[0].reason);
-      if (results[1].status === "rejected")
-        console.warn("listFavoritedBoards failed (index may be building):", results[1].reason);
       // Merge and deduplicate (owned wins over favorited for same board)
       const map = new Map<string, BoardDoc>();
       for (const b of favorited) map.set(b.id, b);
