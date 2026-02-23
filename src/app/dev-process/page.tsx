@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import {
@@ -19,6 +20,8 @@ import {
   Workflow,
   AlertTriangle,
   TrendingDown,
+  MessageSquare,
+  ExternalLink,
 } from "lucide-react";
 import { Bar, BarChart, XAxis, YAxis, CartesianGrid } from "recharts";
 import {
@@ -154,6 +157,15 @@ const STATS: { value: string; label: string; icon: React.ReactNode }[] = [
   { value: "9,396", label: "AI Operations", icon: <Zap className="size-4" /> },
 ];
 
+const DEV_STATS: { value: string; label: string }[] = [
+  { value: "606", label: "Claude Code Messages" },
+  { value: "76", label: "Sessions" },
+  { value: "+31,251", label: "Lines Written" },
+  { value: "378", label: "Files Touched" },
+  { value: "70.3s", label: "Median Response Loop" },
+  { value: "72%", label: "Goals Achieved" },
+];
+
 /* ── Page ─────────────────────────────────────────────────────────── */
 
 export default function DevProcessPage() {
@@ -214,8 +226,45 @@ export default function DevProcessPage() {
       </section>
 
       <div className="mx-auto max-w-5xl px-6">
-        {/* ── Tools ── */}
+        {/* ── Development Process ── */}
         <section className="py-16">
+          <SectionHeading icon={<MessageSquare className="size-4" />} label="Development Process" />
+          <p className="mt-3 text-sm leading-relaxed text-zinc-500">
+            606 Claude Code messages across 76 sessions over 7 days — a rapid-fire dialogue where AI
+            proposes, human evaluates in ~70 seconds, and AI adjusts.
+          </p>
+          <div className="mt-6 grid grid-cols-3 gap-3 sm:grid-cols-6">
+            {DEV_STATS.map((s) => (
+              <div
+                key={s.label}
+                className="rounded-xl border border-zinc-800/70 bg-zinc-900/40 px-3 py-4 text-center"
+              >
+                <span className="text-lg font-semibold tracking-tight text-white">{s.value}</span>
+                <p className="mt-1 text-[10px] leading-tight text-zinc-600">{s.label}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Claude Code narrative */}
+          <div className="mt-4 rounded-xl border border-zinc-800/70 bg-zinc-900/40 p-5">
+            <p className="text-sm leading-relaxed text-zinc-400">
+              Claude Code wrote <span className="text-zinc-200">~90% of the codebase</span> — but
+              the <em>direction</em> was entirely human-driven. The most valuable human
+              contributions were architectural: choosing zustand over Redux, separating RTDB
+              (high-frequency cursors) from Firestore (persistent objects), and designing the
+              &quot;AI describes, layout engine positions&quot; pattern for architecture diagrams.
+            </p>
+            <p className="mt-3 text-sm leading-relaxed text-zinc-400">
+              47% of sessions were <span className="text-zinc-200">bug fixes</span>, not new
+              features. The real value of AI coding isn&apos;t &quot;build faster&quot; — it&apos;s
+              &quot;fix faster.&quot; Claude excelled at reading 10+ files, understanding state
+              interactions, and finding root causes across multi-file codebases.
+            </p>
+          </div>
+        </section>
+
+        {/* ── Tools ── */}
+        <section className="pb-16">
           <SectionHeading icon={<Code2 className="size-4" />} label="Toolchain" />
           <div className="mt-6 grid gap-3 sm:grid-cols-2">
             {TOOLS.map((t) => (
@@ -293,18 +342,32 @@ export default function DevProcessPage() {
         <section className="pb-16">
           <SectionHeading icon={<DollarSign className="size-4" />} label="Cost Analysis" />
 
-          {/* Optimization story callout */}
-          <div className="mt-6 rounded-xl border border-emerald-900/40 bg-emerald-950/20 p-5">
-            <div className="flex items-center gap-2 text-sm font-medium text-emerald-400/90">
-              <TrendingDown className="size-4" />
-              3.3x cost reduction through prompt optimization
+          {/* Optimization story — two cards */}
+          <div className="mt-6 grid gap-3 sm:grid-cols-2">
+            <div className="rounded-xl border border-emerald-900/40 bg-emerald-950/20 p-5">
+              <div className="flex items-center gap-2 text-sm font-medium text-emerald-400/90">
+                <TrendingDown className="size-4" />
+                3.3x — Prompt Optimization
+              </div>
+              <p className="mt-2 text-sm leading-relaxed text-zinc-400">
+                AI command cost dropped from <span className="text-zinc-300">$0.014</span> to{" "}
+                <span className="font-medium text-emerald-400/80">$0.004/call</span> by trimming the
+                system prompt from ~8K to ~1.9K input tokens. Same model (Haiku 4.5), just less
+                wasted context.
+              </p>
             </div>
-            <p className="mt-2 text-sm leading-relaxed text-zinc-400">
-              AI command cost dropped from <span className="text-zinc-300">$0.014/call</span> to{" "}
-              <span className="font-medium text-emerald-400/80">$0.004/call</span> by trimming the
-              system prompt from ~8K to ~1.9K input tokens — same model (Haiku 4.5), just less
-              wasted context. Migrating from Sonnet to Haiku earlier in the sprint saved another 4x.
-            </p>
+            <div className="rounded-xl border border-emerald-900/40 bg-emerald-950/20 p-5">
+              <div className="flex items-center gap-2 text-sm font-medium text-emerald-400/90">
+                <TrendingDown className="size-4" />
+                8.2x — Model Migration
+              </div>
+              <p className="mt-2 text-sm leading-relaxed text-zinc-400">
+                Switching AI commands from Sonnet to Haiku cut cost per call from{" "}
+                <span className="text-zinc-300">$0.051</span> to{" "}
+                <span className="font-medium text-emerald-400/80">$0.006</span>. Quality was
+                sufficient for tool-use tasks — simpler output, but good enough.
+              </p>
+            </div>
           </div>
 
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -319,7 +382,6 @@ export default function DevProcessPage() {
                 <CostRow label="133 traces" value="$1.08 total" />
                 <CostRow label="Avg latency" value="4.1s" />
                 <CostRow label="Cost per command" value="$0.004" accent />
-                <CostRow label="Failure rate" value="0.75%" />
               </div>
             </div>
 
@@ -336,48 +398,16 @@ export default function DevProcessPage() {
                 <CostRow label="69 traces" value="$9.93 total" />
                 <CostRow label="Avg latency" value="25.3s" />
                 <CostRow label="Cost per analysis" value="$0.09" accent />
-                <CostRow label="Failure rate" value="15.9%" />
               </div>
+              <p className="mt-3 text-[11px] leading-relaxed text-sky-400/60">
+                Still in active development — feature launched today. Uses Repomix + Sonnet 4.6 to
+                analyze any GitHub repo and generate a visual architecture diagram on the canvas.
+              </p>
             </div>
           </div>
 
-          {/* Production Projections Chart */}
-          <div className="mt-4 rounded-xl border border-zinc-800/70 bg-zinc-900/40 p-5">
-            <h3 className="text-sm font-medium text-zinc-100">
-              Monthly Production Cost Projections
-            </h3>
-            <p className="mt-1 text-[11px] text-zinc-600">
-              AI commands at $0.004/cmd + arch diagrams at $0.054/effective req (40% cached free)
-            </p>
-
-            <div className="mt-4 grid gap-4 sm:grid-cols-2">
-              {/* 50 cmds/user/mo */}
-              <div>
-                <p className="mb-2 text-[11px] font-medium tracking-wide text-zinc-400 uppercase">
-                  50 commands / user / month
-                </p>
-                <ProjectionChart cmdsPerUser={50} />
-              </div>
-              {/* 100 cmds/user/mo */}
-              <div>
-                <p className="mb-2 text-[11px] font-medium tracking-wide text-zinc-400 uppercase">
-                  100 commands / user / month
-                </p>
-                <ProjectionChart cmdsPerUser={100} />
-              </div>
-            </div>
-
-            <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-zinc-500">
-              <span className="flex items-center gap-1.5">
-                <span className="size-2 rounded-full bg-emerald-500/70" />
-                AI Commands (Haiku)
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="size-2 rounded-full bg-sky-500/70" />
-                Arch Diagrams (Sonnet)
-              </span>
-            </div>
-          </div>
+          {/* Production Projections */}
+          <ProjectionSection />
 
           {/* Total bar */}
           <div className="mt-4 rounded-xl border border-zinc-800/70 bg-zinc-900/40 p-5">
@@ -425,110 +455,107 @@ export default function DevProcessPage() {
           <div className="mt-6 space-y-3">
             <PromptCard
               number={1}
-              title="Connector Implementation"
-              prompt="Please review our PRD.md. We have made good progress but we are currently missing a core key feature. We do not have Connector.tsx — lines/arrows between objects — implemented at all. This should be an easy simple addition but it's so important we do it correctly on the first attempt without introducing any bugs. The usage should be intuitive and feel smooth like Figma."
-              result="Working connectors with endpoint snapping in a single session"
+              title="Feature Implementation with Quality Constraints"
+              prompt="Review PRD.md. We're missing a core feature: Connector.tsx — lines and arrows between objects. This needs to work correctly on the first attempt without introducing bugs. The UX should feel smooth and intuitive like Figma — users click and drag an arrow to connect two elements. Establish a plan and implement it."
+              result="Working connectors with endpoint snapping, shipped in a single session with zero regressions"
             />
             <PromptCard
               number={2}
-              title="Code Cleanup"
-              prompt="I need to clean up this code now so that I can push to GitHub. Pause on future development and clean up the code so it's DRY, well organized, and ready for next phase of development. Remove any 'legacy' or backwards compatible support code or tests since any early test data will be wiped."
-              result="Focused refactor — reduced duplication without breaking functionality"
+              title="Readiness Assessment Before Major Feature"
+              prompt="Review the current implementation and analyze progress. Determine a readiness score (1-10) for implementing the final major feature — AI collaboration. Write a phased plan to implement the AI features in a way that builds on existing architecture."
+              result="Scored 8/10 readiness. Delivered a phased plan: tool schemas → simulate function → API route → chat UI"
             />
             <PromptCard
               number={3}
-              title="AI Agent Planning"
-              prompt="Review our current implementation thus far and analyze our progress. Determine a readiness score 1-10 on implementing the final major feature of the app, enabling AI collaboration. Write a plan to implement the new AI features in a way that makes sense."
-              result="Phased plan: tool schemas → simulate function → API route → chat UI"
-            />
-            <PromptCard
-              number={4}
-              title="Architecture Diagram Feature"
-              prompt="Create a feature that lets users paste a GitHub repo URL and generates an architecture diagram on the canvas. Use Repomix to compress the repo, Claude Sonnet to analyze the architecture, and a deterministic layout engine to position everything. The AI should only describe — a layout engine should handle positioning."
-              result="Clean separation: Claude describes architecture, layout engine positions deterministically"
+              title="Separating AI Judgment from Layout Logic"
+              prompt="Build a feature that takes a GitHub repo URL and generates an architecture diagram on the canvas. Use Repomix to compress the repo, Claude Sonnet to analyze the structure, and a deterministic layout engine to position everything. The AI should only describe the architecture — the layout engine handles all positioning."
+              result="Clean separation of concerns — Claude describes, layout engine positions. Same repo always produces the same diagram."
             />
           </div>
         </section>
 
-        {/* ── Biggest Mistakes ── */}
-        <section className="pb-16">
-          <SectionHeading icon={<AlertTriangle className="size-4" />} label="Biggest Mistakes" />
-          <div className="mt-6 space-y-3">
-            {[
-              {
-                title: "Abandoned the PRD after day 3",
-                body: "Started strong with a Pre-Search doc and detailed PRD, but stopped referencing them after the first few days. The workflow became reactive — fixing whatever felt urgent instead of building against the spec. Features drifted from the original plan and I lost track of what was actually required vs nice-to-have.",
-              },
-              {
-                title: "Tried to one-shot a massive performance refactor",
-                body: "Feb 19 was the least productive day despite burning the most tokens. Kept trying to get Claude to optimize everything in one giant prompt. Nothing worked. Had to start over with fresh branches multiple times. The fix: break it into small, verifiable steps and feed concrete trace data instead of vague descriptions.",
-              },
-              {
-                title: "No automated regression tests",
-                body: "Had 119 unit tests but zero end-to-end or integration tests that caught real regressions. Would fix one bug and unknowingly break something else. An automated smoke test suite (even just 5 Playwright tests) would have saved hours of manual testing and re-debugging.",
-              },
-              {
-                title: "Never shared for early feedback",
-                body: "Kept battling the feeling of 'it needs to be perfect first.' Never shared the deployed app publicly until the final day. Earlier feedback from peers would have caught UX issues, identified missing features, and pressure-tested the multiplayer sync much sooner.",
-              },
-              {
-                title: "Workflow got chaotic as time pressure grew",
-                body: "Early days had clean commits, clear plans, methodical progress. By day 5-6, it was scattered — jumping between features, fixing bugs reactively, losing context between sessions. Should have maintained the discipline of the first few days throughout the sprint.",
-              },
-              {
-                title: "Never learned agent worktrees for parallel workflows",
-                body: "Kept saying 'I'll learn it next week' but never did. Could have run a main feature task in one worktree while a second agent fixed low-priority bugs in parallel — ping-ponging between both. The intuition was there but time pressure made it feel like a risk. In retrospect, the upfront investment would have paid for itself many times over.",
-              },
-            ].map((m) => (
-              <div key={m.title} className="rounded-xl border border-red-900/30 bg-red-950/10 p-5">
-                <h4 className="text-sm font-medium text-red-300/80">{m.title}</h4>
-                <p className="mt-2 text-sm leading-relaxed text-zinc-500">{m.body}</p>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        {/* ── Learnings ── */}
+        {/* ── Lessons Learned ── */}
         <section className="pb-20">
-          <SectionHeading icon={<Brain className="size-4" />} label="Key Learnings" />
-          <div className="mt-6 grid gap-3 sm:grid-cols-2">
-            {[
-              {
-                title: "Hooks are mandatory",
-                body: "Auto-formatting and type-checking after every edit eliminated an entire class of accumulated errors. Should have set these up on day 1.",
-              },
-              {
-                title: "Feed AI data, not descriptions",
-                body: "The performance breakthrough came from feeding Chrome DevTools traces to a custom skill — not from describing symptoms.",
-              },
-              {
-                title: "Separate AI judgment from deterministic logic",
-                body: "Architecture diagrams work because Claude only describes the architecture while a layout engine positions everything. Same input → same output.",
-              },
-              {
-                title: "Small prompts > big prompts",
-                body: "Least productive day was one-shotting a large refactor. Most productive days used focused, sequential prompts with verification between each step.",
-              },
-              {
-                title: "Langfuse pays for itself immediately",
-                body: "Seeing token counts and cost per trace informed the Sonnet → Haiku migration — 4x faster, 4x cheaper, quality was sufficient for tool use.",
-              },
-              {
-                title: "Model selection matters enormously",
-                body: "Output tokens dominate Sonnet costs. Choosing the right model per task and constraining output is the highest-leverage optimization.",
-              },
-            ].map((l) => (
-              <div
-                key={l.title}
-                className="rounded-xl border border-zinc-800/70 bg-zinc-900/40 p-5"
-              >
-                <h4 className="text-sm font-medium text-zinc-100">{l.title}</h4>
-                <p className="mt-2 text-sm leading-relaxed text-zinc-500">{l.body}</p>
-              </div>
-            ))}
+          <SectionHeading icon={<AlertTriangle className="size-4" />} label="Lessons Learned" />
+
+          <div className="mt-6 rounded-xl border border-zinc-800/70 bg-zinc-900/40 overflow-hidden">
+            {/* Intro */}
+            <div className="px-6 pt-6 pb-5 border-b border-zinc-800/50">
+              <p className="text-sm leading-relaxed text-zinc-400">
+                Seven days of AI-first development surfaced a clear pattern:{" "}
+                <span className="text-zinc-200">
+                  the mistakes and wins are two sides of the same coin
+                </span>
+                . Every failure pointed directly to a working principle.
+              </p>
+            </div>
+
+            {/* Paired lessons */}
+            <div className="divide-y divide-zinc-800/50">
+              <LessonRow
+                mistake="Tried to one-shot a massive performance refactor"
+                mistakeDetail='Day 4 burned the most tokens but was the least productive. Vague instructions like "make it faster" produced sprawling, broken changes.'
+                lesson="Small prompts beat big prompts"
+                lessonDetail="Breaking the same refactor into focused, sequential steps with verification between each produced working code. Feed Chrome DevTools traces, not symptom descriptions."
+              />
+              <LessonRow
+                mistake="Stopped referencing the PRD after day 3"
+                mistakeDetail="Development became reactive — fixing whatever felt urgent instead of building against the spec. Features drifted from the original plan."
+                lesson="The skill is steering, not prompting"
+                lessonDetail="53 wrong-approach redirects across 76 sessions. AI agents over-engineer constantly. The human value is catching bad paths early — 72% of sessions still hit their goal through active course correction."
+              />
+              <LessonRow
+                mistake="Zero E2E tests meant silent regressions"
+                mistakeDetail="119 unit tests but no Playwright tests. Fixing one bug would unknowingly break another. Even 5 integration tests would have saved hours."
+                lesson="Observability enables real decisions"
+                lessonDetail="Wiring Langfuse on day 3 gave visibility into token counts, latency, and cost per trace. That data drove the Sonnet → Haiku migration with confidence instead of guesswork."
+              />
+            </div>
+
+            {/* Standalone takeaway */}
+            <div className="px-6 py-5 border-t border-zinc-800/50 bg-zinc-950/30">
+              <p className="text-sm leading-relaxed text-zinc-400">
+                <span className="font-medium text-zinc-200">The architectural takeaway:</span>{" "}
+                separate AI judgment from deterministic logic. Architecture diagrams work because
+                Claude only describes the structure while a layout engine handles positioning —
+                nondeterministic reasoning paired with deterministic rendering produces consistent
+                output every time.
+              </p>
+            </div>
           </div>
         </section>
       </div>
+
+      {/* ── CTA ── */}
+      <section className="border-t border-zinc-800/60 bg-zinc-900/20">
+        <div className="mx-auto max-w-5xl px-6 py-16 text-center">
+          <p className="text-[11px] tracking-[0.2em] text-zinc-600 uppercase">Try it yourself</p>
+          <h2 className="mt-3 text-2xl font-semibold tracking-tight text-white">
+            cre8 is live and open source
+          </h2>
+          <p className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-zinc-500">
+            Real-time collaborative whiteboard with an AI agent that manipulates the canvas through
+            natural language. Paste a GitHub URL and get an architecture diagram in 30 seconds.
+          </p>
+          <div className="mt-6 flex items-center justify-center gap-3">
+            <Link
+              href="/"
+              className="rounded-lg bg-white px-5 py-2.5 text-sm font-medium text-zinc-950 transition-colors hover:bg-zinc-200"
+            >
+              Open cre8
+            </Link>
+            <a
+              href="https://github.com/wkhori/cre8"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 rounded-lg border border-zinc-700 px-5 py-2.5 text-sm font-medium text-zinc-300 transition-colors hover:border-zinc-500 hover:text-white"
+            >
+              GitHub
+              <ExternalLink className="size-3.5" />
+            </a>
+          </div>
+        </div>
+      </section>
 
       {/* ── Footer ── */}
       <footer className="border-t border-zinc-800/60 bg-zinc-950/80">
@@ -546,70 +573,90 @@ export default function DevProcessPage() {
 
 /* ── Chart ────────────────────────────────────────────────────────── */
 
-const projectionChartConfig = {
-  aiCommands: { label: "AI Commands", color: "oklch(0.72 0.17 155)" },
-  archDiagrams: { label: "Arch Diagrams", color: "oklch(0.65 0.15 230)" },
+const SCALES = [100, 1_000, 10_000, 100_000] as const;
+const SCALE_LABELS: Record<number, string> = {
+  100: "100",
+  1000: "1K",
+  10000: "10K",
+  100000: "100K",
+};
+
+const aiCmdConfig = {
+  cost: { label: "Monthly Cost", color: "oklch(0.72 0.17 155)" },
 } satisfies ChartConfig;
 
-function ProjectionChart({ cmdsPerUser }: { cmdsPerUser: number }) {
-  const costPerCmd = 0.004;
-  const archReqsPerUser = 2;
-  const effectiveCostPerArch = 0.054; // $0.09 × 0.60 (40% cached)
+function ProjectionSection() {
+  const [cmdsPerUser, setCmdsPerUser] = useState<50 | 100>(50);
 
-  const data = [
-    {
-      scale: "100",
-      aiCommands: 100 * cmdsPerUser * costPerCmd,
-      archDiagrams: 100 * archReqsPerUser * effectiveCostPerArch,
-    },
-    {
-      scale: "1K",
-      aiCommands: 1000 * cmdsPerUser * costPerCmd,
-      archDiagrams: 1000 * archReqsPerUser * effectiveCostPerArch,
-    },
-    {
-      scale: "10K",
-      aiCommands: 10000 * cmdsPerUser * costPerCmd,
-      archDiagrams: 10000 * archReqsPerUser * effectiveCostPerArch,
-    },
-    {
-      scale: "100K",
-      aiCommands: 100000 * cmdsPerUser * costPerCmd,
-      archDiagrams: 100000 * archReqsPerUser * effectiveCostPerArch,
-    },
-  ];
+  const costPerCmd = 0.004;
+
+  // Lock Y-axis to the 100 cmds/user max so bars visually grow on toggle
+  const aiMax = 100_000 * 100 * costPerCmd; // $40K
+
+  const aiData = SCALES.map((s) => ({
+    scale: SCALE_LABELS[s],
+    cost: s * cmdsPerUser * costPerCmd,
+  }));
 
   return (
-    <ChartContainer config={projectionChartConfig} className="aspect-4/3 w-full">
-      <BarChart data={data} barGap={2}>
-        <CartesianGrid vertical={false} stroke="rgba(255,255,255,0.04)" />
-        <XAxis
-          dataKey="scale"
-          tickLine={false}
-          axisLine={false}
-          tick={{ fill: "#71717a", fontSize: 11 }}
-          tickFormatter={(v) => `${v} users`}
-        />
-        <YAxis
-          tickLine={false}
-          axisLine={false}
-          tick={{ fill: "#71717a", fontSize: 11 }}
-          tickFormatter={(v) => `$${v >= 1000 ? `${(v / 1000).toFixed(0)}K` : v}`}
-          width={48}
-        />
-        <ChartTooltip
-          content={
-            <ChartTooltipContent
-              formatter={(value) =>
-                `$${Number(value).toLocaleString(undefined, { maximumFractionDigits: 0 })}`
+    <div className="mt-4">
+      <div className="rounded-xl border border-zinc-800/70 bg-zinc-900/40 p-5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <span className="size-2 rounded-full bg-emerald-500/70" />
+            <span className="text-[11px] font-medium text-zinc-400">
+              AI Commands — Haiku 4.5 — Production Projection
+            </span>
+          </div>
+          <div className="flex rounded-md border border-zinc-700/60 bg-zinc-800/40 p-0.5">
+            {([50, 100] as const).map((n) => (
+              <button
+                key={n}
+                onClick={() => setCmdsPerUser(n)}
+                className={`rounded px-2 py-0.5 text-[10px] font-medium transition-colors ${
+                  cmdsPerUser === n ? "bg-zinc-700 text-white" : "text-zinc-500 hover:text-zinc-300"
+                }`}
+              >
+                {n}/user/mo
+              </button>
+            ))}
+          </div>
+        </div>
+        <p className="mt-1 text-[11px] text-zinc-600">
+          $0.004/cmd &middot; projected monthly cost by user scale
+        </p>
+        <ChartContainer config={aiCmdConfig} className="mt-3 aspect-[2.5/1] w-full">
+          <BarChart data={aiData} barGap={2}>
+            <CartesianGrid vertical={false} stroke="rgba(255,255,255,0.04)" />
+            <XAxis
+              dataKey="scale"
+              tickLine={false}
+              axisLine={false}
+              tick={{ fill: "#71717a", fontSize: 11 }}
+              tickFormatter={(v) => `${v} users`}
+            />
+            <YAxis
+              tickLine={false}
+              axisLine={false}
+              tick={{ fill: "#71717a", fontSize: 11 }}
+              tickFormatter={(v: number) => `$${v >= 1000 ? `${(v / 1000).toFixed(0)}K` : v}`}
+              width={48}
+              domain={[0, aiMax]}
+            />
+            <ChartTooltip
+              content={
+                <ChartTooltipContent
+                  formatter={(value) =>
+                    `$${Number(value).toLocaleString(undefined, { maximumFractionDigits: 0 })}/mo`
+                  }
+                />
               }
             />
-          }
-        />
-        <Bar dataKey="aiCommands" fill="var(--color-aiCommands)" radius={[4, 4, 0, 0]} />
-        <Bar dataKey="archDiagrams" fill="var(--color-archDiagrams)" radius={[4, 4, 0, 0]} />
-      </BarChart>
-    </ChartContainer>
+            <Bar dataKey="cost" fill="var(--color-cost)" radius={[4, 4, 0, 0]} />
+          </BarChart>
+        </ChartContainer>
+      </div>
+    </div>
   );
 }
 
@@ -629,6 +676,39 @@ function CostRow({ label, value, accent }: { label: string; value: string; accen
     <div className="flex items-center justify-between">
       <span className="text-zinc-500">{label}</span>
       <span className={accent ? "font-medium text-emerald-400/90" : "text-zinc-300"}>{value}</span>
+    </div>
+  );
+}
+
+function LessonRow({
+  mistake,
+  mistakeDetail,
+  lesson,
+  lessonDetail,
+}: {
+  mistake: string;
+  mistakeDetail: string;
+  lesson: string;
+  lessonDetail: string;
+}) {
+  return (
+    <div className="grid gap-px sm:grid-cols-2">
+      <div className="px-6 py-5 sm:border-r sm:border-zinc-800/50">
+        <div className="flex items-center gap-2 text-[11px] font-medium tracking-wide text-red-400/70 uppercase">
+          <span className="size-1.5 rounded-full bg-red-400/50" />
+          What went wrong
+        </div>
+        <h4 className="mt-2 text-sm font-medium text-zinc-200">{mistake}</h4>
+        <p className="mt-1.5 text-sm leading-relaxed text-zinc-500">{mistakeDetail}</p>
+      </div>
+      <div className="px-6 py-5">
+        <div className="flex items-center gap-2 text-[11px] font-medium tracking-wide text-emerald-400/70 uppercase">
+          <span className="size-1.5 rounded-full bg-emerald-400/50" />
+          What I learned
+        </div>
+        <h4 className="mt-2 text-sm font-medium text-zinc-200">{lesson}</h4>
+        <p className="mt-1.5 text-sm leading-relaxed text-zinc-500">{lessonDetail}</p>
+      </div>
     </div>
   );
 }
