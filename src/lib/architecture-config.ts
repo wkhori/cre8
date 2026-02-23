@@ -65,8 +65,7 @@ ${ICON_SLUG_REFERENCE}
 OUTPUT FORMAT — Return ONLY valid JSON, no markdown fences, no explanation:
 {
   "title": "<actual repo name> — Architecture",
-  "description": "One-line summary of what this project does",
-  "summary": "3-5 sentence architectural overview.",
+  "description": "One-line summary (under 15 words) of what this project does",
   "techStackIcons": ["react", "typescript", "firebase", "tailwindcss"],
   "colorTheme": "cool",
   "layoutHint": "bento",

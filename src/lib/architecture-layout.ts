@@ -17,7 +17,6 @@ const LAYER_GAP = 28;
 const SECTION_GAP = 24;
 const SECTION_PAD = 14;
 const SECTION_HEADER_H = 24;
-const TITLE_GAP = 20;
 const TECH_ICON_SIZE = 22;
 const TECH_ICON_GAP = 10;
 const MAX_COMPONENTS_PER_ROW = 6;
@@ -421,13 +420,8 @@ export function layoutArchitecture(
 
   // ── Measure header area ─────────────────────────────────────────
   let headerH = 40; // title
-  if (arch.description) headerH += 28;
-  if (arch.summary) {
-    const estCharsPerLine = Math.floor(gridW / 6.5);
-    const summaryLines = Math.max(1, Math.ceil(arch.summary.length / estCharsPerLine));
-    headerH += summaryLines * 16 + 8;
-  }
-  headerH += TITLE_GAP;
+  if (arch.description) headerH += 24;
+  headerH += 16; // separator + gap
 
   const totalDiagramW = gridW + BACKDROP_PAD * 2;
   const totalDiagramH = headerH + gridH + BACKDROP_PAD * 2;
@@ -446,8 +440,23 @@ export function layoutArchitecture(
     y: baseY,
     w: totalDiagramW,
     h: totalDiagramH,
-    fill: "#0a0a0f",
+    fill: "#08080d",
     cornerRadius: BACKDROP_CORNER_R,
+  });
+
+  // Subtle inner glow (lighter rect inset by 1px, very faint)
+  ops.push({
+    type: "createShape",
+    tempId: genTempId(),
+    shapeType: "rectangle",
+    x: baseX + 1,
+    y: baseY + 1,
+    w: totalDiagramW - 2,
+    h: totalDiagramH - 2,
+    fill: "#0a0a12",
+    cornerRadius: BACKDROP_CORNER_R - 1,
+    stroke: "rgba(255,255,255,0.04)",
+    strokeWidth: 1,
   });
 
   // ── Title row (title left, tech icons right) ───────────────────
@@ -486,7 +495,7 @@ export function layoutArchitecture(
   }
   contentY += 40;
 
-  // ── Description ─────────────────────────────────────────────────
+  // ── Description (one-liner only) ───────────────────────────────
   if (arch.description) {
     ops.push({
       type: "createText",
@@ -494,31 +503,25 @@ export function layoutArchitecture(
       x: diagramX,
       y: contentY,
       text: arch.description,
-      fontSize: 15,
+      fontSize: 13,
       fill: "#94a3b8",
       width: gridW,
     });
-    contentY += 28;
+    contentY += 24;
   }
 
-  // ── Summary ─────────────────────────────────────────────────────
-  if (arch.summary) {
-    ops.push({
-      type: "createText",
-      tempId: genTempId(),
-      x: diagramX,
-      y: contentY,
-      text: arch.summary,
-      fontSize: 12,
-      fill: "#64748b",
-      width: gridW,
-    });
-    const estCharsPerLine = Math.floor(gridW / 6.5);
-    const summaryLines = Math.max(1, Math.ceil(arch.summary.length / estCharsPerLine));
-    contentY += summaryLines * 16 + 8;
-  }
-
-  contentY += TITLE_GAP;
+  // ── Separator line ────────────────────────────────────────────
+  ops.push({
+    type: "createShape",
+    tempId: genTempId(),
+    shapeType: "rectangle",
+    x: diagramX,
+    y: contentY,
+    w: gridW,
+    h: 1,
+    fill: "rgba(255,255,255,0.08)",
+  });
+  contentY += 16;
 
   // ── Render sections ─────────────────────────────────────────────
   const gridBaseY = contentY;
@@ -529,7 +532,14 @@ export function layoutArchitecture(
     const secW = sec.w;
     const secH = sec.h;
 
-    // Section background
+    // Section background — tinted with first layer's palette
+    const secPalette = layerPaletteMap.get(sec.layers[0]);
+    const secTint = secPalette
+      ? secPalette.border.replace(/[\d.]+\)$/, "0.06)")
+      : "rgba(255,255,255,0.03)";
+    const secStroke = secPalette
+      ? secPalette.border.replace(/[\d.]+\)$/, "0.12)")
+      : "rgba(255,255,255,0.06)";
     ops.push({
       type: "createShape",
       tempId: genTempId(),
@@ -538,9 +548,9 @@ export function layoutArchitecture(
       y: secY,
       w: secW,
       h: secH,
-      fill: "rgba(255,255,255,0.02)",
+      fill: secTint,
       cornerRadius: 16,
-      stroke: "rgba(255,255,255,0.06)",
+      stroke: secStroke,
       strokeWidth: 1,
     });
 
@@ -894,18 +904,35 @@ function emitLayer(
       strokeWidth: 1,
     });
 
-    // Component name (centered vertically if no tech label)
+    // Inline icon (if available) + component name
+    const hasIcon = !!comp.iconSlug;
+    const iconInlineSize = 14;
+    const textLeft = hasIcon ? cx + 12 + iconInlineSize + 6 : cx + 12;
+    const textW = hasIcon ? COMPONENT_W - 24 - iconInlineSize - 6 : COMPONENT_W - 24;
+
+    if (hasIcon) {
+      ops.push({
+        type: "createImage",
+        tempId: genTempId(),
+        x: cx + 12,
+        y: comp.techStack ? cy + 10 : cy + (COMPONENT_H - iconInlineSize) / 2,
+        w: iconInlineSize,
+        h: iconInlineSize,
+        src: `https://cdn.simpleicons.org/${comp.iconSlug}/ffffff`,
+      });
+    }
+
     const nameY = comp.techStack ? cy + 10 : cy + (COMPONENT_H - 14) / 2;
     ops.push({
       type: "createText",
       tempId: genTempId(),
-      x: cx + 12,
+      x: textLeft,
       y: nameY,
       text: comp.name,
       fontSize: 12,
       fontStyle: "bold",
       fill: palette.text,
-      width: COMPONENT_W - 24,
+      width: textW,
     });
 
     // Tech stack as small muted label below name
@@ -913,27 +940,14 @@ function emitLayer(
       ops.push({
         type: "createText",
         tempId: genTempId(),
-        x: cx + 12,
+        x: textLeft,
         y: cy + 28,
         text: comp.techStack,
         fontSize: 9,
         fill: "rgba(226,232,240,0.4)",
-        width: COMPONENT_W - 24,
+        width: textW,
       });
     }
-
-    // Accent line at bottom
-    ops.push({
-      type: "createShape",
-      tempId: genTempId(),
-      shapeType: "rectangle",
-      x: cx + 12,
-      y: cy + COMPONENT_H - 10,
-      w: 28,
-      h: 2,
-      fill: palette.header,
-      cornerRadius: 1,
-    });
   }
 
   return layerH;
