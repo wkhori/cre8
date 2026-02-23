@@ -158,6 +158,9 @@
   0% {
     background-position: 200% 0;
   }
+  70% {
+    background-position: -200% 0;
+  }
   100% {
     background-position: -200% 0;
   }
@@ -181,7 +184,7 @@
     transparent 100%
   );
   background-size: 200% 100%;
-  animation: shimmer-border 8s linear infinite;
+  animation: shimmer-border 7s linear infinite;
   z-index: -1;
   mask:
     linear-gradient(#fff 0 0) content-box,

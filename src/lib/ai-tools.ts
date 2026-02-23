@@ -130,6 +130,15 @@ export type AIOperation =
         label: string;
         description?: string;
         color?: string;
+        branches?: {
+          label: string;
+          color?: string;
+          steps: {
+            label: string;
+            description?: string;
+            color?: string;
+          }[];
+        }[];
       }[];
       direction?: "horizontal" | "vertical";
       nodeWidth?: number;
@@ -490,7 +499,7 @@ export const AI_TOOLS: Anthropic.Messages.Tool[] = [
   {
     name: "createFlowchart",
     description:
-      "Create a flowchart with connected steps. Best for processes, workflows, user flows, decision trees. Steps are laid out as rounded rectangles with arrow connectors.",
+      "Create a flowchart with connected steps and optional branching paths. Steps are laid out as rounded rectangles with arrow connectors. Any step can have branches that fork off to the side, each with its own chain of steps.",
     input_schema: {
       type: "object",
       properties: {
@@ -498,13 +507,49 @@ export const AI_TOOLS: Anthropic.Messages.Tool[] = [
         y: { type: "number", description: "Y of top-left corner of the flowchart" },
         steps: {
           type: "array",
-          description: "Ordered array of process steps.",
+          description: "Ordered array of main process steps.",
           items: {
             type: "object",
             properties: {
               label: { type: "string", description: "Step title (2-6 words)" },
               description: { type: "string", description: "Optional detail text below the step" },
               color: { type: "string", description: "Fill color as hex (default: #3b82f6)" },
+              branches: {
+                type: "array",
+                description:
+                  "Optional side-branches forking from this step (e.g. error paths, alternate flows). Each branch is laid out to the right of the main flow.",
+                items: {
+                  type: "object",
+                  properties: {
+                    label: {
+                      type: "string",
+                      description:
+                        "Branch label shown on the connector (e.g. 'No', 'Error', 'Rejected')",
+                    },
+                    color: {
+                      type: "string",
+                      description: "Color for branch nodes (default: #ef4444 red)",
+                    },
+                    steps: {
+                      type: "array",
+                      description: "Ordered steps in this branch path.",
+                      items: {
+                        type: "object",
+                        properties: {
+                          label: { type: "string", description: "Step title" },
+                          description: { type: "string", description: "Optional detail text" },
+                          color: {
+                            type: "string",
+                            description: "Fill color (inherits branch color if omitted)",
+                          },
+                        },
+                        required: ["label"],
+                      },
+                    },
+                  },
+                  required: ["label", "steps"],
+                },
+              },
             },
             required: ["label"],
           },
@@ -512,9 +557,9 @@ export const AI_TOOLS: Anthropic.Messages.Tool[] = [
         direction: {
           type: "string",
           enum: ["horizontal", "vertical"],
-          description: "Layout direction (default: horizontal)",
+          description: "Layout direction for the main flow (default: vertical)",
         },
-        nodeWidth: { type: "number", description: "Width of each step box (default 200)" },
+        nodeWidth: { type: "number", description: "Width of each step box (default 220)" },
         nodeHeight: { type: "number", description: "Height of each step box (default 80)" },
       },
       required: ["x", "y", "steps"],

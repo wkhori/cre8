@@ -39,11 +39,12 @@ function expandSlashCommand(command: string): string {
     const topic = flowchartMatch[1].trim();
     return (
       `Create a flowchart for: "${topic}". ` +
-      `Use a SINGLE createFlowchart call with 8-12 steps that cover the full process. ` +
-      `Include decision points and key outcomes as steps — label them clearly (e.g. "Valid?" or "Approved?"). ` +
-      `Use different colors: blue (#3b82f6) for normal steps, amber (#f59e0b) for decisions, ` +
-      `green (#22c55e) for success outcomes, red (#ef4444) for error/failure states. ` +
-      `Use vertical direction. Do NOT create multiple flowcharts — keep it to one call.`
+      `Use a SINGLE createFlowchart call with 6-10 main steps. Use vertical direction. ` +
+      `For decision points, use amber (#f59e0b) and add branches for alternate/error paths. ` +
+      `Each decision step should have 1-2 branches with 1-3 steps each (e.g. error handling, rejection flow). ` +
+      `Color coding: blue (#3b82f6) normal steps, amber (#f59e0b) decisions, ` +
+      `green (#22c55e) success, red (#ef4444) errors. ` +
+      `Do NOT create multiple flowcharts — use the branches field on steps instead.`
     );
   }
 
