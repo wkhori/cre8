@@ -16,7 +16,6 @@ import {
   ArrowRightLeft,
   Lightbulb,
   ListChecks,
-  Shuffle,
   GitBranch,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -29,7 +28,7 @@ const EXAMPLE_PROMPTS = [
   { text: "Make a pros and cons list for remote work", icon: ArrowRightLeft },
   { text: "Design a user journey map", icon: Lightbulb },
   { text: "Build a weekly sprint board", icon: ListChecks },
-  { text: "Organize everything into a neat grid", icon: Shuffle },
+  { text: "Organize everything into a neat grid", icon: LayoutGrid },
   { text: "Generate an architecture diagram", icon: GitBranch, slashPrefill: "/arch-diagram " },
 ];
 
@@ -42,23 +41,13 @@ const SLASH_COMMANDS = [
   },
   {
     command: "/brainstorm",
-    description: "Brainstorm ideas on sticky notes",
+    description: "Mind map — brainstorm ideas around a topic",
     icon: Lightbulb,
   },
   {
-    command: "/organize",
-    description: "Organize and arrange items on the board",
-    icon: Shuffle,
-  },
-  {
     command: "/flowchart",
-    description: "Create a flowchart or process diagram",
+    description: "Multi-step process with branching paths",
     icon: ArrowRightLeft,
-  },
-  {
-    command: "/grid",
-    description: "Layout items in a structured grid",
-    icon: LayoutGrid,
   },
 ];
 

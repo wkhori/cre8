@@ -3,6 +3,7 @@
 import {
   createUserWithEmailAndPassword,
   onAuthStateChanged,
+  signInAnonymously as firebaseSignInAnonymously,
   signInWithEmailAndPassword,
   signInWithPopup,
   signOut as firebaseSignOut,
@@ -28,6 +29,7 @@ interface AuthContextValue {
   actionLoading: boolean;
   error: string | null;
   signInWithGoogle: () => Promise<void>;
+  signInAnonymously: () => Promise<void>;
   signUpWithEmail: (name: string, email: string, password: string) => Promise<void>;
   signInWithEmail: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
@@ -63,7 +65,7 @@ function makeFallbackProfile(user: User): UserProfile {
       ?.split("@")[0]
       ?.replace(/[._-]+/g, " ")
       .trim() ||
-    "Creator";
+    (user.isAnonymous ? "Guest" : "Creator");
 
   return {
     uid: user.uid,
@@ -154,6 +156,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const signInAnonymously = useCallback(async () => {
+    setActionLoading(true);
+    setError(null);
+    try {
+      await firebaseSignInAnonymously(firebaseAuth);
+    } catch (err) {
+      console.error("Anonymous sign-in failed", err);
+      setError("Could not start demo. Please try again.");
+    } finally {
+      setActionLoading(false);
+    }
+  }, []);
+
   const signOut = useCallback(async () => {
     setActionLoading(true);
     setError(null);
@@ -185,6 +200,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       actionLoading,
       error,
       signInWithGoogle,
+      signInAnonymously,
       signUpWithEmail,
       signInWithEmail,
       signOut,
@@ -196,6 +212,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       loading,
       profile,
       signInWithGoogle,
+      signInAnonymously,
       signUpWithEmail,
       signInWithEmail,
       signOut,

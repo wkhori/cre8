@@ -84,10 +84,10 @@ export default function Home() {
 
             {/* Headline */}
             <h1 className="text-center text-[clamp(2.2rem,5.5vw,3.8rem)] leading-[1.06] font-semibold tracking-[-0.035em] text-white lg:text-left">
-              Where teams think
+              Your canvas has
               <br />
-              <span className="bg-linear-to-r from-zinc-200 via-zinc-400 to-zinc-600 bg-clip-text text-transparent">
-                out loud.
+              <span className="bg-linear-to-r from-emerald-300 via-sky-300 to-zinc-400 bg-clip-text text-transparent">
+                an AI copilot.
               </span>
             </h1>
 
@@ -116,10 +116,8 @@ export default function Home() {
             {/* Auth card */}
             <div className="mt-10 w-full max-w-sm">
               <div className="rounded-2xl border border-zinc-800/60 bg-zinc-900/40 p-6 shadow-[0_8px_40px_rgba(0,0,0,0.3)] backdrop-blur-xl">
-                <h2 className="text-center text-base font-medium text-zinc-100">Get started</h2>
-                <p className="mt-1 text-center text-sm text-zinc-600">
-                  Sign in to open your canvas.
-                </p>
+                <h2 className="text-left text-base font-medium text-zinc-100">Get started</h2>
+                <p className="mt-1 text-left text-sm text-zinc-600">Sign in to open your canvas.</p>
 
                 <div className="mt-5 space-y-3">
                   {/* Google — hero CTA */}
@@ -148,7 +146,7 @@ export default function Home() {
                           setShowEmail(true);
                           clearActionLoading();
                         }}
-                        className="w-full py-1.5 text-center text-xs text-zinc-600 transition-colors hover:text-zinc-300"
+                        className="w-full py-1.5 text-left text-xs text-zinc-600 transition-colors hover:text-zinc-300"
                       >
                         or continue with email
                       </button>
@@ -256,15 +254,25 @@ export default function Home() {
                   )}
 
                   {error && (
-                    <p className="rounded-lg border border-red-500/30 bg-red-950/40 px-3 py-2 text-center text-xs text-red-300">
+                    <p className="rounded-lg border border-red-500/30 bg-red-950/40 px-3 py-2 text-left text-xs text-red-300">
                       {error}
                     </p>
                   )}
                 </div>
               </div>
-              <p className="mt-3 text-center text-[11px] text-zinc-700">
+              <p className="mt-3 text-left text-[11px] text-zinc-700">
                 Free to use. No credit card required.
               </p>
+
+              {/* Try it now — shimmer CTA below auth */}
+              <Link
+                href="/demo"
+                className="shimmer-btn mt-5 flex w-full items-center justify-center gap-2.5 rounded-xl bg-zinc-900/80 px-6 py-3 text-sm font-medium text-zinc-100 transition-all hover:bg-zinc-800 hover:text-white"
+              >
+                <Sparkles className="size-4 text-emerald-400" />
+                Try it now — no sign-up required
+                <ArrowRight className="size-3.5 text-zinc-500" />
+              </Link>
             </div>
           </div>
 
@@ -272,7 +280,7 @@ export default function Home() {
           <div className="relative hidden lg:block">
             <div className="relative overflow-hidden rounded-2xl border border-zinc-800/50 bg-zinc-900/30 shadow-[0_20px_80px_rgba(0,0,0,0.5)]">
               {/* Screenshot placeholder — replace src with actual screenshot */}
-              <div className="aspect-[4/3] w-full bg-zinc-900/50">
+              <div className="aspect-4/3 w-full bg-zinc-900/50">
                 {/*
                   TODO: Replace this placeholder with an actual screenshot
                   <Image src="/screenshot-arch-diagram.png" alt="cre8 architecture diagram" fill className="object-cover" />
@@ -282,7 +290,7 @@ export default function Home() {
                   <p className="text-center text-sm text-zinc-700">
                     Screenshot: Architecture diagram generated from a GitHub repo
                   </p>
-                  <p className="text-center font-[family-name:var(--font-geist-mono)] text-[10px] text-zinc-800">
+                  <p className="text-center font-(family-name:--font-geist-mono) text-[10px] text-zinc-800">
                     Save as /public/screenshot-arch-diagram.png
                   </p>
                 </div>

@@ -17,6 +17,38 @@ interface AICommandResult {
 
 const COOLDOWN_MS = 2000;
 const ARCH_DIAGRAM_REGEX = /^\/arch-diagram\s+(https?:\/\/github\.com\/[\w.-]+\/[\w.-]+)\s*$/i;
+const BRAINSTORM_REGEX = /^\/brainstorm\s+(.+)$/i;
+const FLOWCHART_REGEX = /^\/flowchart\s+(.+)$/i;
+
+/** Map slash commands to rich prompts that guide tool selection. */
+function expandSlashCommand(command: string): string {
+  const brainstormMatch = command.match(BRAINSTORM_REGEX);
+  if (brainstormMatch) {
+    const topic = brainstormMatch[1].trim();
+    return (
+      `Create a mind map to brainstorm about: "${topic}". ` +
+      `Use the createMindMap tool. The central node should be the core topic. ` +
+      `Create 4-6 branches representing distinct angles or sub-topics. ` +
+      `Each branch should have 2-4 children with specific, actionable ideas (not generic). ` +
+      `Use varied colors for branches to make it visually engaging.`
+    );
+  }
+
+  const flowchartMatch = command.match(FLOWCHART_REGEX);
+  if (flowchartMatch) {
+    const topic = flowchartMatch[1].trim();
+    return (
+      `Create a flowchart for: "${topic}". ` +
+      `Use a SINGLE createFlowchart call with 8-12 steps that cover the full process. ` +
+      `Include decision points and key outcomes as steps — label them clearly (e.g. "Valid?" or "Approved?"). ` +
+      `Use different colors: blue (#3b82f6) for normal steps, amber (#f59e0b) for decisions, ` +
+      `green (#22c55e) for success outcomes, red (#ef4444) for error/failure states. ` +
+      `Use vertical direction. Do NOT create multiple flowcharts — keep it to one call.`
+    );
+  }
+
+  return command;
+}
 
 /** Read a streaming NDJSON response, calling onPhase for progress updates. */
 async function readNDJSONStream(
@@ -143,9 +175,10 @@ export function useAIAgent(boardId: string | null, uid: string | null) {
         // Route /arch-diagram commands to the repo analysis endpoint
         const archMatch = command.match(ARCH_DIAGRAM_REGEX);
         const endpoint = archMatch ? "/api/analyze-repo" : "/api/ai-command";
+        const expandedCommand = archMatch ? command : expandSlashCommand(command);
         const payload = archMatch
           ? { repoUrl: archMatch[1], viewportCenter: placementOrigin }
-          : { command, boardState, viewportCenter: placementOrigin };
+          : { command: expandedCommand, boardState, viewportCenter: placementOrigin };
 
         const res = await fetch(endpoint, {
           method: "POST",
