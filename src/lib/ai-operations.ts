@@ -277,9 +277,13 @@ export function executeAIOperations(operations: AIOperation[]): Map<string, stri
     finalShapes = [...finalShapes, ...newShapes];
   }
 
-  // Apply updates
+  // Apply updates (merge patches for the same shape ID)
   if (updates.length > 0) {
-    const updateMap = new Map(updates.map((u) => [u.id, u.patch]));
+    const updateMap = new Map<string, Partial<Shape>>();
+    for (const u of updates) {
+      const existing = updateMap.get(u.id);
+      updateMap.set(u.id, existing ? { ...existing, ...u.patch } : u.patch);
+    }
     finalShapes = finalShapes.map((s) => {
       const patch = updateMap.get(s.id);
       return patch ? ({ ...s, ...patch } as Shape) : s;

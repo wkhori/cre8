@@ -17,7 +17,16 @@ import {
   Bot,
   MousePointer2,
   Workflow,
+  AlertTriangle,
+  TrendingDown,
 } from "lucide-react";
+import { Bar, BarChart, XAxis, YAxis, CartesianGrid } from "recharts";
+import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+  type ChartConfig,
+} from "@/components/ui/chart";
 
 /* ── Data ─────────────────────────────────────────────────────────── */
 
@@ -116,7 +125,7 @@ const TIMELINE: {
 const TOOLS: { name: string; role: string; icon: React.ReactNode }[] = [
   {
     name: "Claude Code",
-    role: "Primary dev agent — 95% of code",
+    role: "Primary dev agent — ~90% of code",
     icon: <Terminal className="size-5" />,
   },
   {
@@ -139,7 +148,7 @@ const TOOLS: { name: string; role: string; icon: React.ReactNode }[] = [
 const STATS: { value: string; label: string; icon: React.ReactNode }[] = [
   { value: "135", label: "Commits", icon: <GitCommit className="size-4" /> },
   { value: "7", label: "Days", icon: <Clock className="size-4" /> },
-  { value: "~85%", label: "AI-Generated Code", icon: <Bot className="size-4" /> },
+  { value: "~90%", label: "AI-Generated Code", icon: <Bot className="size-4" /> },
   { value: "$11.01", label: "API Cost", icon: <DollarSign className="size-4" /> },
   { value: "202", label: "LLM Traces", icon: <Cpu className="size-4" /> },
   { value: "9,396", label: "AI Operations", icon: <Zap className="size-4" /> },
@@ -186,7 +195,7 @@ export default function DevProcessPage() {
           </span>
         </h1>
         <p className="mt-5 max-w-xl text-[17px] leading-relaxed text-zinc-400">
-          cre8 was built in a single week using AI-first development — Claude Code wrote ~85% of the
+          cre8 was built in a single week using AI-first development — Claude Code wrote ~90% of the
           codebase while a human steered architecture, design, and debugging decisions.
         </p>
       </header>
@@ -284,7 +293,21 @@ export default function DevProcessPage() {
         <section className="pb-16">
           <SectionHeading icon={<DollarSign className="size-4" />} label="Cost Analysis" />
 
-          <div className="mt-6 grid gap-3 sm:grid-cols-2">
+          {/* Optimization story callout */}
+          <div className="mt-6 rounded-xl border border-emerald-900/40 bg-emerald-950/20 p-5">
+            <div className="flex items-center gap-2 text-sm font-medium text-emerald-400/90">
+              <TrendingDown className="size-4" />
+              3.3x cost reduction through prompt optimization
+            </div>
+            <p className="mt-2 text-sm leading-relaxed text-zinc-400">
+              AI command cost dropped from <span className="text-zinc-300">$0.014/call</span> to{" "}
+              <span className="font-medium text-emerald-400/80">$0.004/call</span> by trimming the
+              system prompt from ~8K to ~1.9K input tokens — same model (Haiku 4.5), just less
+              wasted context. Migrating from Sonnet to Haiku earlier in the sprint saved another 4x.
+            </p>
+          </div>
+
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
             {/* AI Commands */}
             <div className="rounded-xl border border-zinc-800/70 bg-zinc-900/40 p-5">
               <div className="flex items-center gap-2 text-sm font-medium text-zinc-100">
@@ -297,21 +320,6 @@ export default function DevProcessPage() {
                 <CostRow label="Avg latency" value="4.1s" />
                 <CostRow label="Cost per command" value="$0.004" accent />
                 <CostRow label="Failure rate" value="0.75%" />
-              </div>
-              <div className="mt-4 rounded-lg bg-zinc-800/30 p-3">
-                <p className="text-[11px] font-medium tracking-wide text-zinc-400 uppercase">
-                  Production estimate
-                </p>
-                <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
-                  <span className="text-zinc-500">100 users</span>
-                  <span className="text-right text-zinc-300">$17/mo</span>
-                  <span className="text-zinc-500">1K users</span>
-                  <span className="text-right text-zinc-300">$168/mo</span>
-                  <span className="text-zinc-500">10K users</span>
-                  <span className="text-right text-zinc-300">$1,680/mo</span>
-                  <span className="text-zinc-500">100K users</span>
-                  <span className="text-right text-zinc-300">$16,800/mo</span>
-                </div>
               </div>
             </div>
 
@@ -327,24 +335,47 @@ export default function DevProcessPage() {
               <div className="mt-4 space-y-2 text-sm">
                 <CostRow label="69 traces" value="$9.93 total" />
                 <CostRow label="Avg latency" value="25.3s" />
-                <CostRow label="Cost per analysis" value="$0.045" accent />
+                <CostRow label="Cost per analysis" value="$0.09" accent />
                 <CostRow label="Failure rate" value="15.9%" />
               </div>
-              <div className="mt-4 rounded-lg bg-zinc-800/30 p-3">
-                <p className="text-[11px] font-medium tracking-wide text-zinc-400 uppercase">
-                  Production estimate
+            </div>
+          </div>
+
+          {/* Production Projections Chart */}
+          <div className="mt-4 rounded-xl border border-zinc-800/70 bg-zinc-900/40 p-5">
+            <h3 className="text-sm font-medium text-zinc-100">
+              Monthly Production Cost Projections
+            </h3>
+            <p className="mt-1 text-[11px] text-zinc-600">
+              AI commands at $0.004/cmd + arch diagrams at $0.054/effective req (40% cached free)
+            </p>
+
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              {/* 50 cmds/user/mo */}
+              <div>
+                <p className="mb-2 text-[11px] font-medium tracking-wide text-zinc-400 uppercase">
+                  50 commands / user / month
                 </p>
-                <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
-                  <span className="text-zinc-500">100 users</span>
-                  <span className="text-right text-zinc-300">$7/mo</span>
-                  <span className="text-zinc-500">1K users</span>
-                  <span className="text-right text-zinc-300">$67/mo</span>
-                  <span className="text-zinc-500">10K users</span>
-                  <span className="text-right text-zinc-300">$665/mo</span>
-                  <span className="text-zinc-500">100K users</span>
-                  <span className="text-right text-zinc-300">$6,650/mo</span>
-                </div>
+                <ProjectionChart cmdsPerUser={50} />
               </div>
+              {/* 100 cmds/user/mo */}
+              <div>
+                <p className="mb-2 text-[11px] font-medium tracking-wide text-zinc-400 uppercase">
+                  100 commands / user / month
+                </p>
+                <ProjectionChart cmdsPerUser={100} />
+              </div>
+            </div>
+
+            <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-zinc-500">
+              <span className="flex items-center gap-1.5">
+                <span className="size-2 rounded-full bg-emerald-500/70" />
+                AI Commands (Haiku)
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="size-2 rounded-full bg-sky-500/70" />
+                Arch Diagrams (Sonnet)
+              </span>
             </div>
           </div>
 
@@ -419,6 +450,44 @@ export default function DevProcessPage() {
           </div>
         </section>
 
+        {/* ── Biggest Mistakes ── */}
+        <section className="pb-16">
+          <SectionHeading icon={<AlertTriangle className="size-4" />} label="Biggest Mistakes" />
+          <div className="mt-6 space-y-3">
+            {[
+              {
+                title: "Abandoned the PRD after day 3",
+                body: "Started strong with a Pre-Search doc and detailed PRD, but stopped referencing them after the first few days. The workflow became reactive — fixing whatever felt urgent instead of building against the spec. Features drifted from the original plan and I lost track of what was actually required vs nice-to-have.",
+              },
+              {
+                title: "Tried to one-shot a massive performance refactor",
+                body: "Feb 19 was the least productive day despite burning the most tokens. Kept trying to get Claude to optimize everything in one giant prompt. Nothing worked. Had to start over with fresh branches multiple times. The fix: break it into small, verifiable steps and feed concrete trace data instead of vague descriptions.",
+              },
+              {
+                title: "No automated regression tests",
+                body: "Had 119 unit tests but zero end-to-end or integration tests that caught real regressions. Would fix one bug and unknowingly break something else. An automated smoke test suite (even just 5 Playwright tests) would have saved hours of manual testing and re-debugging.",
+              },
+              {
+                title: "Never shared for early feedback",
+                body: "Kept battling the feeling of 'it needs to be perfect first.' Never shared the deployed app publicly until the final day. Earlier feedback from peers would have caught UX issues, identified missing features, and pressure-tested the multiplayer sync much sooner.",
+              },
+              {
+                title: "Workflow got chaotic as time pressure grew",
+                body: "Early days had clean commits, clear plans, methodical progress. By day 5-6, it was scattered — jumping between features, fixing bugs reactively, losing context between sessions. Should have maintained the discipline of the first few days throughout the sprint.",
+              },
+              {
+                title: "Never learned agent worktrees for parallel workflows",
+                body: "Kept saying 'I'll learn it next week' but never did. Could have run a main feature task in one worktree while a second agent fixed low-priority bugs in parallel — ping-ponging between both. The intuition was there but time pressure made it feel like a risk. In retrospect, the upfront investment would have paid for itself many times over.",
+              },
+            ].map((m) => (
+              <div key={m.title} className="rounded-xl border border-red-900/30 bg-red-950/10 p-5">
+                <h4 className="text-sm font-medium text-red-300/80">{m.title}</h4>
+                <p className="mt-2 text-sm leading-relaxed text-zinc-500">{m.body}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+
         {/* ── Learnings ── */}
         <section className="pb-20">
           <SectionHeading icon={<Brain className="size-4" />} label="Key Learnings" />
@@ -472,6 +541,75 @@ export default function DevProcessPage() {
         </div>
       </footer>
     </div>
+  );
+}
+
+/* ── Chart ────────────────────────────────────────────────────────── */
+
+const projectionChartConfig = {
+  aiCommands: { label: "AI Commands", color: "oklch(0.72 0.17 155)" },
+  archDiagrams: { label: "Arch Diagrams", color: "oklch(0.65 0.15 230)" },
+} satisfies ChartConfig;
+
+function ProjectionChart({ cmdsPerUser }: { cmdsPerUser: number }) {
+  const costPerCmd = 0.004;
+  const archReqsPerUser = 2;
+  const effectiveCostPerArch = 0.054; // $0.09 × 0.60 (40% cached)
+
+  const data = [
+    {
+      scale: "100",
+      aiCommands: 100 * cmdsPerUser * costPerCmd,
+      archDiagrams: 100 * archReqsPerUser * effectiveCostPerArch,
+    },
+    {
+      scale: "1K",
+      aiCommands: 1000 * cmdsPerUser * costPerCmd,
+      archDiagrams: 1000 * archReqsPerUser * effectiveCostPerArch,
+    },
+    {
+      scale: "10K",
+      aiCommands: 10000 * cmdsPerUser * costPerCmd,
+      archDiagrams: 10000 * archReqsPerUser * effectiveCostPerArch,
+    },
+    {
+      scale: "100K",
+      aiCommands: 100000 * cmdsPerUser * costPerCmd,
+      archDiagrams: 100000 * archReqsPerUser * effectiveCostPerArch,
+    },
+  ];
+
+  return (
+    <ChartContainer config={projectionChartConfig} className="aspect-4/3 w-full">
+      <BarChart data={data} barGap={2}>
+        <CartesianGrid vertical={false} stroke="rgba(255,255,255,0.04)" />
+        <XAxis
+          dataKey="scale"
+          tickLine={false}
+          axisLine={false}
+          tick={{ fill: "#71717a", fontSize: 11 }}
+          tickFormatter={(v) => `${v} users`}
+        />
+        <YAxis
+          tickLine={false}
+          axisLine={false}
+          tick={{ fill: "#71717a", fontSize: 11 }}
+          tickFormatter={(v) => `$${v >= 1000 ? `${(v / 1000).toFixed(0)}K` : v}`}
+          width={48}
+        />
+        <ChartTooltip
+          content={
+            <ChartTooltipContent
+              formatter={(value) =>
+                `$${Number(value).toLocaleString(undefined, { maximumFractionDigits: 0 })}`
+              }
+            />
+          }
+        />
+        <Bar dataKey="aiCommands" fill="var(--color-aiCommands)" radius={[4, 4, 0, 0]} />
+        <Bar dataKey="archDiagrams" fill="var(--color-archDiagrams)" radius={[4, 4, 0, 0]} />
+      </BarChart>
+    </ChartContainer>
   );
 }
 

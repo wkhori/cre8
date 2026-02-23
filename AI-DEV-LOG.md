@@ -82,9 +82,9 @@ I did not use MCP server integrations during this project. The combination of Cl
 
 | Category | Estimated % | Notes |
 |----------|-------------|-------|
-| **AI-generated (Claude Code)** | ~85% | Core canvas logic, state management, Firebase sync, AI agent, all UI components |
-| **AI-generated (Codex)** | ~5% | Architecture planning docs, some code review suggestions |
-| **Hand-written** | ~10% | Prompt engineering, configuration, hooks, debugging decisions, manual CSS tweaks |
+| **AI-generated (Claude Code)** | ~90% | Core canvas logic, state management, Firebase sync, AI agent, all UI components |
+| **AI-generated (Codex)** | ~3% | Architecture planning docs, some code review suggestions |
+| **Hand-written / human-directed** | ~7% | Prompt engineering, configuration, hooks, debugging decisions, manual CSS tweaks |
 
 **135 commits** across 7 days. The codebase includes 50+ source files spanning canvas rendering, state management, real-time sync, AI agent integration, and the architecture diagram feature.
 
@@ -113,6 +113,22 @@ AI generated the vast majority of the code, but the *direction* — what to buil
 - **Complex state interactions** — Frame containment (parentId management, re-parenting on drag, Firestore deleteField sentinel) required multiple debugging cycles. Claude would fix one edge case and introduce another. This was the hardest bug category.
 - **Prompt engineering for AI features** — Getting Claude (Haiku) to produce good spatial layouts via tool use required extensive prompt iteration. The system prompt went through 5+ major revisions.
 - **One-shotting large refactors** — I kept trying to do the performance refactor in one prompt. It needed to be broken into smaller, verifiable steps. Multi-session work with clear checkpoints worked much better.
+
+---
+
+## Biggest Mistakes
+
+1. **Abandoned the PRD after day 3.** Started strong with a Pre-Search doc and detailed PRD, but stopped referencing them after the first few days. The workflow became reactive — fixing whatever felt urgent instead of building against the spec. Features drifted from the original plan and I lost track of what was actually required vs nice-to-have.
+
+2. **Tried to one-shot a massive performance refactor.** Feb 19 was the least productive day despite burning the most tokens. Kept trying to get Claude to optimize everything in one giant prompt. Nothing worked — had to start over with fresh branches multiple times. The fix was breaking it into small, verifiable steps and feeding concrete Chrome DevTools trace data instead of vague descriptions like "make it faster."
+
+3. **No automated regression tests.** Had 119 unit tests but zero end-to-end or integration tests that caught real regressions. Would fix one bug and unknowingly break something else. An automated smoke test suite (even just 5 Playwright tests) would have saved hours of manual testing and re-debugging.
+
+4. **Never shared for early feedback.** Kept battling the feeling of "it needs to be perfect first." Never shared the deployed app publicly until the final day. Earlier feedback from peers would have caught UX issues, identified missing features, and pressure-tested the multiplayer sync much sooner.
+
+5. **Workflow got chaotic as time pressure grew.** Early days had clean commits, clear plans, methodical progress. By day 5-6, it was scattered — jumping between features, fixing bugs reactively, losing context between sessions. Should have maintained the discipline of the first few days throughout the sprint.
+
+6. **Never learned agent worktrees for parallel workflows.** Kept telling myself "I'll learn it next week, I don't have time right now." But the time cost of *not* learning it was higher. I had a strong intuition for how to leverage it — run a main feature task in one worktree while a second agent fixes low-priority bugs in parallel, ping-ponging between both. I even tried a few times but ran into setup friction and gave up. In retrospect, the upfront investment would have paid for itself many times over across the sprint.
 
 ---
 

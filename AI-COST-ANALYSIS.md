@@ -11,12 +11,13 @@
 
 | Metric | Value |
 |--------|-------|
-| Plan usage | ~48% of Pro plan consumed before reset |
+| Plan | Claude Max ($200/month) |
+| Plan usage | ~48% consumed before weekly reset |
 | Sessions | ~20+ Claude Code sessions over 7 days |
 | Primary model | Claude Opus 4.6 (via Claude Code CLI) |
 | Commits produced | 135 across all branches |
 
-Claude Code runs on a subscription plan (Claude Pro), so the cost is a flat monthly rate rather than per-token. At ~48% plan usage over one week of intensive development, the effective cost attributable to this project is approximately **$50** (half of a $100/month Pro plan estimate).
+Claude Code runs on Claude Max ($200/month subscription). At ~48% plan usage over one week of intensive development, the effective cost attributable to this project is approximately **$100** (48% of $200/month).
 
 ### OpenAI Codex
 
@@ -79,11 +80,11 @@ Actual costs from the Anthropic API dashboard (`cre8-key-1`), Feb 18–23:
 
 | Category | Cost |
 |----------|------|
-| Claude Code (Pro plan, ~48% usage) | ~$50 |
+| Claude Code (Max plan, ~48% usage) | ~$100 |
 | OpenAI Codex | ~$0 (within plan) |
 | Anthropic API (in-app AI features) | $11.01 |
 | Infrastructure (Firebase, Vercel, Langfuse) | $0 |
-| **Total** | **~$61** |
+| **Total** | **~$111** |
 
 ---
 
@@ -93,93 +94,114 @@ Actual costs from the Anthropic API dashboard (`cre8-key-1`), Feb 18–23:
 
 The core AI feature — natural language board manipulation (create sticky notes, arrange layouts, build templates, etc.).
 
-**Assumptions:**
+**Cost per command improved 3.3x over the dev period** through prompt optimization:
+
+| Metric | Early calls (first 10) | Recent calls (last 10) | All 133 traces |
+|--------|----------------------|----------------------|----------------|
+| Avg cost/call | $0.014 | **$0.004** | $0.008 |
+| Avg input tokens | 8,654 | 1,882 | 4,669 |
+| Avg output tokens | 1,200+ | 661 | 625 |
+
+The cost dropped because input token count was reduced from ~8K (bloated system prompt + full board state) to ~1.9K (trimmed prompt, selective board context, slash commands).
+
+**For production projections, using the optimized recent cost: $0.004/command***
+
+*\*Token usage and speed have not been fully optimized yet. Further gains possible with prompt caching at scale.*
+
+**Usage assumptions:**
 
 | Parameter | Value | Rationale |
 |-----------|-------|-----------|
-| Avg AI commands per session | 5 | Typical brainstorming session: create template + 3-4 adjustments |
-| Avg sessions per user per month | 8 | ~2 sessions/week for active users |
-| Avg input tokens per command | 4,669 | Measured from 88 Haiku traces (includes board state context) |
-| Avg output tokens per command | 625 | Measured from 88 Haiku traces |
-| Prompt caching hit rate | 60% | System prompt + tool schemas are static; board state varies |
-| Cached input price | $0.08/MTok | 90% discount on cached tokens |
+| AI commands per user per month | 50–100 | 50 = moderate (create template + adjustments, ~4 sessions/mo). 100 = power user (~daily sessions or heavy single sessions) |
 
-**Cost per AI command (with caching):**
+**Monthly projections (50 commands/user/month):**
 
-| Component | Tokens | Effective $/MTok | Cost |
-|-----------|--------|------------------|------|
-| Input (40% uncached) | 1,868 | $0.80 | $0.0015 |
-| Input (60% cached) | 2,801 | $0.08 | $0.0002 |
-| Output | 625 | $4.00 | $0.0025 |
-| **Total per command** | | | **$0.0042** |
+| Scale | Commands/mo | Monthly Cost | Per-User Cost |
+|-------|-------------|-------------|---------------|
+| **100 users** | 5,000 | **$20** | $0.20 |
+| **1,000 users** | 50,000 | **$200** | $0.20 |
+| **10,000 users** | 500,000 | **$2,000** | $0.20 |
+| **100,000 users** | 5,000,000 | **$20,000** | $0.20 |
 
-**Monthly projections:**
+**Monthly projections (100 commands/user/month):**
 
-| Scale | Users | Commands/mo | Monthly Cost | Per-User Cost |
-|-------|-------|-------------|-------------|---------------|
-| **100 users** | 100 | 4,000 | **$17** | $0.17 |
-| **1,000 users** | 1,000 | 40,000 | **$168** | $0.17 |
-| **10,000 users** | 10,000 | 400,000 | **$1,680** | $0.17 |
-| **100,000 users** | 100,000 | 4,000,000 | **$16,800** | $0.17 |
+| Scale | Commands/mo | Monthly Cost | Per-User Cost |
+|-------|-------------|-------------|---------------|
+| **100 users** | 10,000 | **$40** | $0.40 |
+| **1,000 users** | 100,000 | **$400** | $0.40 |
+| **10,000 users** | 1,000,000 | **$4,000** | $0.40 |
+| **100,000 users** | 10,000,000 | **$40,000** | $0.40 |
 
-The AI command feature scales linearly and is very affordable — **$0.17/user/month**. Haiku's low cost ($0.80/$4.00 per MTok) combined with prompt caching makes this viable even at scale without rate limiting.
+At production scale, prompt caching would further reduce this — the system prompt (~2K tokens) and tool schemas (~3K tokens) are identical across all users and would be cached at 90% discount. Estimated **30-40% additional cost reduction** at scale.
 
 ---
 
 ### B. Architecture Diagram Feature (Claude Sonnet 4.6)
 
-The above-and-beyond feature — paste a GitHub URL, generate a full architecture diagram on the canvas. This is significantly more expensive per call.
+The above-and-beyond feature — paste a GitHub URL, generate a full architecture diagram on the canvas. Uses Repomix to compress the repo, Sonnet 4.6 to analyze architecture, and a deterministic layout engine to position everything.
 
-**Assumptions:**
+**Cost optimization journey:**
+
+| Metric | Overall avg (69 traces) | Current state |
+|--------|------------------------|---------------|
+| Avg cost/analysis | $0.144 | **~$0.09*** |
+| Avg latency | 25.3s | ~25s |
+| Avg components/diagram | 14.8 | 22-26 |
+
+*\*Token usage and speed have not been fully optimized yet. The $0.09 figure reflects current prompt tuning but further gains are possible.*
+
+The overall average ($0.144) is inflated by heavy prompt iteration during development — the same repo (wkhori/cre8) was analyzed 54 times while tuning the prompt and layout engine. Early iterations had bloated prompts and unoptimized output schemas.
+
+**Optimization: Firestore caching**
+
+We implemented a commit-SHA-based Firestore cache (`repo-cache` collection). When a user analyzes a repo that's already been analyzed at the same commit, the cached architecture JSON is returned instantly — **zero LLM cost, <1s latency**. This is critical for cost control since popular repos would be analyzed repeatedly by different users.
+
+**For production projections, using current cost: $0.09/analysis***
+
+**Usage assumptions:**
 
 | Parameter | Value | Rationale |
 |-----------|-------|-----------|
-| Avg diagram generations per session | 1.5 | Users typically analyze 1-2 repos per session |
-| Avg sessions using this feature per user per month | 2 | Power-user feature, less frequent than AI commands |
-| Avg input tokens per analysis | 6,160 | Measured from 44 Sonnet traces (compressed repo content) |
-| Avg output tokens per analysis | 2,228 | Measured from 44 Sonnet traces (architecture JSON) |
-| Prompt caching hit rate | 40% | System prompt is cached; repo content varies per call |
-| Cached input price | $0.30/MTok | 90% discount on cached tokens |
-| Firestore cache hit rate | 30% | Same repo+commit returns cached result (no LLM call) |
-| Repomix processing | $0 | Runs serverless, no external API cost |
-
-**Cost per architecture analysis (with caching, excluding Firestore cache hits):**
-
-| Component | Tokens | Effective $/MTok | Cost |
-|-----------|--------|------------------|------|
-| Input (60% uncached) | 3,696 | $3.00 | $0.0111 |
-| Input (40% cached) | 2,464 | $0.30 | $0.0007 |
-| Output | 2,228 | $15.00 | $0.0334 |
-| **Total per analysis** | | | **$0.0452** |
-
-**Effective cost after Firestore caching:** $0.0452 × 0.70 = **$0.0317** per request (30% of requests are free cache hits).
+| Analyses per user per month | 2 | Power-user feature, used sparingly |
+| Firestore cache hit rate | 40% | Popular repos shared across users; same-commit = free |
+| Effective cost per request | $0.054 | $0.09 × 0.60 (40% are free cache hits) |
 
 **Monthly projections:**
 
-| Scale | Users | Analyses/mo | Monthly Cost | Per-User Cost |
-|-------|-------|-------------|-------------|---------------|
-| **100 users** | 100 | 210 | **$7** | $0.07 |
-| **1,000 users** | 1,000 | 2,100 | **$67** | $0.07 |
-| **10,000 users** | 10,000 | 21,000 | **$665** | $0.07 |
-| **100,000 users** | 100,000 | 210,000 | **$6,650** | $0.07 |
-
-The architecture diagram feature costs **$0.07/user/month** — also reasonable, though the per-call cost ($0.045) is ~10x higher than an AI command ($0.004). Firestore caching is critical here: repeated analyses of the same repo (same commit SHA) skip the LLM entirely.
+| Scale | Requests/mo | Billable | Monthly Cost | Per-User Cost |
+|-------|-------------|----------|-------------|---------------|
+| **100 users** | 200 | 120 | **$11** | $0.11 |
+| **1,000 users** | 2,000 | 1,200 | **$108** | $0.11 |
+| **10,000 users** | 20,000 | 12,000 | **$1,080** | $0.11 |
+| **100,000 users** | 200,000 | 120,000 | **$10,800** | $0.11 |
 
 **Cost optimization opportunities (not yet implemented):**
-- Migrate to a smaller model for architecture extraction (could reduce cost 3-5x)
-- Stricter output token limits (cap JSON response size)
-- Tiered rate limiting (free users get 3 analyses/month, paid get unlimited)
+- Migrate to a smaller/cheaper model (Haiku for extraction could reduce cost ~5-10x)
+- Stricter output token limits (cap architecture JSON response size)
+- Tiered rate limiting (free users get 3 analyses/month, paid unlimited)
+- Further prompt compression (current prompt still has room for trimming)
 
 ---
 
 ### C. Combined Production Cost
 
+**At 50 commands/user/month:**
+
 | Scale | AI Commands | Arch Diagrams | Firebase/Infra* | **Total/month** |
 |-------|------------|---------------|-----------------|-----------------|
-| **100 users** | $17 | $7 | ~$0 | **$24** |
-| **1,000 users** | $168 | $67 | ~$25 | **$260** |
-| **10,000 users** | $1,680 | $665 | ~$200 | **$2,545** |
-| **100,000 users** | $16,800 | $6,650 | ~$2,000 | **$25,450** |
+| **100 users** | $20 | $11 | ~$0 | **$31** |
+| **1,000 users** | $200 | $108 | ~$25 | **$333** |
+| **10,000 users** | $2,000 | $1,080 | ~$200 | **$3,280** |
+| **100,000 users** | $20,000 | $10,800 | ~$2,000 | **$32,800** |
+
+**At 100 commands/user/month:**
+
+| Scale | AI Commands | Arch Diagrams | Firebase/Infra* | **Total/month** |
+|-------|------------|---------------|-----------------|-----------------|
+| **100 users** | $40 | $11 | ~$0 | **$51** |
+| **1,000 users** | $400 | $108 | ~$25 | **$533** |
+| **10,000 users** | $4,000 | $1,080 | ~$200 | **$5,280** |
+| **100,000 users** | $40,000 | $10,800 | ~$2,000 | **$52,800** |
 
 *\*Firebase costs estimated: Firestore reads/writes, RTDB bandwidth, Auth. Free tier covers ~100 users; Blaze plan scales from there.*
 
@@ -187,14 +209,14 @@ The architecture diagram feature costs **$0.07/user/month** — also reasonable,
 
 ### D. Key Takeaways
 
-1. **AI commands are cheap.** At $0.004/command with Haiku + caching, this feature is viable to offer for free to all users. Even at 100K users, it's under $17K/month.
+1. **AI commands are cheap.** Optimized to $0.004/command with Haiku — down 3.3x from early development. At $0.20–$0.40/user/month (50–100 cmds), viable to offer free to all users or easily covered by a modest subscription.
 
-2. **Architecture diagrams are 10x more expensive per call** but used less frequently. The $0.045/analysis cost is manageable with Firestore caching reducing ~30% of calls to zero cost.
+2. **Architecture diagrams are ~22x more expensive per call** ($0.09 vs $0.004) but used much less frequently. Firestore commit-SHA caching is critical — same repo at same commit skips the LLM entirely (zero cost, <1s).
 
-3. **Output tokens dominate Sonnet costs.** $1.47 of the $2.28 Sonnet spend during development was output tokens. Constraining output format and length is the highest-leverage optimization.
+3. **Prompt optimization is the biggest lever.** AI command cost dropped 3.3x just from trimming system prompt and board state serialization. No model change needed — same Haiku model, just less wasted input.
 
 4. **Model selection matters enormously.** Migrating AI commands from Sonnet to Haiku (done on Feb 21) reduced per-command cost by ~4x with acceptable quality for tool-use tasks.
 
-5. **Prompt caching is free money.** The system prompt (~2K tokens) and tool schemas (~3K tokens) are identical across calls. With Anthropic's prompt caching, these are charged at 90% discount after the first call, saving ~$0.004 per AI command.
+5. **Dev costs ≠ production costs.** The overall $0.144/analysis average is inflated by 54 analyses of the same repo during prompt tuning. Current cost is ~$0.09, and Firestore caching would eliminate ~40% of calls at scale.
 
 6. **Infrastructure costs are negligible at small scale.** Firebase free tier and Vercel Hobby plan handle the first ~100 users with zero cost. AI API calls are the only meaningful expense.

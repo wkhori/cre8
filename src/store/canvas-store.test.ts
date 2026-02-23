@@ -426,4 +426,425 @@ describe("canvas-store", () => {
     expect(useCanvasStore.getState().shapes).toHaveLength(10);
     expect(useCanvasStore.getState().historyIndex).toBe(-1);
   });
+
+  // ── Undo/redo edge cases ───────────────────────────────────────
+
+  it("undo on empty history is a no-op", () => {
+    const store = useCanvasStore.getState();
+    expect(store.canUndo()).toBe(false);
+    store.undo();
+    expect(useCanvasStore.getState().shapes).toEqual([]);
+    expect(useCanvasStore.getState().historyIndex).toBe(-1);
+  });
+
+  it("redo on empty history is a no-op", () => {
+    const store = useCanvasStore.getState();
+    expect(store.canRedo()).toBe(false);
+    store.redo();
+    expect(useCanvasStore.getState().shapes).toEqual([]);
+    expect(useCanvasStore.getState().historyIndex).toBe(-1);
+  });
+
+  it("redo past the end is a no-op", () => {
+    const store = useCanvasStore.getState();
+    store.addRect(100, 100);
+    // No undo was done, so redo should not advance
+    expect(store.canRedo()).toBe(false);
+    const before = canvasSnapshot();
+    store.redo();
+    expect(canvasSnapshot()).toEqual(before);
+  });
+
+  it("undo past the beginning is a no-op", () => {
+    const store = useCanvasStore.getState();
+    store.addRect(100, 100);
+    store.undo(); // back to empty
+    expect(useCanvasStore.getState().historyIndex).toBe(-1);
+    expect(useCanvasStore.getState().shapes).toEqual([]);
+    // Try another undo — should be no-op
+    store.undo();
+    expect(useCanvasStore.getState().historyIndex).toBe(-1);
+    expect(useCanvasStore.getState().shapes).toEqual([]);
+  });
+
+  it("canUndo / canRedo reflect state correctly", () => {
+    const store = useCanvasStore.getState();
+    expect(store.canUndo()).toBe(false);
+    expect(store.canRedo()).toBe(false);
+
+    store.addRect(100, 100);
+    expect(useCanvasStore.getState().canUndo()).toBe(true);
+    expect(useCanvasStore.getState().canRedo()).toBe(false);
+
+    store.addCircle(200, 200);
+    expect(useCanvasStore.getState().canUndo()).toBe(true);
+    expect(useCanvasStore.getState().canRedo()).toBe(false);
+
+    store.undo(); // back to [rect]
+    expect(useCanvasStore.getState().canUndo()).toBe(true);
+    expect(useCanvasStore.getState().canRedo()).toBe(true);
+
+    store.undo(); // back to []
+    expect(useCanvasStore.getState().canUndo()).toBe(false);
+    expect(useCanvasStore.getState().canRedo()).toBe(true);
+
+    store.redo(); // forward to [rect]
+    expect(useCanvasStore.getState().canUndo()).toBe(true);
+    expect(useCanvasStore.getState().canRedo()).toBe(true);
+
+    store.redo(); // forward to [rect, circle]
+    expect(useCanvasStore.getState().canUndo()).toBe(true);
+    expect(useCanvasStore.getState().canRedo()).toBe(false);
+  });
+
+  it("undo addStickyNote restores empty canvas", () => {
+    const store = useCanvasStore.getState();
+    store.addStickyNote(100, 100, "Hello");
+    expect(useCanvasStore.getState().shapes).toHaveLength(1);
+
+    store.undo();
+    expect(useCanvasStore.getState().shapes).toHaveLength(0);
+
+    store.redo();
+    expect(useCanvasStore.getState().shapes).toHaveLength(1);
+    const sticky = useCanvasStore.getState().shapes[0];
+    if (sticky.type !== "sticky") throw new Error("unreachable");
+    expect(sticky.text).toBe("Hello");
+  });
+
+  it("undo addFrame restores empty canvas", () => {
+    const store = useCanvasStore.getState();
+    store.addFrame(200, 200, "My Frame");
+    expect(useCanvasStore.getState().shapes).toHaveLength(1);
+
+    store.undo();
+    expect(useCanvasStore.getState().shapes).toHaveLength(0);
+
+    store.redo();
+    const frame = useCanvasStore.getState().shapes[0];
+    if (frame.type !== "frame") throw new Error("unreachable");
+    expect(frame.title).toBe("My Frame");
+  });
+
+  it("undo addConnector restores previous shapes", () => {
+    const store = useCanvasStore.getState();
+    store.addRect(100, 100);
+    store.addCircle(300, 300);
+    const beforeConnector = canvasSnapshot();
+
+    store.addConnector(
+      { id: useCanvasStore.getState().shapes[0].id },
+      { id: useCanvasStore.getState().shapes[1].id },
+      "arrow"
+    );
+    expect(useCanvasStore.getState().shapes).toHaveLength(3);
+
+    store.undo();
+    expect(canvasSnapshot()).toEqual(beforeConnector);
+    expect(useCanvasStore.getState().shapes).toHaveLength(2);
+  });
+
+  it("undo deleteShapes restores deleted shapes", () => {
+    const store = useCanvasStore.getState();
+    store.addRect(100, 100);
+    store.addCircle(200, 200);
+    const beforeDelete = canvasSnapshot();
+
+    const rectId = useCanvasStore.getState().shapes[0].id;
+    store.deleteShapes([rectId]);
+    expect(useCanvasStore.getState().shapes).toHaveLength(1);
+
+    store.undo();
+    expect(canvasSnapshot()).toEqual(beforeDelete);
+  });
+
+  it("undo deleteShapes restores cascaded connectors", () => {
+    const store = useCanvasStore.getState();
+    store.addRect(100, 100);
+    store.addCircle(300, 300);
+    const [rect, circle] = useCanvasStore.getState().shapes;
+    store.addConnector({ id: rect.id }, { id: circle.id }, "arrow");
+    const beforeDelete = canvasSnapshot();
+
+    // Deleting rect cascades to connector
+    store.deleteShapes([rect.id]);
+    expect(useCanvasStore.getState().shapes).toHaveLength(1);
+
+    store.undo();
+    expect(canvasSnapshot()).toEqual(beforeDelete);
+    expect(useCanvasStore.getState().shapes).toHaveLength(3);
+  });
+
+  it("undo duplicateShapes removes the duplicates", () => {
+    const store = useCanvasStore.getState();
+    store.addRect(100, 100);
+    const beforeDup = canvasSnapshot();
+
+    const rectId = useCanvasStore.getState().shapes[0].id;
+    store.duplicateShapes([rectId]);
+    expect(useCanvasStore.getState().shapes).toHaveLength(2);
+
+    store.undo();
+    expect(canvasSnapshot()).toEqual(beforeDup);
+    expect(useCanvasStore.getState().shapes).toHaveLength(1);
+  });
+
+  it("undo paste removes pasted shapes", () => {
+    const store = useCanvasStore.getState();
+    store.addRect(100, 100);
+    store.setSelected([useCanvasStore.getState().shapes[0].id]);
+    store.copySelected();
+    const beforePaste = canvasSnapshot();
+
+    store.paste(20, 20);
+    expect(useCanvasStore.getState().shapes).toHaveLength(2);
+
+    store.undo();
+    expect(canvasSnapshot()).toEqual(beforePaste);
+  });
+
+  it("undo bringToFront restores original z-order", () => {
+    const store = useCanvasStore.getState();
+    store.addRect(100, 100);
+    store.addCircle(200, 200);
+    const beforeBring = canvasSnapshot();
+
+    const rectId = useCanvasStore.getState().shapes[0].id;
+    store.bringToFront([rectId]);
+    expect(canvasSnapshot()).not.toEqual(beforeBring);
+
+    store.undo();
+    expect(canvasSnapshot()).toEqual(beforeBring);
+  });
+
+  it("undo sendToBack restores original z-order", () => {
+    const store = useCanvasStore.getState();
+    store.addRect(100, 100);
+    store.addCircle(200, 200);
+    const beforeSend = canvasSnapshot();
+
+    const circleId = useCanvasStore.getState().shapes[1].id;
+    store.sendToBack([circleId]);
+    expect(canvasSnapshot()).not.toEqual(beforeSend);
+
+    store.undo();
+    expect(canvasSnapshot()).toEqual(beforeSend);
+  });
+
+  it("undo updateShape restores previous values", () => {
+    const store = useCanvasStore.getState();
+    store.addRect(100, 100);
+    const rectId = useCanvasStore.getState().shapes[0].id;
+    const beforeUpdate = canvasSnapshot();
+
+    store.pushHistory();
+    store.updateShape(rectId, { x: 999, y: 888 });
+    expect(useCanvasStore.getState().shapes[0].x).toBe(999);
+
+    store.undo();
+    expect(canvasSnapshot()).toEqual(beforeUpdate);
+  });
+
+  it("undo color change (pushHistory + updateShapes) restores original color", () => {
+    const store = useCanvasStore.getState();
+    store.addRect(100, 100);
+    const rectId = useCanvasStore.getState().shapes[0].id;
+    const originalColor = (useCanvasStore.getState().shapes[0] as { fill: string }).fill;
+
+    store.pushHistory();
+    store.updateShapes([{ id: rectId, patch: { fill: "#ff0000" } }]);
+    expect((useCanvasStore.getState().shapes[0] as { fill: string }).fill).toBe("#ff0000");
+
+    store.undo();
+    expect((useCanvasStore.getState().shapes[0] as { fill: string }).fill).toBe(originalColor);
+  });
+
+  it("text editing undo flow: pushHistory before edits, undo restores original", () => {
+    const store = useCanvasStore.getState();
+    const id = store.addStickyNote(100, 100, "original text");
+
+    // Simulate beginTextEditing: pushHistory BEFORE any live edits
+    store.pushHistory();
+
+    // Simulate handleTextareaChange: live edits go directly to store
+    store.updateShape(id, { text: "typing..." });
+    store.updateShape(id, { text: "typing more..." });
+    store.updateShape(id, { text: "final edit" });
+
+    // Simulate commitTextEdit: just updates with final value (no extra pushHistory)
+    store.updateShape(id, { text: "final edit" });
+
+    const sticky = useCanvasStore.getState().shapes.find((s) => s.id === id);
+    if (sticky!.type !== "sticky") throw new Error("unreachable");
+    expect(sticky!.text).toBe("final edit");
+
+    // Undo should restore the original text (snapshot was taken before live edits)
+    store.undo();
+    const restored = useCanvasStore.getState().shapes.find((s) => s.id === id);
+    if (restored!.type !== "sticky") throw new Error("unreachable");
+    expect(restored!.text).toBe("original text");
+  });
+
+  it("text editing cancel (undo) restores original text", () => {
+    const store = useCanvasStore.getState();
+    const id = store.addStickyNote(100, 100, "keep me");
+
+    // Simulate beginTextEditing
+    store.pushHistory();
+
+    // Simulate live typing
+    store.updateShape(id, { text: "changed" });
+
+    // Simulate cancelTextEdit: undo reverts to pre-edit state
+    store.undo();
+    const restored = useCanvasStore.getState().shapes.find((s) => s.id === id);
+    if (restored!.type !== "sticky") throw new Error("unreachable");
+    expect(restored!.text).toBe("keep me");
+  });
+
+  it("frame title editing undo restores original title", () => {
+    const store = useCanvasStore.getState();
+    const id = store.addFrame(200, 200, "Original Title");
+
+    // Simulate beginTextEditing
+    store.pushHistory();
+
+    // Simulate live typing
+    store.updateShape(id, { title: "New Title" });
+
+    // Simulate commitTextEdit (no extra push)
+    store.updateShape(id, { title: "New Title" });
+
+    const frame = useCanvasStore.getState().shapes.find((s) => s.id === id);
+    if (frame!.type !== "frame") throw new Error("unreachable");
+    expect(frame!.title).toBe("New Title");
+
+    store.undo();
+    const restored = useCanvasStore.getState().shapes.find((s) => s.id === id);
+    if (restored!.type !== "frame") throw new Error("unreachable");
+    expect(restored!.title).toBe("Original Title");
+  });
+
+  it("nudge sequence: single pushHistory covers multiple arrow moves", () => {
+    const store = useCanvasStore.getState();
+    store.addRect(100, 100);
+    const rectId = useCanvasStore.getState().shapes[0].id;
+    const originalX = useCanvasStore.getState().shapes[0].x;
+
+    // Simulate nudge sequence: push once, then multiple updateShapes
+    store.pushHistory();
+    store.updateShapes([{ id: rectId, patch: { x: originalX + 1 } }]);
+    store.updateShapes([{ id: rectId, patch: { x: originalX + 2 } }]);
+    store.updateShapes([{ id: rectId, patch: { x: originalX + 3 } }]);
+
+    expect(useCanvasStore.getState().shapes[0].x).toBe(originalX + 3);
+
+    // Single undo should revert the entire nudge sequence
+    store.undo();
+    expect(useCanvasStore.getState().shapes[0].x).toBe(originalX);
+  });
+
+  it("multiple undo then redo preserves exact shape data", () => {
+    const store = useCanvasStore.getState();
+    store.addStickyNote(100, 100, "sticky");
+    store.addFrame(300, 300, "frame");
+    store.addConnector(
+      { id: useCanvasStore.getState().shapes[0].id },
+      { id: useCanvasStore.getState().shapes[1].id },
+      "arrow"
+    );
+    const finalSnapshot = canvasSnapshot();
+
+    // Undo all 3
+    store.undo();
+    store.undo();
+    store.undo();
+    expect(useCanvasStore.getState().shapes).toHaveLength(0);
+
+    // Redo all 3
+    store.redo();
+    store.redo();
+    store.redo();
+    expect(canvasSnapshot()).toEqual(finalSnapshot);
+  });
+
+  it("undo clears selection", () => {
+    const store = useCanvasStore.getState();
+    store.addRect(100, 100);
+    const rectId = useCanvasStore.getState().shapes[0].id;
+    // addRect auto-selects
+    expect(useCanvasStore.getState().selectedIds).toEqual([rectId]);
+
+    store.undo();
+    expect(useCanvasStore.getState().selectedIds).toEqual([]);
+  });
+
+  it("redo clears selection", () => {
+    const store = useCanvasStore.getState();
+    store.addRect(100, 100);
+    store.undo();
+    store.setSelected([]); // just ensure clean state
+    store.redo();
+    // Redo should clear selection
+    expect(useCanvasStore.getState().selectedIds).toEqual([]);
+  });
+
+  it("addFrameAtBounds is undoable and restores child parentIds", () => {
+    const store = useCanvasStore.getState();
+    // Add a rect that will be inside the frame bounds
+    store.addRect(150, 150);
+    const rectId = useCanvasStore.getState().shapes[0].id;
+    const beforeFrame = canvasSnapshot();
+
+    // Frame will encompass the rect
+    store.addFrameAtBounds(0, 0, 500, 500, "Container");
+    const rect = useCanvasStore.getState().shapes.find((s) => s.id === rectId);
+    expect(rect?.parentId).toBeDefined(); // rect adopted by frame
+
+    store.undo();
+    expect(canvasSnapshot()).toEqual(beforeFrame);
+    const restoredRect = useCanvasStore.getState().shapes.find((s) => s.id === rectId);
+    expect(restoredRect?.parentId).toBeUndefined();
+  });
+
+  it("setShapes (sync) does NOT push history", () => {
+    const store = useCanvasStore.getState();
+    store.addRect(100, 100);
+    const historyLenBefore = useCanvasStore.getState().history.length;
+
+    // setShapes is for Firestore sync — should NOT affect history
+    store.setShapes([]);
+    expect(useCanvasStore.getState().history.length).toBe(historyLenBefore);
+  });
+
+  it("addShape (sync) does NOT push history", () => {
+    const store = useCanvasStore.getState();
+    const historyLenBefore = useCanvasStore.getState().history.length;
+
+    store.addShape({
+      id: "sync-1",
+      type: "rect",
+      x: 0,
+      y: 0,
+      w: 50,
+      h: 50,
+      fill: "#000",
+      cornerRadius: 0,
+      rotation: 0,
+      opacity: 1,
+      zIndex: 0,
+    });
+    expect(useCanvasStore.getState().history.length).toBe(historyLenBefore);
+  });
+
+  it("removeShapeSync does NOT push history", () => {
+    const store = useCanvasStore.getState();
+    store.addRect(100, 100);
+    const rectId = useCanvasStore.getState().shapes[0].id;
+    const historyLenBefore = useCanvasStore.getState().history.length;
+
+    store.removeShapeSync(rectId);
+    expect(useCanvasStore.getState().shapes).toHaveLength(0);
+    expect(useCanvasStore.getState().history.length).toBe(historyLenBefore);
+  });
 });
