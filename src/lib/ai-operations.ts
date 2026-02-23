@@ -186,6 +186,7 @@ export function executeAIOperations(operations: AIOperation[]): Map<string, stri
           zIndex: baseZIndex++,
           ...(op.lineStyle ? { lineStyle: op.lineStyle } : {}),
           ...(op.routingMode ? { routingMode: op.routingMode } : {}),
+          ...(op.curveOffset != null ? { curveOffset: op.curveOffset } : {}),
         } as ConnectorShape);
         break;
       }

@@ -12,37 +12,75 @@ const ICON_SLUG_REFERENCE = `Use Simple Icons slugs (simpleicons.org) for iconSl
 export const ANALYSIS_PROMPT = `You are a senior software architect. Analyze the following codebase and produce a structured architecture description as JSON.
 
 ANALYSIS RULES:
-- Identify 2-5 logical layers or groups. They do NOT have to be traditional client/server tiers.
+- Identify 3-7 logical layers or groups. They do NOT have to be traditional client/server tiers.
   - If the project has distinct feature modules, group by feature area instead.
   - If it's a monolith, group by concern (UI, state, data, services, utilities).
   - If it has separate packages/workspaces, group by package.
 - Assign tier numbers (0 = top/client-facing, higher = deeper). Use the same tier number for groups that sit side-by-side at the same level.
-- Identify 2-5 major components per layer (max 5 per layer, ~20 total across all layers). If a layer has more than 5 components, split into two layers at the same tier.
+- Identify 2-5 major components per layer (max 5 per layer, ~20 total across all layers).
 - Each component should map to a real module, service, or package in the codebase.
-- For each component, provide an iconSlug from Simple Icons if a well-known technology is used.
-- Identify 5-12 key connections showing data flow between components. Add a short label describing the relationship.
-- Provide a 3-5 sentence "summary" explaining what the project does, its key architectural decisions, and notable patterns.
-- Provide "techStackIcons": an array of 4-8 Simple Icons slugs for the project's main technologies.
+
+COMPONENT FIELDS:
+- "name": Short display name (2-4 words max, e.g., "Canvas Stage", "Auth Provider").
+- "techStack": The PRIMARY technology for this component as a SHORT label (1-3 words, e.g., "React Konva", "Zustand", "Firestore"). Every component should have one. Do NOT repeat the same tech on every component — only the primary one unique to that component.
+- "iconSlug": Simple Icons slug for the primary technology. Every component with a well-known tech should have this.
+- "description": OMIT THIS FIELD. Do NOT include per-component descriptions. The layer "description" field covers this.
+
+LAYER FIELDS:
+- "name": Short group name (e.g., "Canvas UI", "State Management", "API Routes").
+- "description": ONE short sentence (8-15 words max) explaining what this layer handles. Examples:
+  - "Renders shapes and handles user interaction on the canvas"
+  - "Manages application state and syncs with backend"
+  - "Processes AI commands and streams results to client"
+  This is displayed as a subtitle in the layer header. Keep it punchy and informative.
+- "tier": Number (0 = top/client-facing, higher = deeper).
+- "section": Required. Groups related layers visually.
+
+SECTION RULES:
+- EVERY layer MUST have a "section" string.
+- Use 2-4 sections. Common patterns:
+  - "Frontend" + "Backend" + "Infrastructure" (classic web app)
+  - "Client" + "Server" + "Data" (API-centric)
+  - "Core" + "Features" + "Platform" (modular monolith)
+- Layers within a section don't need sequential tier numbers.
+- Think of sections as major subsystems a developer would mentally group together.
+
+COLOR THEME:
+- Choose a "colorTheme" based on the project's character:
+  - "warm" — creative tools, social apps, content platforms
+  - "cool" — enterprise, dashboards, productivity tools
+  - "earth" — data/ML, scientific, analytics
+  - "neon" — dev tools, CLIs, developer-facing projects
+  - "ocean" — cloud infrastructure, networking, DevOps
+  - "mono" — minimal projects, libraries, utilities
+
+LAYOUT HINT:
+- Choose a "layoutHint" based on the project's topology:
+  - "vertical" — simple projects with clear top-down data flow. Sections stack top to bottom.
+  - "horizontal" — projects with a clear frontend/backend split. Sections sit side by side.
+  - "bento" (default) — complex projects where sections have different sizes. Dynamic grid layout.
 
 ${ICON_SLUG_REFERENCE}
 
 OUTPUT FORMAT — Return ONLY valid JSON, no markdown fences, no explanation:
 {
-  "title": "Project Name — Architecture",
-  "description": "One-line summary of what this project does",
-  "summary": "3-5 sentence architectural overview. Describe the project purpose, key architectural patterns, data flow approach, and notable design decisions.",
+  "title": "<actual repo name> — Architecture",
+  "description": "One-line summary (under 15 words) of what this project does",
   "techStackIcons": ["react", "typescript", "firebase", "tailwindcss"],
+  "colorTheme": "cool",
+  "layoutHint": "bento",
   "layers": [
     {
-      "name": "Layer or Group Name",
-      "tier": 0,
+      "name": "Canvas UI",
+      "description": "Renders shapes and handles user interaction on the canvas",
+      "tier": 1,
+      "section": "Frontend",
       "components": [
         {
-          "id": "unique-kebab-id",
-          "name": "Display Name",
-          "description": "What this component does (8 words max)",
-          "techStack": "Key tech (e.g. Next.js, React)",
-          "iconSlug": "nextdotjs"
+          "id": "canvas-stage",
+          "name": "Canvas Stage",
+          "techStack": "React Konva",
+          "iconSlug": "react"
         }
       ]
     }
@@ -53,22 +91,30 @@ OUTPUT FORMAT — Return ONLY valid JSON, no markdown fences, no explanation:
       "to": "component-id-b",
       "label": "REST API",
       "style": "arrow",
-      "lineStyle": "solid"
+      "lineStyle": "solid",
+      "importance": "primary"
     }
   ]
 }
 
-CONNECTION RULES:
+CONNECTION RULES — LESS IS MORE:
+- MAXIMUM 2-4 connections total. Only show connections that reveal non-obvious, cross-section relationships.
+- If a relationship is obvious from the section grouping (e.g., frontend calls backend), do NOT add a connector.
 - "arrow" for directed data flow, "double-arrow" for bidirectional, "line" for loose coupling
 - "dashed" lineStyle for async/event-driven, "dotted" for optional, "solid" for synchronous
 - Every "from" and "to" must reference a valid component "id"
-- Always include a short "label" describing the connection (e.g. "REST API", "imports", "subscribes", "WebSocket", "queries")
-- Keep connections to the most important 5-12 relationships
+- Always include a short "label" (2-4 words max)
+- Classify each connection by importance:
+  - "primary" (1-2): The single most critical data flow path
+  - "secondary" (1-2): Important supporting relationships
+  - "tertiary" (0-1): Nice-to-know, rendered faintly
+- ONLY connect components within the SAME section or between directly adjacent sections.
 
-LAYOUT HINTS:
-- Not every architecture is a top-down waterfall. Feel free to use the same tier number for groups that are peers/siblings.
-- Group related infrastructure together (e.g. "Data / Infrastructure" layer for DB + cache + auth).
-- If the project has a clear feature-based structure, reflect that in the grouping.`;
+LAYOUT TIPS:
+- Use the same tier number for peer groups that sit side-by-side.
+- Group related infrastructure together.
+- A layer with 1-2 components is a thin row; 4-5 components is a major subsystem.
+- Within a section, order layers from highest tier (user-facing) to lowest (infrastructure).`;
 
 // ── Repomix include globs (architecture-relevant files only) ─────────
 export const ARCH_INCLUDE = [

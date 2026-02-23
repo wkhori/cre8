@@ -18,6 +18,7 @@ import {
   ArrowDownToLine,
   Trash2,
   ChevronDown,
+  ImageDown,
 } from "lucide-react";
 import ColorPicker from "@/components/canvas/ColorPicker";
 import { getShapeBounds, computeConnectorPoints } from "@/lib/shape-geometry";
@@ -625,6 +626,19 @@ function ActionButtons({ selectedIds }: { selectedIds: string[] }) {
         title="Send to Back"
       >
         <ArrowDownToLine className="size-3.5" />
+      </Button>
+      <div className="mx-0.5 h-4 w-px bg-zinc-200 dark:bg-zinc-700" />
+      <Button
+        size="icon-xs"
+        variant="ghost"
+        onClick={() =>
+          window.dispatchEvent(
+            new CustomEvent("export-image", { detail: { scope: "selection", format: "png" } })
+          )
+        }
+        title="Export selection as PNG"
+      >
+        <ImageDown className="size-3.5" />
       </Button>
       <Button
         size="icon-xs"

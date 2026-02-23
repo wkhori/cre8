@@ -20,6 +20,7 @@ import { useTransformer } from "./useTransformer";
 import { useConnectorEndpoints } from "./useConnectorEndpoints";
 import { usePlacement } from "./usePlacement";
 import GhostPreview from "./GhostPreview";
+import { exportCanvasAsImage } from "@/lib/export-image";
 
 interface CanvasStageProps {
   boardId?: string;
@@ -97,6 +98,25 @@ export default function CanvasStage({
     const observer = new MutationObserver(check);
     observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
     return () => observer.disconnect();
+  }, []);
+
+  // Export-image event listener
+  useEffect(() => {
+    const handleExport = (evt: Event) => {
+      const { scope, format } = (evt as CustomEvent).detail ?? {};
+      const stage = stageRef.current;
+      const layer = layerRef.current;
+      if (!stage || !layer) return;
+      const { shapes: s, selectedIds: sel } = useCanvasStore.getState();
+      exportCanvasAsImage(stage, layer, {
+        scope: scope ?? "board",
+        format: format ?? "png",
+        shapes: s,
+        selectedIds: sel,
+      });
+    };
+    window.addEventListener("export-image", handleExport);
+    return () => window.removeEventListener("export-image", handleExport);
   }, []);
 
   const effectiveTool = spaceHeld ? "hand" : activeTool;

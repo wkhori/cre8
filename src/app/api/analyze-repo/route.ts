@@ -357,7 +357,7 @@ export async function POST(request: NextRequest) {
           messages: [
             {
               role: "user",
-              content: `Analyze this codebase and produce the architecture JSON:\n\n${packed}`,
+              content: `Analyze this codebase and produce the architecture JSON.\n\nRepository: ${repoName}\nIMPORTANT: Use the actual repository name "${repo}" in the title field — do NOT invent a different name.\n\n${packed}`,
             },
           ],
         });
