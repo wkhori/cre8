@@ -544,6 +544,33 @@ export function layoutArchitecture(
       strokeWidth: 1,
     });
 
+    // Section icons (right side) — all unique tech from components in this section
+    const sectionIcons = new Set<string>();
+    for (const layer of sec.layers) {
+      for (const comp of layer.components) {
+        if (comp.iconSlug) sectionIcons.add(comp.iconSlug);
+      }
+    }
+    const sectionIconList = [...sectionIcons];
+    if (sectionIconList.length > 0) {
+      const iconSize = 14;
+      const iconGap = 5;
+      const iconRowW = sectionIconList.length * (iconSize + iconGap) - iconGap;
+      const iconStartX = secX + secW - iconRowW - 14;
+      const iconY = secY + (SECTION_HEADER_H - iconSize) / 2;
+      for (let i = 0; i < sectionIconList.length; i++) {
+        ops.push({
+          type: "createImage",
+          tempId: genTempId(),
+          x: iconStartX + i * (iconSize + iconGap),
+          y: iconY,
+          w: iconSize,
+          h: iconSize,
+          src: `https://cdn.simpleicons.org/${sectionIconList[i]}/ffffff`,
+        });
+      }
+    }
+
     // Section label
     ops.push({
       type: "createText",
@@ -600,9 +627,6 @@ function emitConnectors(
   componentTierMap: Map<string, number>,
   componentSectionMap: Map<string, string>
 ) {
-  let curvedIdx = 0;
-  const curveOffsets = [30, -30, 50, -50, 20, -20];
-
   for (const conn of connections) {
     const fromTempId = componentTempIds.get(conn.from);
     const toTempId = componentTempIds.get(conn.to);
@@ -614,16 +638,14 @@ function emitConnectors(
     const fromSection = componentSectionMap.get(conn.from) ?? "";
     const toSection = componentSectionMap.get(conn.to) ?? "";
     const tierDiff = Math.abs(fromTier - toTier);
-    const crossSection = fromSection !== toSection;
+    const sameSection = fromSection === toSection;
 
-    // Choose routing mode based on spatial relationship
+    // Choose routing: straight for same-tier neighbors, elbowed for everything else
     let routingMode: "straight" | "curved" | "elbowed";
-    if (tierDiff === 0 && !crossSection) {
+    if (tierDiff === 0 && sameSection) {
       routingMode = "straight";
-    } else if (tierDiff <= 1 && !crossSection) {
-      routingMode = "elbowed";
     } else {
-      routingMode = "curved";
+      routingMode = "elbowed";
     }
 
     // Vary stroke by importance
@@ -653,7 +675,7 @@ function emitConnectors(
         break;
     }
 
-    const connectorOp: AIOperation = {
+    ops.push({
       type: "createConnector",
       tempId: genTempId(),
       fromId: fromTempId,
@@ -663,16 +685,7 @@ function emitConnectors(
       routingMode,
       stroke,
       strokeWidth,
-    };
-
-    // Add curve offset for curved connectors to prevent overlap
-    if (routingMode === "curved") {
-      (connectorOp as AIOperation & { curveOffset?: number }).curveOffset =
-        curveOffsets[curvedIdx % curveOffsets.length];
-      curvedIdx++;
-    }
-
-    ops.push(connectorOp);
+    });
 
     // Label pill — offset away from component cards to avoid overlap
     if (showLabel && conn.label) {
@@ -835,31 +848,6 @@ function emitLayer(
       fill: "rgba(226,232,240,0.5)",
       width: layerW - 32,
     });
-  }
-
-  // ── Per-layer icons in header (right side) ──────────────────
-  const layerIcons = layer.components
-    .map((c) => c.iconSlug)
-    .filter((slug): slug is string => !!slug);
-  const uniqueIcons = [...new Set(layerIcons)];
-  if (uniqueIcons.length > 0) {
-    const iconSize = 16;
-    const iconGap = 6;
-    const iconRowW = uniqueIcons.length * (iconSize + iconGap) - iconGap;
-    const iconStartX = layerX + layerW - iconRowW - 14;
-    const iconY = layerY + (HEADER_BAND_H - iconSize) / 2;
-
-    for (let i = 0; i < uniqueIcons.length; i++) {
-      ops.push({
-        type: "createImage",
-        tempId: genTempId(),
-        x: iconStartX + i * (iconSize + iconGap),
-        y: iconY,
-        w: iconSize,
-        h: iconSize,
-        src: `https://cdn.simpleicons.org/${uniqueIcons[i]}/ffffff`,
-      });
-    }
   }
 
   // ── Component cards (compact: name + tech label) ────────────
