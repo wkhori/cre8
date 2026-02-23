@@ -3,12 +3,22 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import Image from "next/image";
-import { ArrowRight, Loader2, MousePointer2, Sparkles, Users } from "lucide-react";
+import Link from "next/link";
+import {
+  ArrowRight,
+  Loader2,
+  Sparkles,
+  GitFork,
+  MessageSquareText,
+  Cpu,
+  Users,
+  MousePointer2,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { BorderTrail } from "@/components/ui/border-trail";
 
 export default function Home() {
   const router = useRouter();
@@ -38,225 +48,350 @@ export default function Home() {
   const busy = loading || actionLoading;
 
   return (
-    <div className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-zinc-950 text-zinc-100">
-      {/* ── Ambient glow layers ── */}
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_60%_50%_at_50%_-10%,rgba(120,119,198,0.18),transparent)]" />
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_80%_60%,rgba(56,189,248,0.08),transparent_50%)]" />
+    <div className="relative min-h-screen bg-zinc-950 text-zinc-100">
+      {/* ── Ambient layers ── */}
+      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(ellipse_60%_50%_at_50%_-10%,rgba(120,119,198,0.12),transparent)]" />
+      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_80%_60%,rgba(56,189,248,0.06),transparent_50%)]" />
+      <div className="pointer-events-none fixed inset-0 bg-[linear-gradient(transparent_31px,rgba(255,255,255,0.02)_32px),linear-gradient(90deg,transparent_31px,rgba(255,255,255,0.02)_32px)] bg-size-[32px_32px]" />
+      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_1px_at_32px_32px,rgba(255,255,255,0.1)_0%,transparent_100%)] bg-size-[32px_32px]" />
+      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(ellipse_at_center,transparent_40%,rgba(9,9,11,0.7))]" />
 
-      {/* ── Grid pattern ── */}
-      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(transparent_31px,rgba(255,255,255,0.03)_32px),linear-gradient(90deg,transparent_31px,rgba(255,255,255,0.03)_32px)] bg-size-[32px_32px]" />
-
-      {/* ── Grid intersection dots ── */}
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_1px_at_32px_32px,rgba(255,255,255,0.15)_0%,transparent_100%)] bg-size-[32px_32px]" />
-
-      {/* ── Vignette ── */}
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_40%,rgba(9,9,11,0.7))]" />
-
-      {/* ── Content ── */}
-      <div className="relative z-10 mx-auto flex w-full max-w-2xl flex-col items-center px-6 py-20">
-        {/* Top badge */}
-        <Badge
-          variant="outline"
-          className="mb-8 border-zinc-700/80 bg-zinc-900/60 px-3 py-1.5 text-[11px] tracking-[0.2em] text-zinc-400 uppercase backdrop-blur-sm"
-        >
-          <span className="mr-2 inline-block size-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.6)]" />
-          Now in beta
-        </Badge>
-
-        {/* Headline */}
-        <h1 className="text-center text-[clamp(2.5rem,7vw,4.5rem)] leading-[1.04] font-semibold tracking-[-0.035em] text-white">
-          Where teams think
-          <br />
-          <span className="bg-linear-to-r from-zinc-200 via-zinc-400 to-zinc-500 bg-clip-text text-transparent">
-            out loud.
-          </span>
-        </h1>
-
-        {/* Subheadline */}
-        <p className="mt-5 max-w-md text-center text-[17px] leading-relaxed text-zinc-400">
-          An infinite canvas for brainstorming, planning, and building together — with AI that moves
-          as fast as you do.
-        </p>
-
-        {/* Feature pills */}
-        <div className="mt-8 flex flex-wrap items-center justify-center gap-2">
-          <FeaturePill icon={<MousePointer2 className="size-3" />} label="Multiplayer cursors" />
-          <FeaturePill icon={<Users className="size-3" />} label="Real-time sync" />
-          <FeaturePill icon={<Sparkles className="size-3" />} label="AI-powered" />
+      {/* ── Nav ── */}
+      <nav className="relative z-20 border-b border-zinc-800/40 bg-zinc-950/60 backdrop-blur-2xl">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-3">
+          <div className="flex items-center gap-2">
+            <Image src="/logo-dark.svg" alt="cre8" width={18} height={18} className="opacity-70" />
+            <span className="text-sm font-medium tracking-tight text-zinc-300">cre8</span>
+          </div>
+          <Link
+            href="/dev-process"
+            className="font-[family-name:var(--font-geist-mono)] text-[10px] tracking-[0.15em] text-zinc-600 uppercase transition-colors hover:text-zinc-400"
+          >
+            How this was built
+          </Link>
         </div>
+      </nav>
 
-        {/* ── Sign-in card ── */}
-        <div className="mt-12 w-full max-w-sm">
-          <div className="rounded-2xl border border-zinc-800/80 bg-zinc-900/50 p-6 shadow-[0_8px_40px_rgba(0,0,0,0.4)] backdrop-blur-xl">
-            <h2 className="text-center text-lg font-medium text-zinc-100">Get started</h2>
-            <p className="mt-1.5 text-center text-sm text-zinc-500">Sign in to open your canvas.</p>
+      {/* ── Hero ── */}
+      <div className="relative z-10 mx-auto max-w-6xl px-6">
+        <div className="grid items-center gap-12 pt-20 pb-16 lg:grid-cols-2 lg:gap-16 lg:pt-28 lg:pb-24">
+          {/* Left — copy + auth */}
+          <div className="flex flex-col items-center lg:items-start">
+            {/* Beta badge */}
+            <span className="mb-6 inline-flex items-center gap-2 rounded-full border border-zinc-800/80 bg-zinc-900/60 px-3 py-1.5 text-[11px] tracking-[0.15em] text-zinc-500 uppercase backdrop-blur-sm">
+              <span className="size-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.5)]" />
+              Beta
+            </span>
 
-            <div className="mt-5 space-y-3">
-              {/* Google — hero CTA */}
-              {!showEmail && (
-                <>
-                  <Button
-                    size="lg"
-                    className="h-11 w-full justify-between rounded-xl bg-white text-zinc-950 hover:bg-zinc-100"
-                    onClick={() => void signInWithGoogle()}
-                    disabled={busy}
-                  >
-                    <span className="inline-flex items-center gap-2.5 text-[14px] font-medium">
-                      <GoogleMark />
-                      Continue with Google
-                    </span>
-                    {busy ? (
-                      <Loader2 className="size-4 animate-spin text-zinc-400" />
-                    ) : (
-                      <ArrowRight className="size-4 text-zinc-400" />
-                    )}
-                  </Button>
+            {/* Headline */}
+            <h1 className="text-center text-[clamp(2.2rem,5.5vw,3.8rem)] leading-[1.06] font-semibold tracking-[-0.035em] text-white lg:text-left">
+              Your canvas has
+              <br />
+              <span className="bg-linear-to-r from-emerald-300 via-sky-300 to-zinc-400 bg-clip-text text-transparent">
+                an AI copilot.
+              </span>
+            </h1>
 
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowEmail(true);
-                      clearActionLoading();
-                    }}
-                    className="w-full py-1.5 text-center text-xs text-zinc-500 transition-colors hover:text-zinc-300"
-                  >
-                    or continue with email
-                  </button>
-                </>
-              )}
+            {/* Subheadline */}
+            <p className="mt-5 max-w-md text-center text-[16px] leading-relaxed text-zinc-400 lg:text-left">
+              An infinite canvas for brainstorming, planning, and building together — with an AI
+              agent that creates diagrams, layouts, and frameworks from natural language.
+            </p>
 
-              {/* Email form — revealed on demand */}
-              {showEmail && (
-                <form
-                  className="space-y-3"
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    if (isSignUp) {
-                      void signUpWithEmail(name, email, password);
-                    } else {
-                      void signInWithEmail(email, password);
-                    }
-                  }}
-                >
-                  {isSignUp && (
-                    <div className="space-y-1.5">
-                      <Label htmlFor="auth-name" className="text-xs text-zinc-400">
-                        Name
-                      </Label>
-                      <Input
-                        id="auth-name"
-                        type="text"
-                        placeholder="Your name"
-                        value={name}
-                        onChange={(e) => setName(e.target.value)}
-                        required
-                        autoFocus
-                        className="h-10 rounded-lg border-zinc-700 bg-zinc-950/60 text-sm text-zinc-100 placeholder:text-zinc-600"
-                      />
-                    </div>
+            {/* Feature row */}
+            <div className="mt-7 flex flex-wrap items-center justify-center gap-4 text-[12px] text-zinc-500 lg:justify-start">
+              <span className="flex items-center gap-1.5">
+                <MessageSquareText className="size-3.5 text-zinc-600" />
+                AI canvas commands
+              </span>
+              <span className="flex items-center gap-1.5">
+                <GitFork className="size-3.5 text-zinc-600" />
+                Repo architecture diagrams
+              </span>
+              <span className="flex items-center gap-1.5">
+                <Users className="size-3.5 text-zinc-600" />
+                Real-time multiplayer
+              </span>
+            </div>
+
+            {/* Auth card */}
+            <div className="mt-10 w-full max-w-sm">
+              <div className="rounded-2xl border border-zinc-800/60 bg-zinc-900/40 p-6 shadow-[0_8px_40px_rgba(0,0,0,0.3)] backdrop-blur-xl">
+                <h2 className="text-left text-base font-medium text-zinc-100">Get started</h2>
+                <p className="mt-1 text-left text-sm text-zinc-600">Sign in to open your canvas.</p>
+
+                <div className="mt-5 space-y-3">
+                  {/* Google — hero CTA */}
+                  {!showEmail && (
+                    <>
+                      <Button
+                        size="lg"
+                        className="h-11 w-full justify-between rounded-xl bg-white text-zinc-950 hover:bg-zinc-100"
+                        onClick={() => void signInWithGoogle()}
+                        disabled={busy}
+                      >
+                        <span className="inline-flex items-center gap-2.5 text-[14px] font-medium">
+                          <GoogleMark />
+                          Continue with Google
+                        </span>
+                        {busy ? (
+                          <Loader2 className="size-4 animate-spin text-zinc-400" />
+                        ) : (
+                          <ArrowRight className="size-4 text-zinc-400" />
+                        )}
+                      </Button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowEmail(true);
+                          clearActionLoading();
+                        }}
+                        className="w-full py-1.5 text-left text-xs text-zinc-600 transition-colors hover:text-zinc-300"
+                      >
+                        or continue with email
+                      </button>
+                    </>
                   )}
 
-                  <div className="space-y-1.5">
-                    <Label htmlFor="auth-email" className="text-xs text-zinc-400">
-                      Email
-                    </Label>
-                    <Input
-                      id="auth-email"
-                      type="email"
-                      placeholder="you@example.com"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      required
-                      autoFocus={!isSignUp}
-                      className="h-10 rounded-lg border-zinc-700 bg-zinc-950/60 text-sm text-zinc-100 placeholder:text-zinc-600"
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <Label htmlFor="auth-password" className="text-xs text-zinc-400">
-                      Password
-                    </Label>
-                    <Input
-                      id="auth-password"
-                      type="password"
-                      placeholder={isSignUp ? "At least 6 characters" : "••••••••"}
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      required
-                      minLength={isSignUp ? 6 : undefined}
-                      className="h-10 rounded-lg border-zinc-700 bg-zinc-950/60 text-sm text-zinc-100 placeholder:text-zinc-600"
-                    />
-                  </div>
-
-                  <Button
-                    type="submit"
-                    size="lg"
-                    disabled={busy}
-                    className="h-10 w-full rounded-xl bg-zinc-100 text-sm font-medium text-zinc-900 hover:bg-white"
-                  >
-                    {busy ? (
-                      <Loader2 className="size-4 animate-spin" />
-                    ) : isSignUp ? (
-                      "Create Account"
-                    ) : (
-                      "Sign In"
-                    )}
-                  </Button>
-
-                  <div className="flex items-center justify-between pt-1">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowEmail(false);
-                        setIsSignUp(false);
+                  {/* Email form */}
+                  {showEmail && (
+                    <form
+                      className="space-y-3"
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        if (isSignUp) {
+                          void signUpWithEmail(name, email, password);
+                        } else {
+                          void signInWithEmail(email, password);
+                        }
                       }}
-                      className="text-xs text-zinc-600 transition-colors hover:text-zinc-400"
                     >
-                      Back to Google
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setIsSignUp(!isSignUp)}
-                      className="text-xs text-zinc-400 transition-colors hover:text-zinc-200"
-                    >
-                      {isSignUp ? "Have an account? Sign in" : "Need an account? Sign up"}
-                    </button>
-                  </div>
-                </form>
-              )}
+                      {isSignUp && (
+                        <div className="space-y-1.5">
+                          <Label htmlFor="auth-name" className="text-xs text-zinc-400">
+                            Name
+                          </Label>
+                          <Input
+                            id="auth-name"
+                            type="text"
+                            placeholder="Your name"
+                            value={name}
+                            onChange={(e) => setName(e.target.value)}
+                            required
+                            autoFocus
+                            className="h-10 rounded-lg border-zinc-700 bg-zinc-950/60 text-sm text-zinc-100 placeholder:text-zinc-600"
+                          />
+                        </div>
+                      )}
 
-              {error && (
-                <p className="rounded-lg border border-red-500/30 bg-red-950/40 px-3 py-2 text-center text-xs text-red-300">
-                  {error}
-                </p>
-              )}
+                      <div className="space-y-1.5">
+                        <Label htmlFor="auth-email" className="text-xs text-zinc-400">
+                          Email
+                        </Label>
+                        <Input
+                          id="auth-email"
+                          type="email"
+                          placeholder="you@example.com"
+                          value={email}
+                          onChange={(e) => setEmail(e.target.value)}
+                          required
+                          autoFocus={!isSignUp}
+                          className="h-10 rounded-lg border-zinc-700 bg-zinc-950/60 text-sm text-zinc-100 placeholder:text-zinc-600"
+                        />
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <Label htmlFor="auth-password" className="text-xs text-zinc-400">
+                          Password
+                        </Label>
+                        <Input
+                          id="auth-password"
+                          type="password"
+                          placeholder={isSignUp ? "At least 6 characters" : "••••••••"}
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          required
+                          minLength={isSignUp ? 6 : undefined}
+                          className="h-10 rounded-lg border-zinc-700 bg-zinc-950/60 text-sm text-zinc-100 placeholder:text-zinc-600"
+                        />
+                      </div>
+
+                      <Button
+                        type="submit"
+                        size="lg"
+                        disabled={busy}
+                        className="h-10 w-full rounded-xl bg-zinc-100 text-sm font-medium text-zinc-900 hover:bg-white"
+                      >
+                        {busy ? (
+                          <Loader2 className="size-4 animate-spin" />
+                        ) : isSignUp ? (
+                          "Create Account"
+                        ) : (
+                          "Sign In"
+                        )}
+                      </Button>
+
+                      <div className="flex items-center justify-between pt-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowEmail(false);
+                            setIsSignUp(false);
+                          }}
+                          className="text-xs text-zinc-600 transition-colors hover:text-zinc-400"
+                        >
+                          Back to Google
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setIsSignUp(!isSignUp)}
+                          className="text-xs text-zinc-400 transition-colors hover:text-zinc-200"
+                        >
+                          {isSignUp ? "Have an account? Sign in" : "Need an account? Sign up"}
+                        </button>
+                      </div>
+                    </form>
+                  )}
+
+                  {error && (
+                    <p className="rounded-lg border border-red-500/30 bg-red-950/40 px-3 py-2 text-left text-xs text-red-300">
+                      {error}
+                    </p>
+                  )}
+                </div>
+              </div>
+              <p className="mt-3 text-left text-[11px] text-zinc-700">
+                Free to use. No credit card required.
+              </p>
+
+              {/* Try it now — border trail CTA below auth */}
+              <Link
+                href="/demo"
+                className="relative mt-5 flex w-full items-center justify-center gap-2.5 overflow-hidden rounded-xl bg-zinc-900/80 px-6 py-3 text-sm font-medium text-zinc-100 transition-all hover:bg-zinc-800 hover:text-white"
+              >
+                <BorderTrail
+                  size={120}
+                  className="bg-linear-to-l from-emerald-400 via-sky-400 to-transparent"
+                  transition={{
+                    repeat: Infinity,
+                    duration: 4,
+                    ease: "linear",
+                    repeatDelay: 0,
+                  }}
+                />
+                <Sparkles className="size-4 text-emerald-400" />
+                Try it now — no sign-up required
+                <ArrowRight className="size-3.5 text-zinc-500" />
+              </Link>
             </div>
           </div>
 
-          {/* Trust line */}
-          <p className="mt-4 text-center text-[11px] text-zinc-600">
-            Free to use. No credit card required.
-          </p>
+          {/* Right — product screenshot */}
+          <div className="relative hidden lg:block">
+            <div className="relative overflow-hidden rounded-2xl border border-zinc-800/50 bg-zinc-900/30 shadow-[0_20px_80px_rgba(0,0,0,0.5)]">
+              {/* Screenshot placeholder — replace src with actual screenshot */}
+              <div className="aspect-4/3 w-full bg-zinc-900/50">
+                {/*
+                  TODO: Replace this placeholder with an actual screenshot
+                  <Image src="/screenshot-arch-diagram.png" alt="cre8 architecture diagram" fill className="object-cover" />
+                */}
+                <div className="flex size-full flex-col items-center justify-center gap-3 p-8">
+                  <Cpu className="size-8 text-zinc-700" />
+                  <p className="text-center text-sm text-zinc-700">
+                    Screenshot: Architecture diagram generated from a GitHub repo
+                  </p>
+                  <p className="text-center font-(family-name:--font-geist-mono) text-[10px] text-zinc-800">
+                    Save as /public/screenshot-arch-diagram.png
+                  </p>
+                </div>
+              </div>
+              {/* Browser chrome bar */}
+              <div className="absolute top-0 right-0 left-0 flex items-center gap-1.5 border-b border-zinc-800/40 bg-zinc-950/80 px-3 py-2 backdrop-blur-sm">
+                <span className="size-2 rounded-full bg-zinc-800" />
+                <span className="size-2 rounded-full bg-zinc-800" />
+                <span className="size-2 rounded-full bg-zinc-800" />
+                <span className="ml-2 flex-1 rounded-md bg-zinc-900/60 px-2 py-0.5 font-[family-name:var(--font-geist-mono)] text-[9px] text-zinc-600">
+                  cre8.cool/board/abc123
+                </span>
+              </div>
+            </div>
+            {/* Floating accent */}
+            <div className="absolute -right-4 -bottom-4 -z-10 size-32 rounded-full bg-sky-500/5 blur-2xl" />
+            <div className="absolute -top-4 -left-4 -z-10 size-24 rounded-full bg-indigo-500/5 blur-2xl" />
+          </div>
         </div>
+
+        {/* ── Feature cards ── */}
+        <section className="border-t border-zinc-800/40 pt-16 pb-20">
+          <div className="grid gap-px overflow-hidden rounded-2xl border border-zinc-800/50 bg-zinc-800/30 sm:grid-cols-3">
+            <FeatureCard
+              icon={<Sparkles className="size-5" />}
+              title="AI Canvas Agent"
+              description="Type natural language commands and watch the AI create sticky notes, shapes, frameworks, and complete templates like SWOT analyses."
+            />
+            <FeatureCard
+              icon={<GitFork className="size-5" />}
+              title="Repo Architecture Diagrams"
+              description="Paste a GitHub URL and get a full architecture diagram — layers, components, and connections laid out automatically on the canvas."
+            />
+            <FeatureCard
+              icon={<MousePointer2 className="size-5" />}
+              title="Real-Time Collaboration"
+              description="See teammates' cursors move in real time. Every shape, note, and edit syncs instantly across all connected users."
+            />
+          </div>
+        </section>
       </div>
 
-      {/* ── Bottom logo mark ── */}
-      <div className="absolute bottom-6 flex items-center gap-1.5">
-        <Image src="/logo-dark.svg" alt="cre8" width={18} height={18} className="opacity-70" />
-        <span className="text-xs font-medium tracking-tight text-zinc-500">cre8</span>
-      </div>
+      {/* ── Footer ── */}
+      <footer className="border-t border-zinc-800/30">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-5">
+          <div className="flex items-center gap-1.5">
+            <Image src="/logo-dark.svg" alt="cre8" width={14} height={14} className="opacity-50" />
+            <span className="text-xs font-medium tracking-tight text-zinc-600">cre8</span>
+          </div>
+          <div className="flex items-center gap-4">
+            <Link
+              href="/dev-process"
+              className="text-[11px] text-zinc-700 transition-colors hover:text-zinc-400"
+            >
+              How this was built
+            </Link>
+            <a
+              href="https://github.com/wkhori/cre8"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[11px] text-zinc-700 transition-colors hover:text-zinc-400"
+            >
+              GitHub
+            </a>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }
 
 /* ── Supporting components ── */
 
-function FeaturePill({ icon, label }: { icon: React.ReactNode; label: string }) {
+function FeatureCard({
+  icon,
+  title,
+  description,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  description: string;
+}) {
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full border border-zinc-800/80 bg-zinc-900/60 px-3 py-1.5 text-xs text-zinc-400 backdrop-blur-sm">
-      {icon}
-      {label}
-    </span>
+    <div className="group flex flex-col bg-zinc-950 p-6 transition-colors hover:bg-zinc-900/60">
+      <span className="flex size-10 items-center justify-center rounded-xl border border-zinc-800/60 bg-zinc-900/60 text-zinc-500 transition-colors group-hover:border-zinc-700 group-hover:text-zinc-300">
+        {icon}
+      </span>
+      <h3 className="mt-4 text-sm font-medium text-zinc-200">{title}</h3>
+      <p className="mt-2 text-sm leading-relaxed text-zinc-600">{description}</p>
+    </div>
   );
 }
 

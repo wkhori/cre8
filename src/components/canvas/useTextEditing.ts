@@ -21,6 +21,9 @@ export function useTextEditing(stageRef: React.RefObject<Konva.Stage | null>, sh
       if (!shape) return;
       if (shape.type !== "text" && shape.type !== "sticky" && shape.type !== "frame") return;
 
+      // Push history BEFORE any edits so undo restores the original text
+      useCanvasStore.getState().pushHistory();
+
       editingShapeTypeRef.current = shape.type;
       setEditingTextId(id);
       const currentText = shape.type === "frame" ? shape.title : shape.text;
@@ -98,7 +101,7 @@ export function useTextEditing(stageRef: React.RefObject<Konva.Stage | null>, sh
     if (!editingTextId) return;
     const store = useCanvasStore.getState();
     const shapeType = editingShapeTypeRef.current;
-    store.pushHistory();
+    // History was already pushed in beginTextEditing (before any edits)
     if (shapeType === "frame") {
       store.updateShape(editingTextId, { title: editingTextValue || "Frame" });
     } else {
@@ -115,6 +118,8 @@ export function useTextEditing(stageRef: React.RefObject<Konva.Stage | null>, sh
   }, [editingTextId, editingTextValue, restoreEditingNode]);
 
   const cancelTextEdit = useCallback(() => {
+    // Undo the live text changes — history was pushed in beginTextEditing
+    useCanvasStore.getState().undo();
     restoreEditingNode();
     editingShapeTypeRef.current = null;
     setEditingTextId(null);

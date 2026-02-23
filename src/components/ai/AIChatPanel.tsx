@@ -16,7 +16,6 @@ import {
   ArrowRightLeft,
   Lightbulb,
   ListChecks,
-  Shuffle,
   GitBranch,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -29,7 +28,8 @@ const EXAMPLE_PROMPTS = [
   { text: "Make a pros and cons list for remote work", icon: ArrowRightLeft },
   { text: "Design a user journey map", icon: Lightbulb },
   { text: "Build a weekly sprint board", icon: ListChecks },
-  { text: "Organize everything into a neat grid", icon: Shuffle },
+  { text: "Brainstorm with a mind map", icon: Lightbulb, slashPrefill: "/brainstorm " },
+  { text: "Create a flowchart", icon: ArrowRightLeft, slashPrefill: "/flowchart " },
   { text: "Generate an architecture diagram", icon: GitBranch, slashPrefill: "/arch-diagram " },
 ];
 
@@ -42,23 +42,13 @@ const SLASH_COMMANDS = [
   },
   {
     command: "/brainstorm",
-    description: "Brainstorm ideas on sticky notes",
+    description: "Mind map — brainstorm ideas around a topic",
     icon: Lightbulb,
   },
   {
-    command: "/organize",
-    description: "Organize and arrange items on the board",
-    icon: Shuffle,
-  },
-  {
     command: "/flowchart",
-    description: "Create a flowchart or process diagram",
+    description: "Multi-step process with branching paths",
     icon: ArrowRightLeft,
-  },
-  {
-    command: "/grid",
-    description: "Layout items in a structured grid",
-    icon: LayoutGrid,
   },
 ];
 
@@ -82,6 +72,7 @@ export default function AIChatPanel({ boardId, uid, open }: AIChatPanelProps) {
   );
 
   // Filter slash commands based on current input
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const filteredCommands = command.startsWith("/")
     ? SLASH_COMMANDS.filter((c) => c.command.startsWith(command.split(" ")[0].toLowerCase()))
     : [];
@@ -128,10 +119,17 @@ export default function AIChatPanel({ boardId, uid, open }: AIChatPanelProps) {
     async (prompt: { text: string; slashPrefill?: string }) => {
       if (prompt.slashPrefill) {
         setCommand(prompt.slashPrefill);
+        const cmd = prompt.slashPrefill.trim();
+        const hintMap: Record<string, string> = {
+          "/arch-diagram":
+            "Share the repo URL and I'll generate an architecture diagram!\ne.g. `/arch-diagram https://github.com/owner/repo`",
+          "/brainstorm":
+            "What topic would you like to brainstorm?\ne.g. `/brainstorm marketing strategies for a new app`",
+          "/flowchart": "What process should I map out?\ne.g. `/flowchart user onboarding flow`",
+        };
         await addChatMessage(boardId, uid, {
           role: "assistant",
-          content:
-            "Please share the repo URL and I'll get started! e.g.\n/arch-diagram https://github.com/owner/repo",
+          content: hintMap[cmd] ?? `Type your input after \`${cmd}\` and press Enter.`,
           timestamp: null,
         });
         // Focus and move cursor to end (after React re-renders the value)
@@ -216,7 +214,7 @@ export default function AIChatPanel({ boardId, uid, open }: AIChatPanelProps) {
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3">
           <div className="flex items-center gap-2.5">
-            <div className="flex size-7 items-center justify-center rounded-lg bg-gradient-to-br from-violet-500 to-purple-600 shadow-sm">
+            <div className="flex size-7 items-center justify-center rounded-lg bg-linear-to-br from-violet-500 to-purple-600 shadow-sm">
               <Wand2 className="size-3.5 text-white" />
             </div>
             <div>
@@ -231,7 +229,7 @@ export default function AIChatPanel({ boardId, uid, open }: AIChatPanelProps) {
           </button>
         </div>
 
-        <div className="mx-4 h-px bg-gradient-to-r from-transparent via-zinc-200 to-transparent dark:via-zinc-700" />
+        <div className="mx-4 h-px bg-linear-to-r from-transparent via-zinc-200 to-transparent dark:via-zinc-700" />
 
         {/* Messages */}
         <div
@@ -406,7 +404,7 @@ function EmptyState({
 }) {
   return (
     <div className="flex flex-col items-center py-6">
-      <div className="mb-4 flex size-12 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-purple-600 shadow-lg shadow-violet-500/25">
+      <div className="mb-4 flex size-12 items-center justify-center rounded-2xl bg-linear-to-br from-violet-500 to-purple-600 shadow-lg shadow-violet-500/25">
         <Sparkles className="size-6 text-white" />
       </div>
       <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">

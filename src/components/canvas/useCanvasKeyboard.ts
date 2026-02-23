@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useCanvasStore } from "@/store/canvas-store";
 import { useUIStore } from "@/store/ui-store";
 
@@ -26,6 +26,9 @@ export function useCanvasKeyboard({
   const bringToFront = useCanvasStore((s) => s.bringToFront);
   const sendToBack = useCanvasStore((s) => s.sendToBack);
   const clearSelection = useCanvasStore((s) => s.clearSelection);
+
+  // Track nudge sequence: only push history once at the start, not on every keypress
+  const nudgeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -149,7 +152,15 @@ export function useCanvasKeyboard({
         const ids = useCanvasStore.getState().selectedIds;
         const store = useCanvasStore.getState();
         if (ids.length === 0) return;
-        store.pushHistory();
+        // Only push history at the START of a nudge sequence, not every keypress
+        if (!nudgeTimerRef.current) {
+          store.pushHistory();
+        }
+        // Reset the timer — when arrow keys stop for 300ms, the sequence ends
+        if (nudgeTimerRef.current) clearTimeout(nudgeTimerRef.current);
+        nudgeTimerRef.current = setTimeout(() => {
+          nudgeTimerRef.current = null;
+        }, 300);
         const shapeById = new Map(store.shapes.map((shape) => [shape.id, shape]));
         const updates: Array<{ id: string; patch: { x: number; y: number } }> = [];
         for (const id of ids) {
@@ -215,6 +226,10 @@ export function useCanvasKeyboard({
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
+      if (nudgeTimerRef.current) {
+        clearTimeout(nudgeTimerRef.current);
+        nudgeTimerRef.current = null;
+      }
     };
   }, [
     deleteShapes,
