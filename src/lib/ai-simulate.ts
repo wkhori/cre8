@@ -488,8 +488,9 @@ export function simulateToolCall(
       };
       const steps = toolInput.steps as FlowStep[];
       const direction = (toolInput.direction as string) || "vertical";
-      const nodeW = (toolInput.nodeWidth as number) || 220;
-      const nodeH = (toolInput.nodeHeight as number) || 80;
+      const nodeW = (toolInput.nodeWidth as number) || 240;
+      const nodeH = (toolInput.nodeHeight as number) || 72;
+      const headerBandH = 28;
       const gap = 100;
       const baseX = toolInput.x as number;
       const baseY = toolInput.y as number;
@@ -498,7 +499,18 @@ export function simulateToolCall(
 
       const ops: AIOperation[] = [];
 
-      // Helper: create a node (rounded rect + label text) and return its ID
+      // ── Color helpers (architecture-style) ──
+      const hexToCardBg = (hex: string): string => {
+        const r = parseInt(hex.slice(1, 3), 16);
+        const g = parseInt(hex.slice(3, 5), 16);
+        const b = parseInt(hex.slice(5, 7), 16);
+        const dr = Math.round(r * 0.12 + 12);
+        const dg = Math.round(g * 0.12 + 12);
+        const db = Math.round(b * 0.12 + 12);
+        return `#${dr.toString(16).padStart(2, "0")}${dg.toString(16).padStart(2, "0")}${db.toString(16).padStart(2, "0")}`;
+      };
+
+      // Helper: create a styled node (shadow + dark card + header band + text)
       const createNode = (
         x: number,
         y: number,
@@ -506,6 +518,22 @@ export function simulateToolCall(
         color: string,
         desc?: string
       ): string => {
+        const cardBg = hexToCardBg(color);
+
+        // Drop shadow
+        ops.push({
+          type: "createShape",
+          tempId: generateTempId(),
+          shapeType: "rectangle",
+          x: x + 3,
+          y: y + 3,
+          w: nodeW,
+          h: nodeH,
+          fill: "rgba(0,0,0,0.4)",
+          cornerRadius: 12,
+        });
+
+        // Card body (dark tinted background)
         const shapeId = generateTempId();
         createdIds.push(shapeId);
         tempIdMap.set(shapeId, shapeId);
@@ -517,9 +545,37 @@ export function simulateToolCall(
           y,
           w: nodeW,
           h: nodeH,
-          fill: color,
-          cornerRadius: 14,
+          fill: cardBg,
+          cornerRadius: 12,
+          stroke: color,
+          strokeWidth: 1,
         });
+
+        // Colored header band (top portion)
+        ops.push({
+          type: "createShape",
+          tempId: generateTempId(),
+          shapeType: "rectangle",
+          x,
+          y,
+          w: nodeW,
+          h: headerBandH,
+          fill: color,
+          cornerRadius: 12,
+        });
+        // Square off bottom of header band
+        ops.push({
+          type: "createShape",
+          tempId: generateTempId(),
+          shapeType: "rectangle",
+          x,
+          y: y + 14,
+          w: nodeW,
+          h: 14,
+          fill: color,
+        });
+
+        // Label text in header band
         const labelId = generateTempId();
         createdIds.push(labelId);
         tempIdMap.set(labelId, labelId);
@@ -527,12 +583,15 @@ export function simulateToolCall(
           type: "createText",
           tempId: labelId,
           x: x + 14,
-          y: y + (desc ? 14 : nodeH / 2 - 10),
+          y: y + 6,
           text: label,
-          fontSize: 15,
+          fontSize: 13,
+          fontStyle: "bold",
           fill: "#ffffff",
           width: nodeW - 28,
         });
+
+        // Description text below header band
         if (desc) {
           const descId = generateTempId();
           createdIds.push(descId);
@@ -541,22 +600,25 @@ export function simulateToolCall(
             type: "createText",
             tempId: descId,
             x: x + 14,
-            y: y + 40,
+            y: y + headerBandH + 8,
             text: desc,
-            fontSize: 12,
-            fill: "#dbeafe",
+            fontSize: 11,
+            fill: "#cbd5e1",
             width: nodeW - 28,
           });
         }
+
         return shapeId;
       };
 
-      // Helper: create a connector
+      // Helper: create a connector with architecture-style stroke
       const createConn = (
         fromId: string,
         toId: string,
         style: "arrow" | "line" = "arrow",
-        routing: "elbowed" | "straight" | "curved" = "elbowed"
+        routing: "elbowed" | "straight" | "curved" = "elbowed",
+        strokeColor = "#4b5563",
+        lineStyle: "solid" | "dashed" | "dotted" = "solid"
       ) => {
         const cId = generateTempId();
         createdIds.push(cId);
@@ -568,10 +630,46 @@ export function simulateToolCall(
           toId,
           style,
           routingMode: routing,
+          stroke: strokeColor,
+          strokeWidth: 2,
+          lineStyle,
         });
       };
 
-      // Layout main flow
+      // ── Compute backdrop bounds ──
+      // We need to know total size for the dark backdrop, so pre-compute positions.
+      let totalW = nodeW;
+      let totalH = steps.length * nodeH + (steps.length - 1) * gap;
+      // Account for branches extending right
+      let maxBranchExtent = 0;
+      steps.forEach((step) => {
+        if (step.branches) {
+          step.branches.forEach((branch, bIdx) => {
+            const branchOffsetX = nodeW + 140 + bIdx * (nodeW + 140);
+            const branchExtent = branchOffsetX + nodeW;
+            maxBranchExtent = Math.max(maxBranchExtent, branchExtent);
+            const branchH = branch.steps.length * nodeH + (branch.steps.length - 1) * 70;
+            totalH = Math.max(totalH, branchH);
+          });
+        }
+      });
+      if (maxBranchExtent > 0) totalW = maxBranchExtent;
+
+      const backdropPad = 60;
+      // Dark backdrop
+      ops.push({
+        type: "createShape",
+        tempId: generateTempId(),
+        shapeType: "rectangle",
+        x: baseX - backdropPad,
+        y: baseY - backdropPad,
+        w: totalW + backdropPad * 2,
+        h: steps.length * (nodeH + gap) - gap + backdropPad * 2,
+        fill: "#08080d",
+        cornerRadius: 24,
+      });
+
+      // ── Layout main flow ──
       steps.forEach((step, i) => {
         const sx = direction === "horizontal" ? baseX + i * (nodeW + gap) : baseX;
         const sy = direction === "horizontal" ? baseY : baseY + i * (nodeH + gap);
@@ -584,7 +682,6 @@ export function simulateToolCall(
           step.branches.forEach((branch, bIdx) => {
             const branchColor = branch.color ?? "#ef4444";
             const branchGap = 70;
-            // More room: wider horizontal offset between main flow and branches
             const branchOffsetX = nodeW + 140 + bIdx * (nodeW + 140);
             const branchNodeIds: string[] = [];
 
@@ -603,16 +700,31 @@ export function simulateToolCall(
               branchNodeIds.push(bId);
             });
 
-            // Connect main step → first branch node
+            // Connect main step → first branch node with dashed connector
             if (branchNodeIds.length > 0) {
-              createConn(shapeId, branchNodeIds[0], "arrow", "elbowed");
+              createConn(shapeId, branchNodeIds[0], "arrow", "elbowed", branchColor, "dashed");
 
-              // Branch label positioned midway on the horizontal connector arm
+              // Branch label badge midway on the connector arm
               const labelX =
                 direction === "horizontal"
                   ? sx + nodeW / 2 - 30
-                  : sx + nodeW + (branchOffsetX - nodeW) / 2 - 35;
-              const labelY = direction === "horizontal" ? sy + nodeW + 10 : sy + nodeH / 2 - 18;
+                  : sx + nodeW + (branchOffsetX - nodeW) / 2 - 40;
+              const labelY = direction === "horizontal" ? sy + nodeW + 10 : sy + nodeH / 2 - 14;
+
+              // Small badge background
+              ops.push({
+                type: "createShape",
+                tempId: generateTempId(),
+                shapeType: "rectangle",
+                x: labelX - 4,
+                y: labelY - 3,
+                w: 88,
+                h: 22,
+                fill: hexToCardBg(branchColor),
+                cornerRadius: 6,
+                stroke: `${branchColor}60`,
+                strokeWidth: 1,
+              });
               const branchLabelId = generateTempId();
               createdIds.push(branchLabelId);
               tempIdMap.set(branchLabelId, branchLabelId);
@@ -623,6 +735,7 @@ export function simulateToolCall(
                 y: labelY,
                 text: branch.label,
                 fontSize: 11,
+                fontStyle: "bold",
                 fill: branchColor,
                 width: 80,
               });
@@ -630,15 +743,27 @@ export function simulateToolCall(
 
             // Connect branch steps sequentially
             for (let j = 0; j < branchNodeIds.length - 1; j++) {
-              createConn(branchNodeIds[j], branchNodeIds[j + 1], "arrow", "elbowed");
+              createConn(
+                branchNodeIds[j],
+                branchNodeIds[j + 1],
+                "arrow",
+                "elbowed",
+                `${branchColor}90`
+              );
             }
           });
         }
       });
 
       // Connect main flow steps sequentially
+      // Use the target step's color for the connector if it's green (success)
       for (let i = 0; i < stepIds.length - 1; i++) {
-        createConn(stepIds[i], stepIds[i + 1]);
+        const targetColor = steps[i + 1].color ?? "#3b82f6";
+        const isGreen =
+          targetColor.toLowerCase().startsWith("#22c5") ||
+          targetColor.toLowerCase().startsWith("#10b9") ||
+          targetColor.toLowerCase().startsWith("#16a3");
+        createConn(stepIds[i], stepIds[i + 1], "arrow", "elbowed", isGreen ? "#22c55e" : "#6b7280");
       }
 
       tempIdMap.set(flowId, flowId);
@@ -889,6 +1014,33 @@ export function simulateToolCall(
             childAnchorY = isBottom ? by + branchH + 24 : by - totalH - 24;
           }
 
+          // Pre-create child IDs so we can emit connectors FIRST (behind cards)
+          const childIds: string[] = [];
+          branch.children.forEach(() => {
+            const childId = generateTempId();
+            childIds.push(childId);
+            createdIds.push(childId);
+            tempIdMap.set(childId, childId);
+          });
+
+          // Emit connectors first (lower z-index → renders behind cards)
+          childIds.forEach((childId) => {
+            const childConnId = generateTempId();
+            createdIds.push(childConnId);
+            tempIdMap.set(childConnId, childConnId);
+            ops.push({
+              type: "createConnector",
+              tempId: childConnId,
+              fromId: branchId,
+              toId: childId,
+              style: "line",
+              lineStyle: "dotted",
+              stroke: `${fillColor}60`,
+              strokeWidth: 1,
+            });
+          });
+
+          // Now emit the actual child cards (on top of connectors)
           branch.children.forEach((childText, j) => {
             const childX = childAnchorX;
             const childY = childAnchorY + j * (childH + childGap);
@@ -907,12 +1059,9 @@ export function simulateToolCall(
             });
 
             // Child card
-            const childId = generateTempId();
-            createdIds.push(childId);
-            tempIdMap.set(childId, childId);
             ops.push({
               type: "createShape",
-              tempId: childId,
+              tempId: childIds[j],
               shapeType: "rectangle",
               x: childX,
               y: childY,
@@ -946,21 +1095,6 @@ export function simulateToolCall(
               fontSize: 12,
               fill: "#e2e8f0",
               width: childW - 20,
-            });
-
-            // Thin dotted connector
-            const childConnId = generateTempId();
-            createdIds.push(childConnId);
-            tempIdMap.set(childConnId, childConnId);
-            ops.push({
-              type: "createConnector",
-              tempId: childConnId,
-              fromId: branchId,
-              toId: childId,
-              style: "line",
-              lineStyle: "dotted",
-              stroke: `${fillColor}60`,
-              strokeWidth: 1,
             });
           });
         }

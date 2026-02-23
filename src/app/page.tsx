@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { BorderTrail } from "@/components/ui/border-trail";
 
 export default function Home() {
   const router = useRouter();
@@ -264,11 +265,21 @@ export default function Home() {
                 Free to use. No credit card required.
               </p>
 
-              {/* Try it now — shimmer CTA below auth */}
+              {/* Try it now — border trail CTA below auth */}
               <Link
                 href="/demo"
-                className="shimmer-btn mt-5 flex w-full items-center justify-center gap-2.5 rounded-xl bg-zinc-900/80 px-6 py-3 text-sm font-medium text-zinc-100 transition-all hover:bg-zinc-800 hover:text-white"
+                className="relative mt-5 flex w-full items-center justify-center gap-2.5 overflow-hidden rounded-xl bg-zinc-900/80 px-6 py-3 text-sm font-medium text-zinc-100 transition-all hover:bg-zinc-800 hover:text-white"
               >
+                <BorderTrail
+                  size={120}
+                  className="bg-linear-to-l from-emerald-400 via-sky-400 to-transparent"
+                  transition={{
+                    repeat: Infinity,
+                    duration: 4,
+                    ease: "linear",
+                    repeatDelay: 0,
+                  }}
+                />
                 <Sparkles className="size-4 text-emerald-400" />
                 Try it now — no sign-up required
                 <ArrowRight className="size-3.5 text-zinc-500" />
