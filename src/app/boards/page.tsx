@@ -225,16 +225,6 @@ export default function BoardsPage() {
 
           <div className="flex-1" />
 
-          {/* New board button — instant create */}
-          <Button size="sm" onClick={handleCreateInstant} disabled={creating}>
-            {creating ? (
-              <Loader2 className="mr-1.5 size-3.5 animate-spin" />
-            ) : (
-              <Plus className="mr-1.5 size-3.5" />
-            )}
-            New board
-          </Button>
-
           {/* Profile dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
