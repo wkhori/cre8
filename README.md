@@ -2,7 +2,7 @@
 
 Real-time collaborative whiteboard with AI agent integration. Multiple users create, move, and edit shapes on an infinite canvas while seeing each other's cursors and changes instantly. An AI agent manipulates the board through natural language commands.
 
-**Live:** [cre8-seven.vercel.app](https://cre8-seven.vercel.app/)
+**Live:** [cre8.cool](https://cre8.cool/) · [Try the demo](https://cre8.cool/demo) (no sign-up required)
 
 ![cre8 board example](public/example-board.png)
 
@@ -11,9 +11,11 @@ Real-time collaborative whiteboard with AI agent integration. Multiple users cre
 - **Infinite canvas** — pan, zoom, 500+ objects at 60fps
 - **7 object types** — sticky notes, rectangles, circles, text, lines, frames, connectors
 - **Real-time multiplayer** — cursor sync, object sync, presence indicators
-- **AI agent** — 14 tool functions via Claude, natural language board manipulation
+- **AI canvas agent** — 16 tool functions via Claude, natural language board manipulation
+- **Repo architecture diagrams** — paste a GitHub URL, get a full architecture diagram laid out on canvas
 - **Board management** — create, rename, duplicate, favorite, delete boards
 - **Full editing** — multi-select, resize, rotate, copy/paste, undo/redo, keyboard shortcuts
+- **Demo mode** — anonymous access, instant canvas with no sign-up
 - **Dark/light mode** — theme toggle with oklch color system
 
 ## Tech Stack
@@ -24,16 +26,19 @@ Real-time collaborative whiteboard with AI agent integration. Multiple users cre
 | Canvas | react-konva / Konva |
 | State | Zustand |
 | Backend | Firebase Auth + Firestore + Realtime Database |
-| AI | Anthropic Claude (Haiku) with function calling |
+| AI | Anthropic Claude (Haiku + Sonnet) with function calling |
+| Observability | Langfuse (AI tracing) |
 | Styling | Tailwind CSS v4, shadcn/ui |
+| Testing | Vitest (12 test files) |
 | Deployment | Vercel |
 
 ## Architecture
 
 ```
-User interaction (Konva) ──→ board-operations ──→ Firestore
-AI agent (tool use)      ──→ board-operations ──→ Firestore
-Firestore onSnapshot     ──→ zustand store     ──→ Konva re-render
+User interaction (Konva) ──→ canvas-store ──→ Firestore
+AI agent (tool use)      ──→ canvas-store ──→ Firestore
+Repo analysis (Claude)   ──→ canvas-store ──→ Firestore
+Firestore onSnapshot     ──→ canvas-store ──→ Konva re-render
 ```
 
 - **Firestore** for board objects (last-write-wins conflict resolution)
@@ -69,7 +74,7 @@ npx vitest run   # Run tests
 
 ## AI Agent
 
-Natural language commands via Claude function calling (14 tools). Examples:
+Natural language commands via Claude function calling (16 tools). Examples:
 
 ```
 "Add a yellow sticky note that says User Research"
@@ -77,3 +82,11 @@ Natural language commands via Claude function calling (14 tools). Examples:
 "Move all sticky notes to the right and change them to blue"
 "Build a user journey map with 5 stages"
 ```
+
+## Repo Architecture Diagrams
+
+Paste a GitHub repo URL into the analyzer and get an architecture diagram generated on your canvas. Uses Repomix to pack the repo, Claude Sonnet to analyze the structure, and a deterministic layout engine to place components with connections. Results are cached in Firestore.
+
+## Development
+
+Built in 7 days. See the full build log at [/dev-process](https://cre8.cool/dev-process).
