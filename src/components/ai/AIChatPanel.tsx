@@ -26,7 +26,6 @@ const EXAMPLE_PROMPTS = [
   { text: "Create a SWOT analysis for a coffee shop", icon: LayoutGrid },
   { text: "Brainstorm 5 startup ideas on sticky notes", icon: StickyNote },
   { text: "Make a pros and cons list for remote work", icon: ArrowRightLeft },
-  { text: "Design a user journey map", icon: Lightbulb },
   { text: "Build a weekly sprint board", icon: ListChecks },
   { text: "Brainstorm with a mind map", icon: Lightbulb, slashPrefill: "/brainstorm " },
   { text: "Create a flowchart", icon: ArrowRightLeft, slashPrefill: "/flowchart " },

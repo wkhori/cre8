@@ -4,6 +4,8 @@ Real-time collaborative whiteboard with AI agent integration. Multiple users cre
 
 **Live:** [cre8-seven.vercel.app](https://cre8-seven.vercel.app/)
 
+![cre8 board example](public/example-board.png)
+
 ## Features
 
 - **Infinite canvas** — pan, zoom, 500+ objects at 60fps

@@ -10,7 +10,6 @@ import {
   Sparkles,
   GitFork,
   MessageSquareText,
-  Cpu,
   Users,
   MousePointer2,
 } from "lucide-react";
@@ -290,21 +289,12 @@ export default function Home() {
           {/* Right — product screenshot */}
           <div className="relative hidden lg:block">
             <div className="relative overflow-hidden rounded-2xl border border-zinc-800/50 bg-zinc-900/30 shadow-[0_20px_80px_rgba(0,0,0,0.5)]">
-              {/* Screenshot placeholder — replace src with actual screenshot */}
-              <div className="aspect-4/3 w-full bg-zinc-900/50">
-                {/*
-                  TODO: Replace this placeholder with an actual screenshot
-                  <Image src="/screenshot-arch-diagram.png" alt="cre8 architecture diagram" fill className="object-cover" />
-                */}
-                <div className="flex size-full flex-col items-center justify-center gap-3 p-8">
-                  <Cpu className="size-8 text-zinc-700" />
-                  <p className="text-center text-sm text-zinc-700">
-                    Screenshot: Architecture diagram generated from a GitHub repo
-                  </p>
-                  <p className="text-center font-(family-name:--font-geist-mono) text-[10px] text-zinc-800">
-                    Save as /public/screenshot-arch-diagram.png
-                  </p>
-                </div>
+              <div className="relative aspect-4/3 w-full">
+                <img
+                  src="/example-board.png"
+                  alt="cre8 board with shapes, sticky notes, and AI-generated content"
+                  className="size-full object-cover"
+                />
               </div>
               {/* Browser chrome bar */}
               <div className="absolute top-0 right-0 left-0 flex items-center gap-1.5 border-b border-zinc-800/40 bg-zinc-950/80 px-3 py-2 backdrop-blur-sm">

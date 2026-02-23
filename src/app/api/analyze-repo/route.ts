@@ -234,9 +234,11 @@ export async function POST(request: NextRequest) {
             // Cache hit — skip packing + Claude entirely
             sendEvent(controller, { phase: "cached", message: "Using cached analysis" });
 
-            const cx = viewportCenter?.x ?? 400;
-            const cy = viewportCenter?.y ?? 200;
-            const operations = layoutArchitecture(cachedArch, cx - 300, cy - 200);
+            // `viewportCenter` is provided by the client as a clear top-left origin
+            // for new AI content; do not offset it or we can overlap existing diagrams.
+            const originX = viewportCenter?.x ?? 100;
+            const originY = viewportCenter?.y ?? 0;
+            const operations = layoutArchitecture(cachedArch, originX, originY);
             const componentCount = cachedArch.layers.reduce(
               (s: number, l: { components: unknown[] }) => s + l.components.length,
               0
@@ -466,9 +468,11 @@ export async function POST(request: NextRequest) {
         }
 
         // ── Layout engine ────────────────────────────────────────
-        const cx = viewportCenter?.x ?? 400;
-        const cy = viewportCenter?.y ?? 200;
-        const operations = layoutArchitecture(architecture, cx - 300, cy - 200);
+        // `viewportCenter` is provided by the client as a clear top-left origin
+        // for new AI content; do not offset it or we can overlap existing diagrams.
+        const originX = viewportCenter?.x ?? 100;
+        const originY = viewportCenter?.y ?? 0;
+        const operations = layoutArchitecture(architecture, originX, originY);
 
         const componentCount = architecture.layers.reduce((s, l) => s + l.components.length, 0);
         const durationMs = Date.now() - startMs;
