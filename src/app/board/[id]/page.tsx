@@ -23,6 +23,10 @@ import type { Shape } from "@/lib/types";
 import { isRenderOnly } from "@/lib/sync-mode";
 import { diffShapeWrites } from "@/lib/board-sync-diff";
 import { Loader2 } from "lucide-react";
+import { ChatBridgeSDK } from "@/lib/chatbridge-sdk";
+import { AI_TOOLS } from "@/lib/ai-tools";
+import { simulateToolCall } from "@/lib/ai-simulate";
+import { executeAIOperations } from "@/lib/ai-operations";
 
 const TopBar = dynamic(() => import("@/components/board/TopBar"), { ssr: false });
 const ToolSidebar = dynamic(() => import("@/components/board/ToolSidebar"), { ssr: false });
@@ -426,6 +430,49 @@ export default function BoardPage() {
 
   const handleLiveDragEnd = useCallback(() => {
     liveDragBroadcasterRef.current?.clear();
+  }, []);
+
+  // ── ChatBridge SDK: expose canvas tools when running inside an iframe ──
+  useEffect(() => {
+    if (typeof window === "undefined" || window.self === window.top) return;
+
+    const sdk = new ChatBridgeSDK("whiteboard");
+
+    for (const toolDef of AI_TOOLS) {
+      sdk.registerToolHandler(toolDef.name, async (params: Record<string, unknown>) => {
+        const shapes = useCanvasStore.getState().shapes;
+        const tempIdMap = new Map<string, string>();
+
+        const { operation, result, extraOps } = simulateToolCall(
+          toolDef.name,
+          params,
+          shapes as unknown as Record<string, unknown>[],
+          tempIdMap
+        );
+
+        const ops = [operation, ...(extraOps || [])].filter(Boolean);
+
+        if (ops.length > 0) {
+          executeAIOperations(ops as Parameters<typeof executeAIOperations>[0]);
+        }
+
+        const updatedShapes = useCanvasStore.getState().shapes;
+        sdk.sendStateUpdate(
+          { shapeCount: updatedShapes.length },
+          `Canvas has ${updatedShapes.length} objects`
+        );
+
+        try {
+          return JSON.parse(result);
+        } catch {
+          return { success: true, result };
+        }
+      });
+    }
+
+    sdk.sendReady("cre8 Whiteboard", "1.0.0");
+
+    return () => sdk.destroy();
   }, []);
 
   // ── Auth guard ──────────────────────────────────────────────────────
