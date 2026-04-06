@@ -471,6 +471,11 @@ export default function BoardPage() {
     }
 
     sdk.sendReady("cre8 Whiteboard", "1.0.0");
+    sdk.registerTools(AI_TOOLS.map(t => ({
+      name: t.name,
+      description: t.description ?? '',
+      inputSchema: t.input_schema as Record<string, unknown>,
+    })));
 
     return () => sdk.destroy();
   }, []);
